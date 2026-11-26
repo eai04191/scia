@@ -7,8 +7,8 @@ public final class StatusInteractions {
         case favourite
         case reblog
         case bookmark
-        /// 押した投稿の会話をミュートする。サーバーは会話全体をミュートするが、投稿は会話のIDを持たないため、同じ会話のほかの投稿の`muted`は古いまま残る。
-        /// 残った投稿でもう一度ミュートを選んでも、サーバーではミュートしたままで、その投稿の表示が正しくなるだけなので、会話のほかの投稿は読み直さない。
+        /// 選択した投稿の会話をミュートする。サーバーは会話全体をミュートするが、投稿は会話のIDを持たないため、同じ会話のほかの投稿の`muted`は古いまま残る。
+        /// 残った投稿でもう一度ミュートを選んでも、サーバーではミュートしたままで、その投稿の表示が正しくなるだけなので、会話のほかの投稿は再読み込みしない。
         case muteConversation
         case pin
         /// その絵文字の自分のリアクション。Fedibirdの拡張で、決まりはdocs/emoji-reaction.mdにある。
@@ -120,12 +120,12 @@ public final class StatusInteractions {
 
     /// サーバーが操作を受け付けたとき。操作と、結果を反映した投稿（ブーストなら元の投稿）を渡す。
     /// ブックマークやお気に入りのタイムラインに、付けた投稿を入れるのに使う。失敗して戻したときは呼ばない。
-    /// 同じ投稿へのほかの操作の結果を待っている間に押した操作の状態も、渡す投稿に含める。
+    /// 同じ投稿へのほかの操作の結果を待っている間に選択した操作の状態も、渡す投稿に含める。
     public var onSettle: (@MainActor (Action, Status) -> Void)?
-    /// 結果を待っている操作がある投稿の、いちばん新しい状態。あとから押した操作には、先に押した操作の見込みの状態が入っているため、押したときの投稿で置き換え、受け付けた結果と戻した状態を重ねる。
-    /// `onSettle`に、先に押した操作の、押したときの古い状態を渡さないため。
+    /// 結果を待っている操作がある投稿の、いちばん新しい状態。あとから選択した操作には、先に選択した操作の見込みの状態が入っているため、選択したときの投稿で置き換え、受け付けた結果と戻した状態を重ねる。
+    /// `onSettle`に、先に選択した操作の、選択したときの古い状態を渡さないため。
     private var latest: [Status.ID: Status] = [:]
-    /// 結果を待っている間に、ストリーミングでサーバーの数が届いた絵文字のリアクション。届いた数は押した結果を手元で足し引きした分を含まないので、
+    /// 結果を待っている間に、ストリーミングでサーバーの数が届いた絵文字のリアクション。届いた数は選択した結果を手元で足し引きした分を含まないので、
     /// 失敗したときは数を変えずに、自分がしたかだけを戻す。サーバーのお知らせのリアクションの`countIncludesChange`と同じ考え方。
     private var streamedReactions: Set<Key> = []
     /// サーバーが受け付けた、投稿ごとの最後のブーストの状態。まとめてブーストで、選んだときの投稿より新しい状態を知るために使う。
@@ -175,7 +175,7 @@ public final class StatusInteractions {
         update(target.id) { Self.setting(action, turningOn, on: $0) }
         do {
             let result = try await call(action, turningOn, target.id, reblogVisibility: reblogVisibility)
-            // 形は、応答が返ったときのものを使う。お気に入りは、サーバーの機能が読める前にも押せるため。
+            // 形は、応答が返ったときのものを使う。お気に入りは、サーバーの機能が読める前にも選択できるため。
             let style = emojiReactionStyle
             // 結果を応答から丸ごと取り込むサーバーでは、付けた絵文字が返った列になくても失敗にしない。Sharkeyなどは、付けられない絵文字を既定の絵文字に替えて付ける。
             if case .emojiReaction(let emoji) = action, turningOn, !style.settlesFromResponse, !result.displayed.hasEmojiReaction(emoji) {
@@ -205,7 +205,7 @@ public final class StatusInteractions {
     }
 
     /// ストリーミングで届いた絵文字のリアクションの数を、表示しているすべてのタイムラインに当てる。
-    /// 自分がしたかは、リアクションした人に`myAccountID`があるかで決める。その絵文字の結果を待っている間は、押した状態を残す。
+    /// 自分がしたかは、リアクションした人に`myAccountID`があるかで決める。その絵文字の結果を待っている間は、選択した状態を残す。
     public func apply(_ reactionUpdate: EmojiReactionUpdate, myAccountID: Account.ID) {
         let key = Key(statusID: reactionUpdate.statusID, action: .emojiReaction(reactionUpdate.emoji))
         let pending = inFlight.contains(key)

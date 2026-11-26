@@ -137,7 +137,7 @@ final class ProfileImageCropViewController: UIViewController, StaysForSharedCont
         layoutFrame()
     }
 
-    /// 安全領域の中の中央に、枠を左右16ptの余白で置く。iPadや横向きでは、縦にも収まる大きさにする。
+    /// セーフエリアの中の中央に、枠を左右16ptの余白で置く。iPadや横向きでは、縦にも収まる大きさにする。
     private func layoutFrame() {
         var area = view.safeAreaLayoutGuide.layoutFrame.insetBy(dx: 16, dy: 16)
         // 比率の切り替えを出していれば、その上に収める。

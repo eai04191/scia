@@ -64,7 +64,7 @@ struct BrokenResponseTests {
         #expect(page.unreadable.first?.url?.absoluteString == "https://example.social/@alice/113000000000000104", "通知の対象の投稿のURLで開けるようにします")
     }
 
-    /// プロキシが返すHTMLのエラーページは、送り直したうえで種類ごとの文言にし、本文は見せず記録にも残さない。
+    /// プロキシが返すHTMLのエラーページは、再送したうえで種類ごとの文言にし、本文は見せず記録にも残さない。
     @Test func proxyErrorPageIsRetriedAndShownByKind() async throws {
         let transport = StubTransport(Array(repeating: try .fixture("error_502", withExtension: "html", statusCode: 502), count: 3))
         let log = RequestLog(includesBody: false)

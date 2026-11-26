@@ -3,7 +3,7 @@
 /// ピッカーは選択が変わるたびに今の選択を全部送ってくる。そのまま並びに当てると、投稿欄で並べ替えた順が上書きされるため、
 /// 足したものと外したものだけを取り込み、並びは下書きの側の順番を保つ。IDはピッカーの`assetIdentifier`。
 public struct MediaPickerSelection: Sendable, Equatable {
-    /// 投稿欄で外したが、開いているピッカーではまだ選ばれているID。ピッカーが選択を送り直しても足し直さない。
+    /// 投稿欄で外したが、開いているピッカーではまだ選ばれているID。ピッカーが選択を再送しても足し直さない。
     public private(set) var removedWhilePickerOpen: Set<String> = []
 
     public init() {}

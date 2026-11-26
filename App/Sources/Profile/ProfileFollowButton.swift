@@ -19,11 +19,11 @@ final class ProfileFollowButton: UIView {
     struct State: Equatable {
         var title: String
         var style: Style
-        /// 関係を読む前。文字を消して場所だけ取り、押せなくする。
+        /// 関係を読む前。文字を消して場所だけ取り、無効にする。
         var isPlaceholder = false
         /// 関係を待つのが長引いている。場所を取ったカプセルの中に、アクティビティインジケータを出す。
         var showsActivity = false
-        /// フォローを変えている途中。文字の前にアクティビティインジケータを出し、押せなくする。
+        /// フォローを変えている途中。文字の前にアクティビティインジケータを出し、無効にする。
         var isChanging = false
     }
 
@@ -221,10 +221,10 @@ private struct ProfileFollowButtonView: View {
             }
             .buttonStyle(.plain)
             .disabled(state.isChanging)
-            // 関係を読む前は、押せない見た目にすると下地が薄くなるため、見た目はそのままで触れないだけにする。
+            // 関係を読む前は、無効の見た目にすると下地が薄くなるため、見た目はそのままで触れないだけにする。
             .allowsHitTesting(!state.isPlaceholder)
             .accessibilityLabel(state.isPlaceholder ? ProfileTexts.Header.relationshipLoading : state.title)
-            // 押せない見た目にしない代わりに、VoiceOverには押せるボタンとして示さず、文字として読ませる。
+            // 無効の見た目にしない代わりに、VoiceOverには選択できるボタンとして示さず、文字として読ませる。
             .accessibilityRemoveTraits(state.isPlaceholder ? .isButton : [])
             .accessibilityAddTraits(state.isPlaceholder ? .isStaticText : [])
         }

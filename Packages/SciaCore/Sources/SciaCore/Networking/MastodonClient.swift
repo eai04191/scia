@@ -14,7 +14,7 @@ public struct MastodonClient: Sendable {
     /// 再試行までと、メディアの処理が終わるまでの待ちを数える。テストでは手で進める時計を渡す。
     private let clock: any Clock<Duration>
     private let onUnauthorized: (@Sendable () async -> Void)?
-    /// 応答の中で読んだアカウントを覚える先。nilなら覚えない。
+    /// 応答の中で読んだアカウントをキャッシュする先。nilならキャッシュしない。
     private let receivedAccounts: ReceivedAccounts?
     private let instanceCache = InstanceResponseCache()
     private let instanceV1Cache = InstanceResponseCache()
@@ -23,10 +23,10 @@ public struct MastodonClient: Sendable {
     /// - Parameters:
     ///   - rateLimit: 429や503で止められたときに、自動の通信を控える門。セッションの中で共有する。
     ///   - features: 使えないと分かった機能を、セッションの間だけ止める。セッションの中で共有する。
-    ///   - retry: 一時的な失敗で送り直す回数と間隔。
+    ///   - retry: 一時的な失敗で再送する回数と間隔。
     ///   - requestLog: 失敗の記録。セッションの中で共有する。
     ///   - isOtherAccount: 「別のアカウントで」使う、今使っているアカウントとは別のアカウントのクライアントか。断られた通信の理由に、どのアカウントかを出すために使う。
-    ///   - receivedAccounts: 応答の中で読んだアカウントを覚える先。`AccountSession`が作るクライアントは、セッションの`AccountCache`と同じものを渡す。
+    ///   - receivedAccounts: 応答の中で読んだアカウントをキャッシュする先。`AccountSession`が作るクライアントは、セッションの`AccountCache`と同じものを渡す。
     ///   - onUnauthorized: どのAPIでも、401を受けたときに、失敗を投げる前に待って呼ぶ。呼び終えてから呼び出し側に401の`MastodonAPIError`が届く。
     ///     `AccountSession`が作るクライアント（`AccountSession.client`）は、トークンが無効になったとセッションへ知らせるものを渡してあるので、
     ///     そのクライアントで受けた401は、呼び出し側が拾わなくても、自動の通信を止めてログインし直しを促す（`AccountSession.onCredentialsInvalid`）。
@@ -78,7 +78,7 @@ public struct MastodonClient: Sendable {
     }
 
     /// 通知を、サーバーがまとめた形で新しい順に返す。まとめるのは`MastodonNotification.Kind.grouped`の種類だけにする。
-    /// 1回に読めるまとまりの数の上限は80。
+    /// 1回に読めるグループの数の上限は80。
     /// v2のないサーバー（Mastodon 4.2以前）では、v1でまとめずに読む。決まりはdocs/notification-display.mdの「まとめて表示する」にある。
     /// https://docs.joinmastodon.org/methods/grouped_notifications/#get-grouped
     public func notifications(_ query: TimelineQuery) async throws -> NotificationPage {
@@ -98,7 +98,7 @@ public struct MastodonClient: Sendable {
         try await ungroupedNotifications(query, filter: [URLQueryItem(name: "account_id", value: accountID)])
     }
 
-    /// v1で、通知をまとめずに読む。どの通知もそれだけを消せるよう、まとまりのキーを`ungrouped-<通知のID>`にする。
+    /// v1で、通知をまとめずに読む。どの通知もそれだけを消せるよう、グループのキーを`ungrouped-<通知のID>`にする。
     /// https://docs.joinmastodon.org/methods/notifications/#get
     private func ungroupedNotifications(_ query: TimelineQuery, filter: [URLQueryItem]) async throws -> NotificationPage {
         let list = try await get(ElementList<MastodonNotification>.self, path: "api/v1/notifications", query: query.queryItems + filter).0
@@ -121,7 +121,7 @@ public struct MastodonClient: Sendable {
         return try await send(formRequest(method: "PATCH", path: "api/v2/notifications/policy", form: form), decoding: NotificationPolicy.self, feature: .notificationFilter).0
     }
 
-    /// 保留中の通知を、人ごとのまとまりでサーバーが返す順に返す。1回に読める件数の上限は80件。
+    /// 保留中の通知を、人ごとのグループでサーバーが返す順に返す。1回に読める件数の上限は80件。
     /// - Parameter maxID: 前のページの`NotificationRequestPage.nextMaxID`。nilなら最初のページ。
     /// https://docs.joinmastodon.org/methods/notifications/#get-requests
     public func notificationRequests(maxID: String?, limit: Int) async throws -> NotificationRequestPage {
@@ -131,7 +131,7 @@ public struct MastodonClient: Sendable {
         return NotificationRequestPage(requests: requests.elements, nextMaxID: link?.queryValue("max_id", of: "next"))
     }
 
-    /// 保留中の通知の1人分のまとまり。
+    /// 保留中の通知の1人分のグループ。
     /// https://docs.joinmastodon.org/methods/notifications/#get-one-request
     public func notificationRequest(_ id: String) async throws -> NotificationRequest {
         let key = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? id
@@ -441,7 +441,7 @@ public struct MastodonClient: Sendable {
         )
     }
 
-    /// 新しく投稿するときの既定を1つ変える。応答の中身は使わず、変えたあとの値は`preferences()`で読み直す。
+    /// 新しく投稿するときの既定を1つ変える。応答の中身は使わず、変えたあとの値は`preferences()`で再読み込みする。
     /// https://docs.joinmastodon.org/methods/accounts/#update_credentials
     public func updatePostingDefault(_ change: PostingDefaultChange) async throws {
         _ = try await send(formRequest(method: "PATCH", path: "api/v1/accounts/update_credentials", form: [change.formItem]))
@@ -459,7 +459,7 @@ public struct MastodonClient: Sendable {
     public static let multipleStatusesLimit = 20
 
     /// 投稿をまとめて読む。消えた投稿と見られない投稿は返らず、読めない投稿は除く。
-    /// リンクカードの取り直しに使い、リクエストを間隔ごとに1回に収めるため、一時的な失敗でも送り直さず、次の取り直しに任せる。
+    /// リンクカードの取り直しに使い、リクエストを間隔ごとに1回に収めるため、一時的な失敗でも再送せず、次の取り直しに任せる。
     /// https://docs.joinmastodon.org/methods/statuses/#index
     public func statuses(_ ids: [Status.ID]) async throws -> [Status] {
         let query = ids.map { URLQueryItem(name: "id[]", value: $0) }
@@ -555,7 +555,7 @@ public struct MastodonClient: Sendable {
         return status.reblog ?? status
     }
 
-    /// 投稿する。同じ下書きを送り直しても二重に投稿されないよう、下書きごとの`Idempotency-Key`を付ける。
+    /// 投稿する。同じ下書きを再送しても二重に投稿されないよう、下書きごとの`Idempotency-Key`を付ける。
     /// 添付ファイルが済んでいなければ送らずに`StatusPostError.attachmentsNotReady`を投げる。
     /// サーバーが内容を拒んだら、422の`MastodonAPIError`を投げる。
     /// https://docs.joinmastodon.org/methods/statuses/#create
@@ -646,7 +646,7 @@ public struct MastodonClient: Sendable {
         try await get(StatusSource.self, path: "api/v1/statuses/\(statusID)/source", query: []).0
     }
 
-    /// 投稿を1件読む。スレッドを読み直すときに、押した投稿の編集を取り込むのに使う。
+    /// 投稿を1件読む。スレッドを再読み込みするときに、選択した投稿の編集を取り込むのに使う。
     /// https://docs.joinmastodon.org/methods/statuses/#get
     public func status(_ statusID: Status.ID) async throws -> Status {
         try await get(Status.self, path: "api/v1/statuses/\(statusID)", query: []).0
@@ -786,7 +786,7 @@ public struct MastodonClient: Sendable {
     }
 
     /// 削除した投稿の添付を、新しい投稿に付けられるようになるまで待つ。決まりはdocs/compose.mdの「自分の投稿を削除して書き直す」にある。
-    /// サーバーは、削除した投稿を後ろの処理で消し終えるまで添付を投稿に付けたままにし、その間は404を返すので、1秒おきに読み直す。
+    /// サーバーは、削除した投稿を後ろの処理で消し終えるまで添付を投稿に付けたままにし、その間は404を返すので、1秒おきに再読み込みする。
     /// `timeout`を過ぎても付けられなければ`RedraftMediaError.notReleased`を投げる。通報された投稿は、サーバーが消さずに残すため、いつまでも付けられない。
     public func waitUntilReleased(_ id: String, timeout: Duration = .seconds(60)) async throws -> MediaAttachment {
         try await waitUntilReleased(id, timeout: timeout, clock: clock)
@@ -882,7 +882,7 @@ public struct MastodonClient: Sendable {
     public static let multipleAccountsLimit = 40
 
     /// アカウントをまとめて読む。見つからないアカウントと、承認されていないアカウントは返らない。
-    /// メニューを開いたときに使い、メニューを閉じれば要らなくなるため、一時的な失敗でも送り直さない。
+    /// メニューを開いたときに使い、メニューを閉じれば要らなくなるため、一時的な失敗でも再送しない。
     /// https://docs.joinmastodon.org/methods/accounts/#index
     public func accounts(_ ids: [String]) async throws -> [Account] {
         let query = ids.map { URLQueryItem(name: "id[]", value: $0) }
@@ -1149,7 +1149,7 @@ public struct MastodonClient: Sendable {
 
     /// 投稿欄のメンションの補完に使う。web UIと同じく、打つたびに相手のサーバーへ問い合わせると遅いので、自分のサーバーが知っているアカウントだけを探す。
     /// `api/v2/search`の`type=accounts`もサーバーの中では同じ検索をするが、アカウントだけを返す専用の口で、web UIの補完と同じこちらを使う。
-    /// 打っている途中の問い合わせなので、一時的な失敗でも送り直さない。待つより、次に打った文字で問い合わせ直すほうが早い。
+    /// 打っている途中の問い合わせなので、一時的な失敗でも再送しない。待つより、次に打った文字で問い合わせ直すほうが早い。
     /// https://docs.joinmastodon.org/methods/accounts/#search
     /// - Parameter following: フォローしている人だけから探す。
     public func searchAccountsForCompletion(_ query: String, limit: Int, following: Bool = false) async throws -> [Account] {
@@ -1165,7 +1165,7 @@ public struct MastodonClient: Sendable {
     }
 
     /// リストのメンバーの画面で、足す人を探す。リストに足せるのはフォローしている人だけなので、フォローしている人に絞る。
-    /// 補完と同じく、打っている途中の問い合わせなので、相手のサーバーには問い合わせず、一時的な失敗でも送り直さない。
+    /// 補完と同じく、打っている途中の問い合わせなので、相手のサーバーには問い合わせず、一時的な失敗でも再送しない。
     /// https://docs.joinmastodon.org/methods/accounts/#search
     public func searchFollowedAccounts(_ query: String, limit: Int) async throws -> [Account] {
         let items = [
@@ -1178,7 +1178,7 @@ public struct MastodonClient: Sendable {
     }
 
     /// 投稿欄のハッシュタグの補完に使う。web UIは`exclude_unreviewed`を付けるが、管理者が確かめていないタグ（小さなサーバーではほとんど）が出なくなるため付けない。
-    /// メンションと同じく、一時的な失敗でも送り直さない。
+    /// メンションと同じく、一時的な失敗でも再送しない。
     /// https://docs.joinmastodon.org/methods/search/#v2
     public func searchHashtagsForCompletion(_ query: String, limit: Int) async throws -> [Hashtag] {
         struct Results: Decodable {
@@ -1226,7 +1226,7 @@ public struct MastodonClient: Sendable {
     }
 
     /// ハッシュタグを自分のプロフィールに載せる。上限を超えたときや、載せているタグをもう一度載せたときは、サーバーが422を返す。
-    /// 二重に載せようとして断られないよう、一時的な失敗でも送り直さない。
+    /// 二重に載せようとして断られないよう、一時的な失敗でも再送しない。
     /// https://docs.joinmastodon.org/methods/featured_tags/#feature
     public func featureTag(_ name: String) async throws -> FeaturedTag {
         try await send(formRequest(method: "POST", path: "api/v1/featured_tags", form: [URLQueryItem(name: "name", value: name)]), decoding: FeaturedTag.self, retries: false).0
@@ -1490,7 +1490,7 @@ public struct MastodonClient: Sendable {
         case .blockDomain(let domain): try await blockDomain(domain)
         case .unblockDomain(let domain): try await unblockDomain(domain)
         }
-        // ドメインのブロックの応答は空なので、相手との関係を読み直して返す。読み直せなくても、変更はサーバーが受け付けている。
+        // ドメインのブロックの応答は空なので、相手との関係を再読み込みして返す。再読み込みできなくても、変更はサーバーが受け付けている。
         do {
             guard let relationship = try await relationship(with: id) else { throw URLError(.badServerResponse) }
             return relationship
@@ -1521,7 +1521,7 @@ public struct MastodonClient: Sendable {
         _ = try await send(formRequest(method: "DELETE", path: "api/v1/domain_blocks", form: [URLQueryItem(name: "domain", value: domain)]))
     }
 
-    /// アカウントを通報する。応答の中身は使わない。`Idempotency-Key`を受け付けないため、二重に届かないよう送り直さない。
+    /// アカウントを通報する。応答の中身は使わない。`Idempotency-Key`を受け付けないため、二重に届かないよう再送しない。
     /// https://docs.joinmastodon.org/methods/reports/#post
     public func report(_ request: ReportRequest) async throws {
         var form = [
@@ -1543,9 +1543,9 @@ public struct MastodonClient: Sendable {
         try await get(ElementList<InstanceRule>.self, path: "api/v1/instance/rules", query: []).0.elements
     }
 
-    /// 通知のまとまりを削除する。まとめない通知は、`ungrouped-<通知のID>`のキーで1件だけ消える。応答の中身は使わない。
+    /// 通知のグループを削除する。まとめない通知は、`ungrouped-<通知のID>`のキーで1件だけ消える。応答の中身は使わない。
     /// v2のないサーバーでは、通知をまとめずに読んでいるので、キーの通知のIDをv1で消す。
-    /// v2の削除のパスはキーを含み、404はまとまりがないことも表すため、v2がないことはここでは判断せず、読み込みで分かったものを使う。
+    /// v2の削除のパスはキーを含み、404はグループがないことも表すため、v2がないことはここでは判断せず、読み込みで分かったものを使う。
     /// https://docs.joinmastodon.org/methods/grouped_notifications/#dismiss-group
     /// https://docs.joinmastodon.org/methods/notifications/#dismiss
     public func dismissNotificationGroup(_ groupKey: String) async throws {
@@ -1573,8 +1573,8 @@ public struct MastodonClient: Sendable {
     }
 
     /// サーバーの`instance`。版、ドメイン、投稿欄の上限、機能の有無、ストリーミングの接続先は、すべてここから読む。
-    /// v2を読み、v2がないサーバー（404）でだけv1を読む。応答はこのクライアントの間で覚え、呼び出しごとに要る項目を読み分ける。
-    /// JSONのオブジェクトとして読めない応答は覚えず、次の呼び出しで読み直す。
+    /// v2を読み、v2がないサーバー（404）でだけv1を読む。応答はこのクライアントの間でキャッシュし、呼び出しごとに要る項目を読み分ける。
+    /// JSONのオブジェクトとして読めない応答はキャッシュせず、次の呼び出しで再読み込みする。
     /// https://docs.joinmastodon.org/methods/instance/#v2
     private func instanceResponse() async throws -> InstanceResponseCache.Response {
         try await instanceCache.response { [self] in
@@ -1606,7 +1606,7 @@ public struct MastodonClient: Sendable {
     }
 
     /// - Parameter feature: なくても使える機能のAPIなら、その機能。使えないと分かったら、セッションの間は送らない。
-    /// - Parameter retries: 一時的な失敗で送り直すか。
+    /// - Parameter retries: 一時的な失敗で再送するか。
     private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem], feature: OptionalFeature? = nil, retries: Bool = true) async throws -> (T, HTTPURLResponse) {
         try await get(type, url: credential.instance.appending(path: path), query: query, feature: feature, retries: retries)
     }
@@ -1966,7 +1966,7 @@ public struct AccountListPage: Sendable, Equatable {
     }
 }
 
-/// 関係の変更はサーバーが受け付けたが、そのあとに相手との関係を読み直せなかった。変更が済んだものとして扱い、関係は後で読み直す。
+/// 関係の変更はサーバーが受け付けたが、そのあとに相手との関係を再読み込みできなかった。変更が済んだものとして扱い、関係は後で再読み込みする。
 public struct RelationChangeAppliedError: Error {
     public let underlying: any Error
 
@@ -2036,7 +2036,7 @@ public struct NotificationPage: Sendable, Equatable {
         self.unreadable = unreadable
     }
 
-    /// 読めたものと読めなかったものを合わせたID。まとまりは、読んだ範囲の最も古い通知のIDも含める。続きを読む位置に使うため。
+    /// 読めたものと読めなかったものを合わせたID。グループは、読んだ範囲の最も古い通知のIDも含める。続きを読む位置に使うため。
     var ids: [String] { notifications.flatMap { [$0.id, $0.pageMinID] } + unreadable.flatMap { [$0.id] + ($0.pageMinID.map { [$0] } ?? []) } }
     var count: Int { notifications.count + unreadable.count }
     var isEmpty: Bool { notifications.isEmpty && unreadable.isEmpty }

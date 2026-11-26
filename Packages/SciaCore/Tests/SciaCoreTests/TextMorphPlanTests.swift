@@ -20,7 +20,7 @@ struct TextMorphPlanTests {
         TextMorphScene(lines: lines, window: CGRect(x: 20, y: top, width: 100, height: height), fade: fade)
     }
 
-    /// カプセルに見えている1行目は動かし、カプセルの行末より先の2行目は入力欄で浮かび上がらせる。
+    /// カプセルに見えている1行目は動かし、カプセルの行末より先の2行目は入力欄でフェードインさせる。
     @Test func movesTheVisibleLineAndRaisesTheRest() {
         let a = capsule([line(0 ..< 20, x: 28, y: 30)])
         let b = field([line(0 ..< 10, x: 28, y: 60), line(10 ..< 20, x: 28, y: 82)])
@@ -29,7 +29,7 @@ struct TextMorphPlanTests {
         #expect(plan.stays == [.init(key: .init(content: .body, range: 10 ..< 20), originInB: CGPoint(x: 28, y: 82))])
     }
 
-    /// 返信の宛先はカプセルにないので、入力欄の位置で浮かび上がらせ、続く本文はカプセルから動かす。
+    /// 返信の宛先はカプセルにないので、入力欄の位置でフェードインさせ、続く本文はカプセルから動かす。
     @Test func raisesTheMentionAndMovesTheBodyAfterIt() {
         let a = capsule([line(5 ..< 9, x: 48, y: 30)])
         let b = field([line(0 ..< 9, x: 28, y: 60)])
@@ -63,7 +63,7 @@ struct TextMorphPlanTests {
     }
 
     /// 入力欄をスクロールしていて、カプセルに見える文字の行が入力欄の見える範囲の外にあっても、動かす。見える範囲の端で薄くなって消える。
-    /// 入力欄の見える範囲の外の行も浮かび上がらせるかたまりに入れ、カプセルに見える先頭の行から入力欄に見える行まで、本文をひと続きにスクロールして見せる。
+    /// 入力欄の見える範囲の外の行もフェードインさせるかたまりに入れ、カプセルに見える先頭の行から入力欄に見える行まで、本文をひと続きにスクロールして見せる。
     @Test func movesIntoScrolledOutLinesAndKeepsTheLinesBetween() {
         let a = capsule([line(0 ..< 30, x: 28, y: 30)])
         let b = field([line(0 ..< 10, x: 28, y: -20), line(10 ..< 20, x: 28, y: 2), line(20 ..< 30, x: 28, y: 60)])
@@ -81,7 +81,7 @@ struct TextMorphPlanTests {
         #expect(plan.stays.isEmpty)
     }
 
-    /// 宛先だけの返信では、カプセルの「いまどうしてる？」と入力欄の宛先に重なる文字がないので、宛先を浮かび上がらせるだけにする。
+    /// 宛先だけの返信では、カプセルの「いまどうしてる？」と入力欄の宛先に重なる文字がないので、宛先をフェードインさせるだけにする。
     @Test func mentionOnlyReplyRaisesTheMention() {
         let a = capsule([line(0 ..< 8, x: 48, y: 30, content: .placeholder)])
         let b = field([line(0 ..< 5, x: 28, y: 60)])

@@ -1,20 +1,20 @@
 public import Foundation
 
-/// ビューアで開く画像の先読み（docs/image-loading.mdの「ビューアで開く画像のプリフェッチ」）。
+/// ビューアで開く画像のプリフェッチ（docs/image-loading.mdの「ビューアで開く画像のプリフェッチ」）。
 public enum MediaPrefetch {
     /// ビューアで画像を開いたときに読む元の画像のURL。自分のサーバーが持っていなければ、他のサーバーの元の画像を読む。
     public static func viewerImageURL(of attachment: MediaAttachment) -> URL? {
         attachment.url ?? attachment.remoteUrl
     }
 
-    /// 先読みする画像のURLを、並んでいる順に重ねずに並べる。画像のほかの種類は、ビューアが開いてから少しずつ読むので含めない。
+    /// プリフェッチする画像のURLを、並んでいる順に重ねずに並べる。画像のほかの種類は、ビューアが開いてから少しずつ読むので含めない。
     public static func urls(of attachments: some Sequence<MediaAttachment>) -> [URL] {
         var seen: Set<URL> = []
         return attachments.filter { $0.type == .image }.compactMap(viewerImageURL(of:)).filter { seen.insert($0).inserted }
     }
 }
 
-/// 先読みするものを、並べた順に1つずつ読む。並びを差し替えると、並びから外れたものの読み込みを止め、残りを先頭から読む。
+/// プリフェッチするものを、並べた順に1つずつ読む。並びを差し替えると、並びから外れたものの読み込みを止め、残りを先頭から読む。
 /// まとめて読むと、サーバーの制限（Mastodonの`/media_proxy`はIPごと）に当たり、タイムラインに描く画像まで止まってしまうため、同時には1つしか読まない。
 /// 読む処理は持ち主（`TaskScope`）で始め、持ち主を閉じたら、読んでいる途中のものも残りも読まない。
 @MainActor
@@ -27,7 +27,7 @@ public final class PrefetchQueue<Item: Hashable & Sendable> {
 
     /// - Parameters:
     ///   - scope: 読む処理の持ち主。ログアウトしたら閉じ、そのアカウントで見た画像を読まないようにする。
-    ///   - load: 1つを読む。先読み（`.prefetch`）と名乗って呼ぶ。取り消されたら、読むのをやめて戻る。読めなくても投げずに戻る。
+    ///   - load: 1つを読む。プリフェッチ（`.prefetch`）と名乗って呼ぶ。取り消されたら、読むのをやめて戻る。読めなくても投げずに戻る。
     public init(scope: TaskScope, load: @escaping @MainActor (Item) async -> Void) {
         self.scope = scope
         self.load = load

@@ -1,16 +1,16 @@
 public import Foundation
 import Synchronization
 
-/// ストリーミングの接続を保ち、切れたら間をおいてつなぎ直す。
+/// ストリーミングの接続を保ち、切れたら間をおいて再接続する。
 public struct ReconnectingStream: Sendable {
     /// 接続の状態の変化と、届いたイベント。
     public enum Activity: Sendable, Equatable {
-        /// 接続が成立した。つなぎ直したときは、切れていた間の投稿をRESTで補う。
+        /// 接続が成立した。再接続したときは、切れていた間の投稿をRESTで補う。
         case connected
         case event(StreamingMessage)
-        /// 接続が401で断られた。ストリーミングは有効なトークンでも401を返すことがあるので、トークンが無効かは呼び出し側が確かめる。この後に`disconnected`が続き、つなぎ直しも続ける。
+        /// 接続が401で断られた。ストリーミングは有効なトークンでも401を返すことがあるので、トークンが無効かは呼び出し側が確かめる。この後に`disconnected`が続き、再接続も続ける。
         case unauthorized
-        /// 接続が切れた、またはつながらなかった。`retryAfter`だけ待ってつなぎ直す。つなぐときの応答が再開の時刻を示していれば、それまで待つ。`reason`はログに書く説明で、応答の中身を含まない。
+        /// 接続が切れた、またはつながらなかった。`retryAfter`だけ待って再接続する。つなぐときの応答が再開の時刻を示していれば、それまで待つ。`reason`はログに書く説明で、応答の中身を含まない。
         case disconnected(reason: String, retryAfter: Duration)
     }
 
@@ -41,7 +41,7 @@ public struct ReconnectingStream: Sendable {
             jitter: .standard
         )
 
-        /// - Parameter retryAfter: つなぐときの応答が示した、再開までの長さ。それより前にはつなぎ直さない。
+        /// - Parameter retryAfter: つなぐときの応答が示した、再開までの長さ。それより前には再接続しない。
         func retryDelay(afterFailures failures: Int, retryAfter: Duration? = nil) -> Duration {
             Backoff(initial: initialRetryDelay, maximum: maxRetryDelay, jitter: jitter).delay(afterFailures: failures, retryAfter: retryAfter)
         }
@@ -57,7 +57,7 @@ public struct ReconnectingStream: Sendable {
     private let clock: any Clock<Duration>
     private let waitForPingTimeout: @Sendable (Duration) async throws -> Void
 
-    /// - Parameter clock: つなぎ直すまでと、次のpingまでと、pingの応答を待つ時間を数える。テストでは手で進める時計を渡す。
+    /// - Parameter clock: 再接続するまでと、次のpingまでと、pingの応答を待つ時間を数える。テストでは手で進める時計を渡す。
     public init(
         policy: Policy = .standard,
         clock: any Clock<Duration> = SystemTime.clock,
@@ -80,7 +80,7 @@ public struct ReconnectingStream: Sendable {
         self.connect = connect
     }
 
-    /// キャンセルされるまで、接続とつなぎ直しを続ける。`handle`は届いた順に1つずつ呼ぶ。
+    /// キャンセルされるまで、接続と再接続を続ける。`handle`は届いた順に1つずつ呼ぶ。
     /// 401で断られても終わらない。ストリーミングは、消したリストや許可の範囲が足りないときにも、有効なトークンで401を返すため、`unauthorized`で知らせて、トークンが無効かは呼び出し側に任せる。
     public func run(_ handle: @escaping @Sendable (Activity) async -> Void) async throws {
         var failures = 0
@@ -98,7 +98,7 @@ public struct ReconnectingStream: Sendable {
                         }
                         await handle(activity)
                     }
-                    // 列は失敗でだけ終わるため、ここへは来ない。来たら切れたものとしてつなぎ直す。
+                    // 列は失敗でだけ終わるため、ここへは来ない。来たら切れたものとして再接続する。
                     throw URLError(.networkConnectionLost)
                 } onCancel: {
                     connection.close()
@@ -109,12 +109,12 @@ public struct ReconnectingStream: Sendable {
                 if failure == .unauthorized {
                     await handle(.unauthorized)
                 }
-                // つながっただけでは回数を戻さない。つながってすぐ切れる状態が続くと、毎回最初の間隔でつなぎ直し、そのたびに補完のRESTも送るため。
+                // つながっただけでは回数を戻さない。つながってすぐ切れる状態が続くと、毎回最初の間隔で再接続し、そのたびに補完のRESTも送るため。
                 if let connectedFor, connectedFor() >= policy.maxRetryDelay {
                     failures = 0
                 }
                 failures += 1
-                // 429や503が再開の時刻を示していたら、それより前にはつなぎ直さない。
+                // 429や503が再開の時刻を示していたら、それより前には再接続しない。
                 var retryAfter: Duration?
                 if case .temporary(let after)? = failure {
                     retryAfter = after

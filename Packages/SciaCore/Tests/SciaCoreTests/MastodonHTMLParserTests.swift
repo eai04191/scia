@@ -100,7 +100,7 @@ struct MastodonHTMLParserTests {
         #expect(account.profileText(.field(0))?.text == "https://example.com/a/very/long/path/to/some/page")
     }
 
-    /// サーバーが知らない相手のハンドルは文字のまま届く。補足情報と自己紹介では、押してプロフィールを開けるようにする。
+    /// サーバーが知らない相手のハンドルは文字のまま届く。補足情報と自己紹介では、選択してプロフィールを開けるようにする。
     @Test func profileTextLinksPlainHandle() {
         let expected: [RichText.Inline] = [
             .text("本垢は ", []),

@@ -11,7 +11,7 @@ struct MenuLayoutMoveTests {
         #expect(MenuLayoutMove.toBottom.destination(from: 2, count: 5) == 4)
     }
 
-    /// 端にある行は、端の向きには動かない。押せないボタンと出さない項目を、これで決める。
+    /// 端にある行は、端の向きには動かない。無効のボタンと出さない項目を、これで決める。
     @Test func doesNotMovePastEnds() {
         #expect(MenuLayoutMove.up.destination(from: 0, count: 5) == nil)
         #expect(MenuLayoutMove.toTop.destination(from: 0, count: 5) == nil)

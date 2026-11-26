@@ -16,7 +16,7 @@ struct LinkMenuTreeTests {
         #expect(MenuNodeTests.describe(menu.children) == "ブラウザで開く,デフォルトのブラウザで開く,アプリ内のSafariで開く,プロフィールとして開く,リンクをコピー,共有,カスタマイズ")
     }
 
-    /// httpとhttps以外のリンクでは、「プロフィールとして開く」とアプリ内のSafariで開くを押せない。
+    /// httpとhttps以外のリンクでは、「プロフィールとして開く」とアプリ内のSafariで開くが無効になる。
     @Test func nonWebLinkCannotOpenAsProfile() throws {
         let url = try #require(URL(string: "mailto:alice@example.com"))
         let menu = try #require(LinkMenuTree(url: url, linkBrowser: .inApp).menu(groups: all))

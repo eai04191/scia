@@ -21,7 +21,7 @@ struct OversizedEmojiRecordTests {
         #expect(!record.contains(try url("other.gif")))
     }
 
-    /// 版のない前の書き方のファイルは読まない。先読みが別の絵文字の画像として置いたファイルから残した大きさを、持ち越さないため。
+    /// 版のない前の書き方のファイルは読まない。プリフェッチが別の絵文字の画像として置いたファイルから残した大きさを、持ち越さないため。
     @Test func ignoresRecordWithoutVersion() throws {
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         let old = #"[{"url":"https://files.example.social/custom_emojis/big.gif","width":2000,"height":2000,"frameCount":10}]"#

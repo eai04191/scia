@@ -73,9 +73,9 @@ class ProfileShelfView: UIView {
 
 /// 注目のハッシュタグの棚。`#名前`と投稿の数をカプセルで並べる。
 final class ProfileFeaturedTagsShelfView: ProfileShelfView {
-    /// カプセルが押された。
+    /// カプセルが選択された。
     var onOpen: ((FeaturedTag) -> Void)?
-    /// カプセルを長押ししたときのメニュー。押したカプセルを渡す。nilを返せばメニューを出さない。
+    /// カプセルを長押ししたときのメニュー。選択したカプセルを渡す。nilを返せばメニューを出さない。
     var menuForTag: ((FeaturedTag, UIView) -> UIMenu?)?
     var menuLifecycle = MenuLifecycle()
     private(set) var tags: [FeaturedTag] = []
@@ -104,7 +104,7 @@ final class ProfileFeaturedTagsShelfView: ProfileShelfView {
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
         configuration.attributedTitle = Self.title(of: tag)
         let chip = UIButton(configuration: configuration)
-        // 文字を、ボタンの色ではなく本文の色で描く。ハッシュタグの名前を読ませるためで、地の薄い色で押せることは分かる。
+        // 文字を、ボタンの色ではなく本文の色で描く。ハッシュタグの名前を読ませるためで、地の薄い色で選択できることは分かる。
         chip.configurationUpdateHandler = { button in
             button.configuration?.baseForegroundColor = .label
         }
@@ -143,15 +143,15 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
         let animatesAvatars: Bool
         let animatesCustomEmojis: Bool
         let glyphLanguage: String
-        /// 表示名のカスタム絵文字ごとの描き方。変わったらカードを描き直す。
+        /// 表示名のカスタム絵文字ごとの描き方。変わったらカードを再描画する。
         var emojiDisplays = CustomEmojiDisplays.none
     }
 
-    /// カードが押された。
+    /// カードが選択された。
     var onOpen: ((Account) -> Void)?
-    /// 「すべて見る」が押された。
+    /// 「すべて見る」が選択された。
     var onOpenAll: (() -> Void)?
-    /// カードを長押ししたときのメニュー。押したカードを渡す。nilを返せばメニューを出さない。
+    /// カードを長押ししたときのメニュー。選択したカードを渡す。nilを返せばメニューを出さない。
     var menuForAccount: ((Account, UIView) -> UIMenu?)?
     var menuLifecycle = MenuLifecycle()
     private(set) var content: Content?
@@ -184,7 +184,7 @@ final class ProfileEndorsementsShelfView: ProfileShelfView {
         } ?? false
     }
 
-    /// カードを描き直す。表示名のカスタム絵文字が読み込まれたときに呼ぶ。読み込む前は、絵文字の場所が空白で描かれているため。
+    /// カードを再描画する。表示名のカスタム絵文字が読み込まれたときに呼ぶ。読み込む前は、絵文字の場所が空白で描かれているため。
     func redraw() {
         guard let content else { return }
         rebuild(content)

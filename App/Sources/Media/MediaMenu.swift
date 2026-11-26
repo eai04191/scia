@@ -13,7 +13,7 @@ protocol MediaMenuHost: AnyObject {
     func mediaMenuDidHide()
     /// タップや長押しに選んだ項目が使えないことを、数秒で消えるチップで知らせる。
     func showNotice(_ notice: Notice)
-    /// メディアのメニューと、タップや長押しに選んだ操作を受け付けるか。falseなら、メディアを押しても何もしない。
+    /// メディアのメニューと、タップや長押しに選んだ操作を受け付けるか。falseなら、メディアを選択しても何もしない。
     var offersMediaActions: Bool { get }
 }
 
@@ -24,7 +24,7 @@ extension MediaMenuHost {
 }
 
 /// サムネイル、リンクカードの画像、プロフィールの画像に付ける、メディアのメニューの長押し。
-/// ボタンに組み込まれたコンテキストメニュー（`isContextMenuInteractionEnabled`）は、ボタンがメニューに変形する形で出るため、押した画像が消え、触覚フィードバックもない。
+/// ボタンに組み込まれたコンテキストメニュー（`isContextMenuInteractionEnabled`）は、ボタンがメニューに変形する形で出るため、長押しした画像が消え、ハプティクスもない。
 /// そこでボタンとは別に付け、プロフィールのアイコンと同じく、画像を持ち上げてメニューを出す。
 ///
 /// 持ち上げるときは、サムネイルの切り抜きではなく画像の全体を見せる。保存や共有の前に、どの画像かを確かめられるようにするため。
@@ -32,7 +32,7 @@ extension MediaMenuHost {
 /// UIKitのプレビューは角を決まった大きさで丸めるため、小さなアイコンに使うと形が変わりすぎる。
 /// 画像の全体はUIKitのプレビューとして渡し、持ち上げる元と閉じて戻る先にはサムネイル自身を渡す。UIKitが、切り抜いたサムネイルから画像の全体へ変形して持ち上げ、
 /// 閉じると元の形へ戻し、その間のサムネイルの出し入れも受け持つ。別のビューに描いてサムネイルを自分で透明にすると、UIKitの出し入れと間合いがずれ、
-/// 押し始めや閉じたあとにサムネイルの場所が白く抜けたため。
+/// 押下し始めたときや閉じたあとにサムネイルの場所が白く抜けたため。
 @MainActor
 final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     private weak var view: UIView?
@@ -46,7 +46,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     /// メニューを組む。並びがnilなら設定の並びで組む。nilなら、応答の連鎖で見つけた`MediaMenuHost`に問い合わせる（タイムラインの行の中のサムネイル）。
     private let menu: (@MainActor (MenuLayout<MediaMenuItem>.Groups?) -> BuiltMenu<MediaMenuCommand>?)?
     private var longPress: ObjectLongPress?
-    /// 持ち上げた画像を、渡したピクセル数の長い辺で読み直す。読めなければnil。
+    /// 持ち上げた画像を、渡したピクセル数の長い辺で再読み込みする。読めなければnil。
     /// サムネイルは表示の大きさに合わせて縮めて読んでいるため、画面の幅に引き伸ばすとぼやける。届いたらプレビューの中で差し替える。
     private let sharperImage: (@MainActor (_ maxPixelSize: Int) async -> UIImage?)?
     /// 持ち上げ始めたときにtrue、メニューを閉じ終えたときにfalseで呼ぶ。UIKitは持ち上げる間、元の場所からビューを隠すため、
@@ -91,8 +91,8 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
         return menu.map { $0(groups) } ?? host?.mediaMenu(from: view, at: location, groups: groups)
     }
 
-    /// 押したメディア。メニューを出さないメディア（ぼかしているものなど）ならnil。決まりはdocs/object-actions.mdにある。
-    /// タップでメニューを出すときは、画像を持ち上げずに押した位置にメニューだけを出す。
+    /// 選択したメディア。メニューを出さないメディア（ぼかしているものなど）ならnil。決まりはdocs/object-actions.mdにある。
+    /// タップでメニューを出すときは、画像を持ち上げずにタップした位置にメニューだけを出す。
     func target(at point: CGPoint) -> ObjectTarget<MediaMenuItem, MediaMenuCommand>? {
         let host = host
         guard let view, offersMenu(point), host?.offersMediaActions != false else { return nil }
@@ -184,7 +184,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
         return controller
     }
 
-    /// 持ち上げた画像を読み直す、長い辺のピクセル数。渡した大きさが縦に収まらなければUIKitが縮めるため、画面に収まる大きさで計算し、
+    /// 持ち上げた画像を再読み込みする、長い辺のピクセル数。渡した大きさが縦に収まらなければUIKitが縮めるため、画面に収まる大きさで計算し、
     /// ビューアと同じ上限を超えない。渡した大きさのまま計算すると、縦に長い画像ほど、表示に要らない大きさで展開してしまう。
     static func sharperPixelSize(previewSize: CGSize, within bounds: CGSize, scale: CGFloat) -> Int {
         guard previewSize.width > 0, previewSize.height > 0, bounds.width > 0, bounds.height > 0 else { return 0 }

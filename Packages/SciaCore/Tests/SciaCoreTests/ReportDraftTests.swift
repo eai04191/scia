@@ -115,7 +115,7 @@ struct ReportDraftTests {
         #expect(await submitted.requests == [ReportRequest(accountID: "2", category: .legal)])
     }
 
-    /// ルールを読めなければ、読めなかったことを出し、読み直せる。
+    /// ルールを読めなければ、読めなかったことを出し、再読み込みできる。
     @Test func rulesCanBeReloadedAfterFailure() async {
         let failing = draft(failsRules: true)
         await failing.loadRules()

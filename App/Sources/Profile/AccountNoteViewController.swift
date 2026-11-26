@@ -4,7 +4,7 @@ import SciaCore
 import UIKit
 
 /// 相手のプロフィールに書く、自分にしか見えないメモのシート。決まりはdocs/profile.mdの「メモ」にある。
-/// サーバーはメモを整形しないので、補完と絵文字のシートは付けない。
+/// サーバーはメモを整形しないので、補完と絵文字ピッカーは付けない。
 final class AccountNoteViewController: UIViewController {
     /// 保存できたら、シートを閉じる前に呼ぶ。
     var onSaved: (Relationship) -> Void = { _ in }

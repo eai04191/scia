@@ -34,9 +34,9 @@ extension EmojiImageStore where Image == UIImage {
 }
 
 extension EmojiImageStore where Image == UIImage {
-    /// `view`がウィンドウにある間だけ知らせを受ける。ウィンドウにない間（ほかのタブ、上に重ねた画面の下）に届いた知らせは溜め、
-    /// ウィンドウに入ったときにまとめて渡す。ストアは、読めなかった絵文字を読み直してよくなったときにも知らせ、描き直した画面が求めると読みに行くため、
-    /// 隠れた画面が描き直すと、見えていない絵文字を読む（docs/network.md）。`view`が解放されると呼ばれなくなる。
+    /// `view`がウィンドウにある間だけコールバックを受ける。ウィンドウにない間（ほかのタブ、モーダルビューの下）に届いたコールバックは溜め、
+    /// ウィンドウに入ったときにまとめて渡す。ストアは、読めなかった絵文字を再読み込みしてよくなったときにも知らせ、再描画した画面が求めると読みに行くため、
+    /// 隠れた画面が再描画すると、見えていない絵文字を読む（docs/network.md）。`view`が解放されると呼ばれなくなる。
     func addListener(whileShownIn view: UIView, onLoad: @escaping @MainActor (Set<URL>) -> Void) {
         let gate = EmojiArrivalGate(onLoad: onLoad)
         view.addSubview(gate)
@@ -44,7 +44,7 @@ extension EmojiImageStore where Image == UIImage {
     }
 }
 
-/// ウィンドウにない間の知らせを溜める、大きさのない隠したビュー。ウィンドウに入ったことを`didMoveToWindow`で知るために、知らせを受ける画面に置く。
+/// ウィンドウにない間のコールバックを溜める、大きさのない隠したビュー。ウィンドウに入ったことを`didMoveToWindow`で知るために、コールバックを受ける画面に置く。
 private final class EmojiArrivalGate: UIView {
     private let onLoad: @MainActor (Set<URL>) -> Void
     private var pending: Set<URL> = []

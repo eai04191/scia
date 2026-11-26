@@ -43,7 +43,7 @@ struct ServerFilterCacheTests {
         ServerFilterCache(label: "filters") { try await server.fetch() }
     }
 
-    /// 読んでいなければ、求められたときに読む。読んだフィルターのリストは覚え、次は送らずに返す。
+    /// 読んでいなければ、求められたときに読む。読んだフィルターのリストはキャッシュし、次は送らずに返す。
     @Test func latestLoadsOnceAndRemembers() async throws {
         let server = Server(titles: ["a"])
         let cache = makeCache(server)
@@ -55,7 +55,7 @@ struct ServerFilterCacheTests {
         #expect(server.requests == 1)
     }
 
-    /// 読めたら、読んだ値を知らせる。後から始めた読み直しに追い越された古い応答と、読めなかったときは知らせない。
+    /// 読めたら、読んだ値を知らせる。後から始めた再読み込みに追い越された古い応答と、読めなかったときは知らせない。
     @Test func onValueChangeReportsOnlyLatestSuccess() async throws {
         let server = Server(titles: ["a"], holds: true)
         let cache = makeCache(server)
@@ -77,7 +77,7 @@ struct ServerFilterCacheTests {
         #expect(reported == [["b"]])
     }
 
-    /// 読み直しは、渡した目的を名乗って読む。まだ読んでいないフィルターのリストを待つときは、待っている側が名乗った目的で読む。
+    /// 再読み込みは、渡した目的を名乗って読む。まだ読んでいないフィルターのリストを待つときは、待っている側が名乗った目的で読む。
     @Test func reloadDeclaresPurpose() async throws {
         let purposes = Mutex<[RequestPurpose?]>([])
         let cache = ServerFilterCache(label: "filters") {
@@ -90,7 +90,7 @@ struct ServerFilterCacheTests {
         #expect(purposes.withLock { $0 } == [.display, .prefetch])
     }
 
-    /// メニューを開くたびの読み直しは、読み直している途中なら重ねて送らない。読み終えるまでは、覚えているフィルターのリストをそのまま返す。
+    /// メニューを開くたびの再読み込みは、再読み込みしている途中なら重ねて送らない。読み終えるまでは、キャッシュしているフィルターのリストをそのまま返す。
     @Test func refreshDoesNotOverlapAndKeepsKnownFilters() async throws {
         let server = Server(titles: ["a"])
         let cache = makeCache(server)
@@ -104,7 +104,7 @@ struct ServerFilterCacheTests {
         #expect(server.requests == 2)
     }
 
-    /// フィルターを変えたあとの読み直しは、変える前に始めた読み直しの応答で古いフィルターのリストに戻さない。待っている側は、新しい読み直しの結果を受け取る。
+    /// フィルターを変えたあとの再読み込みは、変える前に始めた再読み込みの応答で古いフィルターのリストに戻さない。待っている側は、新しい再読み込みの結果を受け取る。
     @Test func reloadSupersedesEarlierReload() async throws {
         let server = Server(titles: ["old"], holds: true)
         let cache = makeCache(server)
@@ -121,7 +121,7 @@ struct ServerFilterCacheTests {
         #expect(cache.value?.map(\.title) == ["new"])
     }
 
-    /// 読めなかったら、覚えているフィルターのリストを残して投げる。
+    /// 読めなかったら、キャッシュしているフィルターのリストを残して投げる。
     @Test func failureKeepsKnownFilters() async throws {
         let server = Server(titles: ["a"])
         let cache = makeCache(server)
@@ -157,7 +157,7 @@ struct ServerFilterCacheTests {
         }
     }
 
-    /// 待っている間に後から始めた読み直しが先に届いても、先に始めた読み直しの古いフィルターのリストを返さない。
+    /// 待っている間に後から始めた再読み込みが先に届いても、先に始めた再読み込みの古いフィルターのリストを返さない。
     @Test func latestReturnsNewerReloadEvenWhenItFinishesFirst() async throws {
         let server = OrderedServer([["old"], ["new"]])
         let cache = ServerFilterCache(label: "filters") { try await server.fetch() }
@@ -175,7 +175,7 @@ struct ServerFilterCacheTests {
         #expect(cache.value?.map(\.title) == ["new"])
     }
 
-    /// 先に始めた読み直しが失敗しても、後から始めた読み直しが読めていれば、そのフィルターのリストを返す。
+    /// 先に始めた再読み込みが失敗しても、後から始めた再読み込みが読めていれば、そのフィルターのリストを返す。
     @Test func latestIgnoresFailureOfSupersededReload() async throws {
         let server = OrderedServer([nil, ["new"]])
         let cache = ServerFilterCache(label: "filters") { try await server.fetch() }
@@ -191,7 +191,7 @@ struct ServerFilterCacheTests {
         #expect(try await waiting.value.map(\.title) == ["new"])
     }
 
-    /// 止めたら、走っている読み直しを取り消し、以後は読まない。ログアウトのあとに前のアカウントで通信し続けないため。
+    /// 止めたら、走っている再読み込みを取り消し、以後は読まない。ログアウトのあとに前のアカウントで通信し続けないため。
     @Test func closeCancelsReloadAndStopsLoading() async throws {
         let server = OrderedServer([["a"], ["b"]])
         let cache = ServerFilterCache(label: "filters") { try await server.fetch() }

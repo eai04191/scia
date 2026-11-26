@@ -130,7 +130,7 @@ private struct ScenarioTransport: HTTPTransport {
     }
 
     /// `api/v1/notifications`の形で持つ通知を、`api/v2/notifications`の形（`GroupedNotificationsResults`）で返す。
-    /// シナリオの通知はまとめずに1件ずつのまとまりにする。まとめた見た目を撮るなら、まとまりをシナリオに持たせる。
+    /// シナリオの通知はまとめずに1件ずつのグループにする。まとめた見た目を撮るなら、グループをシナリオに持たせる。
     private static func groupedNotifications(_ items: [ScenarioScript.Item]) -> Data {
         var accounts: [String: Any] = [:]
         var statuses: [String: Any] = [:]

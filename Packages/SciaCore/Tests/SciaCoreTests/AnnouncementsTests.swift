@@ -248,7 +248,7 @@ struct AnnouncementsModelTests {
         #expect(display.unreadMarks == ["3"])
     }
 
-    /// 既読の送信に失敗したら未読に戻し、次に行が出たときに送り直す。
+    /// 既読の送信に失敗したら未読に戻し、次に行が出たときに再送する。
     @Test func retriesDismissAfterFailure() async throws {
         let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1")])], failing: ["dismiss 1"])
         let (model, _) = try await loaded(server)
@@ -262,7 +262,7 @@ struct AnnouncementsModelTests {
         #expect(server.recorded.filter { $0.hasPrefix("dismiss") }.count == 2)
     }
 
-    /// 押したらすぐ表示を変え、失敗したら戻して知らせる。結果を待つ間に同じリアクションを押しても送らない。
+    /// 選択したらすぐ表示を変え、失敗したら戻して知らせる。結果を待つ間に同じリアクションを選択しても送らない。
     @Test func revertsReactionOnFailure() async throws {
         let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [AnnouncementReaction(name: "a", count: 1, me: false)])])], held: ["add"], failing: ["add 1 a"])
         let (model, _) = try await loaded(server)
@@ -280,7 +280,7 @@ struct AnnouncementsModelTests {
         #expect(failures.first?.message.contains("上限に達しました") == true)
     }
 
-    /// 絵文字のシートで選んだ絵文字は末尾に足す。自分がすでにしている絵文字なら、付けたままにして送らない。
+    /// 絵文字ピッカーで選んだ絵文字は末尾に足す。自分がすでにしている絵文字なら、付けたままにして送らない。
     @Test func addsChosenReaction() async throws {
         let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [AnnouncementReaction(name: "a", count: 1, me: true)])])])
         let (model, _) = try await loaded(server)
@@ -295,7 +295,7 @@ struct AnnouncementsModelTests {
         #expect(server.recorded == ["list", "add 1 blob"])
     }
 
-    /// 結果を待っている間に読み直しても、押す前の応答で既読とリアクションを戻さない。
+    /// 結果を待っている間に再読み込みしても、選択する前の応答で既読とリアクションを戻さない。
     @Test func keepsPendingChangesAcrossReload() async throws {
         let before = Self.announcement("1", reactions: [AnnouncementReaction(name: "a", count: 1, me: false)])
         let server = Server(lists: [AnnouncementList(announcements: [before])], held: ["dismiss", "add"])
@@ -311,7 +311,7 @@ struct AnnouncementsModelTests {
         try await waitUntil { model.runningTaskCount == 0 }
     }
 
-    /// 読んでいる間にストリーミングで変化が届いたら、その前に送った読み込みの応答は使わずに読み直す。
+    /// 読んでいる間にストリーミングで変化が届いたら、その前に送った読み込みの応答は使わずに再読み込みする。
     @Test func reloadsWhenChangedWhileLoading() async throws {
         let server = Server(lists: [AnnouncementList(announcements: []), AnnouncementList(announcements: [Self.announcement("1")])], held: ["list"])
         let (model, _) = makeModel(server)
@@ -327,7 +327,7 @@ struct AnnouncementsModelTests {
         #expect(model.announcements.map(\.id) == ["1"])
     }
 
-    /// 読んでいる間に既読が済んだら、既読にする前の応答を使わずに読み直す。
+    /// 読んでいる間に既読が済んだら、既読にする前の応答を使わずに再読み込みする。
     @Test func reloadsWhenOperationSettlesWhileLoading() async throws {
         let before = Self.announcement("1")
         let after = Self.announcement("1", read: true)
@@ -362,7 +362,7 @@ struct AnnouncementsModelTests {
         #expect(model.announcements[0].reactions == [AnnouncementReaction(name: "a", count: 3, me: false)])
     }
 
-    /// 待っている間にお知らせ全体が届いてから失敗したら、届いた数のまま、自分がしたかだけを戻す。届いた数は押した結果を含まないため。
+    /// 待っている間にお知らせ全体が届いてから失敗したら、届いた数のまま、自分がしたかだけを戻す。届いた数は選択した結果を含まないため。
     @Test func keepsSnapshotCountWhenReactionFails() async throws {
         let original = AnnouncementReaction(name: "a", count: 3, me: false)
         let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [original])])], held: ["add"], failing: ["add 1 a"])
@@ -376,7 +376,7 @@ struct AnnouncementsModelTests {
         #expect(model.announcements[0].reactions == [original])
     }
 
-    /// 数が届いたあとに読み直すと、押した結果を重ねた数になる。そのあと失敗したら、重ねた分を戻す。
+    /// 数が届いたあとに再読み込みすると、選択した結果を重ねた数になる。そのあと失敗したら、重ねた分を戻す。
     @Test func revertsReappliedCountAfterReload() async throws {
         let original = AnnouncementReaction(name: "a", count: 3, me: false)
         let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [original])])], held: ["add"], failing: ["add 1 a"])
@@ -432,7 +432,7 @@ struct AnnouncementsModelTests {
         #expect(model.announcements.map(\.id) == ["2"])
     }
 
-    /// 新しいカスタム絵文字を送っている間に読み直しても、画像を失わない。
+    /// 新しいカスタム絵文字を送っている間に再読み込みしても、画像を失わない。
     @Test func keepsPendingCustomEmojiAcrossReload() async throws {
         let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1")])], held: ["add"])
         let (model, _) = try await loaded(server)
@@ -446,7 +446,7 @@ struct AnnouncementsModelTests {
         try await waitUntil { model.runningTaskCount == 0 }
     }
 
-    /// つながる前に始めた読み込みの応答は、つながるまでの変化を含まないので、読み直す。
+    /// つながる前に始めた読み込みの応答は、つながるまでの変化を含まないので、再読み込みする。
     @Test func reloadsAfterConnectingWhileLoading() async throws {
         let server = Server(lists: [AnnouncementList(announcements: []), AnnouncementList(announcements: [Self.announcement("1")])], held: ["list"])
         let (model, _) = makeModel(server)

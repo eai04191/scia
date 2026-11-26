@@ -1,6 +1,6 @@
 public import Foundation
 
-/// ページのURLに対する共通の項目（`URLMenuAction`）を押したときの操作。コピーしたことの知らせ方、共有のシートの起点、開き方は、メニューを出す場所で決める。
+/// ページのURLに対する共通の項目（`URLMenuAction`）を選択したときの操作。コピーしたことの伝え方、共有のシートの起点、開き方は、メニューを出す場所で決める。
 public enum URLMenuCommand: Equatable, Sendable {
     case copy(URL)
     case share(URL)
@@ -9,7 +9,7 @@ public enum URLMenuCommand: Equatable, Sendable {
 }
 
 extension URLMenuAction {
-    /// メニューの項目。`url`がないか、開く項目で選んだ場所で開けなければ、押せないまま並べる。
+    /// メニューの項目。`url`がないか、開く項目で選んだ場所で開けなければ、無効のまま並べる。
     /// - Parameters:
     ///   - title: 共通の名前の代わりに出す名前。投稿のメニューで、ユーザーの項目をサブメニューにせず並べるときに使う。
     ///   - linkBrowser: 開く場所の設定。メニューを組むときの値で決める。
@@ -17,7 +17,7 @@ extension URLMenuAction {
         .action(title ?? self.title, icon: .symbol(symbolName), command(url: url, linkBrowser: linkBrowser))
     }
 
-    /// 押したときの操作。押せなければnil。
+    /// 選択したときの操作。無効ならnil。
     public func command(url: URL?, linkBrowser: LinkBrowser) -> URLMenuCommand? {
         guard let url else { return nil }
         switch self {

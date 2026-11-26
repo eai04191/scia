@@ -5,7 +5,7 @@ import UIKit
 
 /// プロフィール画面。ProfileStoreの状態を、ヘッダーと投稿のタイムラインへつなぐ。
 ///
-/// 画面はナビゲーションに積まれて閉じられるまで生きるため、画面の方がこのコントローラーを持つ。
+/// 画面はナビゲーションにプッシュされて閉じられるまで生きるため、画面の方がこのコントローラーを持つ。
 /// コントローラーから画面へは弱く持ち、互いに持ち合って残り続けないようにする。
 @MainActor
 final class ProfileController {
@@ -20,12 +20,12 @@ final class ProfileController {
     private let logger = SciaLog.logger(category: "profile")
     /// 自己紹介か補足情報のリンクを開く。開き方はセッションが決める。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
-    /// 自分のプロフィールで「プロフィールを編集」を押した。
+    /// 自分のプロフィールで「プロフィールを編集」を選択した。
     var onEditProfile: (() -> Void)?
     var onEditUserDisplay: ((Account) -> Void)?
-    /// フォローかフォロワーの数が押されたときに、開く人のリストを渡して呼ぶ。
+    /// フォローかフォロワーの数が選択されたときに、開く人のリストを渡して呼ぶ。
     var onOpenAccountList: ((AccountListKind) -> Void)?
-    /// フォローのボタンで、紹介している相手のフォローを外した。サーバーは紹介も消すので、自分のプロフィールの棚を読み直すのに使う。
+    /// フォローのボタンで、紹介している相手のフォローを外した。サーバーは紹介も消すので、自分のプロフィールの棚を再読み込みするのに使う。
     var onEndorsementRemoved: (() -> Void)?
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのコントローラーが捨てられたときに閉じる。
     private let tasks: TaskScope
@@ -121,7 +121,7 @@ final class ProfileController {
         viewController.onApplySettingsChange = redrawPinned
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .display) }
         viewController.onRetry = { [weak self] in self?.retry() }
-        // 引っぱって読み直した投稿が多く、手元の投稿との間が残ったときだけギャップの行が出る。読み直しの続きなので、押されたときだけ読む。
+        // pull to refreshで読んだ投稿が多く、手元の投稿との間が残ったときだけギャップの行が出る。pull to refreshの続きなので、選択されたときだけ読む。
         viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
         header.onToggleFollow = { [weak self] source in self?.confirmToggleFollow(from: source) }
         header.onRetryRelationship = { [weak self] in self?.reloadRelationship() }
@@ -192,15 +192,15 @@ final class ProfileController {
         observeHeaderContent()
         // ヘッダー画像をバーの下に見せる間はタイトルを出さない。最初に出してから消すと、開いた直後にちらつくため、最初から決める。
         viewController.navigationItem.title = header.extendsUnderBars ? nil : "@\(account.acct)"
-        // 名前や自己紹介の絵文字が届いたら、ヘッダーを描き直す。投稿の絵文字はタイムラインが描き直す。
-        // 画面に出ていない間に届いた知らせは、出たときに描き直す（`addListener(whileShownIn:onLoad:)`）。
+        // 名前や自己紹介の絵文字が届いたら、ヘッダーを再描画する。投稿の絵文字はタイムラインが再描画する。
+        // 画面に出ていない間に届いた絵文字は、出たときに再描画する（`addListener(whileShownIn:onLoad:)`）。
         viewController.emojiImages.addListener(whileShownIn: header) { [weak self] urls in
             self?.emojiImagesDidLoad(urls)
         }
     }
 
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
-        // 固定された投稿はタイムラインの行ではなく棚に並べるので、タイムラインの描き直しでは描き直されない。棚のカードもここで描き直す。
+        // 固定された投稿はタイムラインの行ではなく棚に並べるので、タイムラインの再描画では再描画されない。棚のカードもここで再描画する。
         if header.redrawPinned(ifUsing: urls) {
             viewController?.headerDidChangeSize()
         }
@@ -242,7 +242,7 @@ final class ProfileController {
         scrollView.topEdgeEffect.isHidden = shows || MacNavigationBarBackground.isNeeded
     }
 
-    /// ヘッダーに出す値が変わったら描き直す。フォローを送っている途中の表示も、ここで切り替わる。
+    /// ヘッダーに出す値が変わったら再描画する。フォローを送っている途中の表示も、ここで切り替わる。
     private func observeHeaderContent() {
         withObservationTracking {
             updateHeader()
@@ -267,7 +267,7 @@ final class ProfileController {
         }
     }
 
-    /// 画面を移る動きの最中なら、移り終わってから行う。ヘッダーを描き直したりタイムラインの行を作ったりすると、メインスレッドが100msほど止まる。
+    /// 画面遷移の最中なら、終わってから行う。ヘッダーを再描画したりタイムラインの行を作ったりすると、メインスレッドが100msほど止まる。
     /// 止まっている間も、移り変わりに相乗りする動き（チップの列）は時計どおりに進むため、移り変わりとずれて跳んで見える。
     private func afterTransition(_ work: @escaping @MainActor (ProfileController) -> Void) {
         // 戻り値は相乗りの動きを登録できたかで、completionは登録できなくても呼ばれるため、戻り値で分けない。
@@ -303,7 +303,7 @@ final class ProfileController {
     }
 
     /// 開いたときにフォローの関係がまだなければ、少し待っても届かないときだけ、フォローのボタンの中にインジケータを出す。
-    /// 一度読んだ関係は覚えているので、開き直したときは待たない。
+    /// 一度読んだ関係はキャッシュしているので、開き直したときは待たない。
     private func waitForRelationship() {
         guard store.followState == .unknown, let viewController else { return }
         let clock = viewController.clock
@@ -327,7 +327,7 @@ final class ProfileController {
         showEntries(animatesRemoval: true)
     }
 
-    /// ユーザーのメニューで変えた関係を反映する。フォローを変えたら、フォロワー数のためにアカウントを読み直す。
+    /// ユーザーのメニューで変えた関係を反映する。フォローを変えたら、フォロワー数のためにアカウントを再読み込みする。
     func apply(_ relationship: Relationship, reloadsAccount: Bool) {
         store.apply(relationship)
         guard reloadsAccount else { return }
@@ -351,7 +351,7 @@ final class ProfileController {
     /// 開いているプロフィールのアカウントの`acct`。
     var acct: String { store.account.acct }
 
-    // MARK: - 前に出ている間の読み直し
+    // MARK: - 前に出ている間の再読み込み
 
     /// タブに置いたプロフィールで、前に出ている間は間隔をおいて新着を読む。アカウントの投稿のストリームはないため。
     /// 見ていない間は読まず、見えたときとアプリに戻ったときに、見ていなかった間の新着を読む。決まりはdocs/tabs.mdの「プロフィール」にある。
@@ -394,7 +394,7 @@ final class ProfileController {
     }
 
     /// 見ているタイムラインの、一番新しい投稿より後の投稿を読んで足す。空のタイムラインなら、最新のページを読む。最初のタイムラインを出す前は、その読み込みに任せる。
-    /// 読めなかったことは画面に出さない。次の読み直しか、引っぱって読み直したときに読む。
+    /// 読めなかったことは画面に出さない。次の再読み込みか、pull to refreshのときに読む。
     private func readNew() async {
         let timeline = store.timeline
         guard listReveal == .revealed, timeline === shownTimeline, let viewController else { return }
@@ -416,7 +416,7 @@ final class ProfileController {
         showEntries()
     }
 
-    /// 固定を変えたあとに、固定された投稿を読み直す。外した投稿は、使う人の操作の結果なので、閉じて詰める動きで消す。
+    /// 固定を変えたあとに、固定された投稿を再読み込みする。外した投稿は、使う人の操作の結果なので、閉じて詰める動きで消す。
     /// 読めなかったときは、前の固定された投稿のまま残す。固定の操作はできているので、知らせない。
     func reloadPinned() {
         run(.action) { controller in
@@ -446,7 +446,7 @@ final class ProfileController {
         }
     }
 
-    /// 載せるものを変えたあとに、注目のハッシュタグと紹介しているユーザーを読み直す。外したものは、使う人の操作の結果なので、閉じて詰める動きで消す。
+    /// 載せるものを変えたあとに、注目のハッシュタグと紹介しているユーザーを再読み込みする。外したものは、使う人の操作の結果なので、閉じて詰める動きで消す。
     /// 読めなかったときは、前の棚のまま残す。載せる操作はできているので、知らせない。
     func reloadFeatured() {
         run(.action) { controller in
@@ -508,7 +508,7 @@ final class ProfileController {
         viewController?.headerDidChangeSize()
     }
 
-    /// - Parameter replacing: タイムラインを切り替えた。タブを押した場所に残し、その下の中身だけを差し替える。
+    /// - Parameter replacing: タイムラインを切り替えた。タブを選択した場所に残し、その下の中身だけを差し替える。
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
     private func showEntries(replacing: Bool = false, animatesRemoval: Bool = false) {
         // 固定された投稿の棚とその下のタブは、タイムラインと一緒に出す。棚はタブより上にあるので、どちらのタブでも出す。
@@ -594,7 +594,7 @@ final class ProfileController {
         onEditUserDisplay?(store.account)
     }
 
-    /// 開いているユーザーのユーザーのメニューを出すボタン。並びの設定を開いている間に変えても反映するよう、押すたびに組む。
+    /// 開いているユーザーのユーザーのメニューを出すボタン。並びの設定を開いている間に変えても反映するよう、選択するたびに組む。
     private func makeUserMenuItem() -> UIBarButtonItem {
         let item = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
         item.accessibilityLabel = ProfileTexts.userMenu
@@ -655,7 +655,7 @@ final class ProfileController {
         afterTransition { $0.updateHeader() }
     }
 
-    /// 自分にしか見えないメモの欄を押したら、ユーザーのメニューの「メモを編集」と同じシートを開く。
+    /// 自分にしか見えないメモの欄を選択したら、ユーザーのメニューの「メモを編集」と同じシートを開く。
     private func editPrivateNote() {
         guard let relationship = store.relationship else { return }
         let account = store.account
@@ -702,7 +702,7 @@ final class ProfileController {
         }
     }
 
-    /// - Parameter purpose: 末尾が近づいて読むときは`.display`。再試行を押したときは`.action`。
+    /// - Parameter purpose: 末尾が近づいて読むときは`.display`。再試行を選択したときは`.action`。
     private func loadOlder(purpose: RequestPurpose) {
         let timeline = store.timeline
         guard !timeline.isLoading, !timeline.reachedEnd, !timeline.isEmpty else { return }
@@ -719,14 +719,14 @@ final class ProfileController {
         }
     }
 
-    /// タイムラインを引っぱって離したときに、アカウントと固定された投稿を読み直し、一番新しい投稿より後の投稿を上に足す。
+    /// タイムラインをpull to refreshしたときに、アカウントと固定された投稿を再読み込みし、一番新しい投稿より後の投稿を上に足す。
     /// タイムラインをまだ読めていなければ、最初の読み込みをやり直す。読めたタイムラインが空なら、最新のページを読む。
     private func refresh() async {
         guard let viewController else { return }
         logger.info("profile refresh")
         let timeline = store.timeline
         if timeline.isEmpty, case .failed = viewController.footerState {
-            // タイムラインを出す前なので、ほかは読み直さない。
+            // タイムラインを出す前なので、ほかは再読み込みしない。
             await loadInitial()?.value
             return
         }
@@ -743,7 +743,7 @@ final class ProfileController {
                 }
             }
         } catch {
-            // 読めなかったことは、タイムラインの上の読み直しなので画面に出さない。前のタイムラインのまま残す。
+            // 読めなかったことは、pull to refreshなので画面に出さない。前のタイムラインのまま残す。
             logger.error("profile refresh failed: \(SciaLog.describe(error), privacy: .public)")
         }
         await profile
@@ -818,7 +818,7 @@ final class ProfileController {
 
     // MARK: - フォロー
 
-    /// フォローは確かめずに送る。外すときとリクエストを取り消すときは、押し間違えに備えて、ユーザーのメニューと同じ文言で確かめる。
+    /// フォローは確かめずに送る。外すときとリクエストを取り消すときは、誤って選択したときに備えて、ユーザーのメニューと同じ文言で確かめる。
     private func confirmToggleFollow(from source: UIView) {
         guard let change = store.followState.toggleChange else { return }
         guard let confirmation = Confirmation.relationChange(change, acct: store.account.acct, endorsed: store.relationship?.endorsed ?? false) else {

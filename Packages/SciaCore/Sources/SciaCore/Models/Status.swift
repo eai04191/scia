@@ -25,7 +25,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let inReplyToId: String?
     /// 返信先の投稿を書いた人のID。
     public let inReplyToAccountId: String?
-    /// 投票。投票したときと読み直したときに、サーバーの結果で差し替える。
+    /// 投票。投票したときと再読み込みしたときに、サーバーの結果で差し替える。
     public private(set) var poll: Poll?
     /// 本文のリンク先から作ったカード。サーバーは投稿を配信してからカードを付けるため、後から取り直して差し替えることがある。
     public private(set) var card: PreviewCard?
@@ -271,8 +271,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
 
     /// 投稿の行の高さを変えない中身（お気に入り、ブースト、ブックマークの状態と、お気に入り、ブースト、引用の件数）のほかは、`other`と同じか。
     /// 同じ投稿なら`false`。ブーストなら、元の投稿のその中身も除いて比べる。
-    /// タイムラインは、中身が変わった行を、高さが変わるものとして下の行ごと動かして描き直す。ここに並べた中身だけが変わった行は、高さが変わらないので、動かさずに描き直す。
-    /// 高さを変えない中身を投稿に足したら、ここにも足す。足し忘れても、高さの変わらない行で下の行の像を取るだけで、見た目は変わらない。
+    /// タイムラインは、中身が変わった行を、高さが変わるものとして下の行ごと動かして再描画する。ここに並べた中身だけが変わった行は、高さが変わらないので、動かさずに再描画する。
+    /// 高さを変えない中身を投稿に足したら、ここにも足す。足し忘れても、高さの変わらない行で下の行のスナップショットを撮るだけで、見た目は変わらない。
     public func differsOnlyInFixedHeightParts(from other: Status) -> Bool {
         self != other && adoptingFixedHeightParts(of: other) == other
     }
@@ -320,7 +320,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         return status
     }
 
-    /// 投票を、投票したときや読み直したときのサーバーの結果に差し替えたもの。
+    /// 投票を、投票したときや再読み込みしたときのサーバーの結果に差し替えたもの。
     /// 待っている間に編集で投票が作り直されたり、選択肢が変わったりしていたら、結果は編集の前の投票のものなので、差し替えずにそのまま返す。
     /// Mastodonは、編集で選択肢を変えても投票のIDを変えないため、IDだけでは見分けられない。
     public func adoptingPoll(_ result: Poll) -> Status {
@@ -388,7 +388,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         /// 引用元へのリンク（`quote-inline`）。引用のある投稿で除く。
         public let quoteLink: Bool
         /// 参照のページへのリンク（`reference-link-inline`）。参照が引用元の1件だけの投稿で除く。
-        /// Fedibirdは引用を参照としても記録するので、囲みで出す引用元を二重に示すだけになる（docs/quote.mdの「Fedibirdの形」）。
+        /// Fedibirdは引用を参照としても記録するので、カードで出す引用元を二重に示すだけになる（docs/quote.mdの「Fedibirdの形」）。
         public let referenceLink: Bool
     }
 

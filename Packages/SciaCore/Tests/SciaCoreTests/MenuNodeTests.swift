@@ -2,10 +2,10 @@ import Foundation
 import SciaCore
 import Testing
 
-/// メニューの木の組み方と、タップや長押しに割り当てた1項目の行い方を確かめる。決まりはdocs/menus.mdとdocs/object-actions.mdにある。
+/// メニューのツリーの組み方と、タップや長押しに割り当てた1項目の行い方を確かめる。決まりはdocs/menus.mdとdocs/object-actions.mdにある。
 @MainActor
 struct MenuNodeTests {
-    /// 項目の名前。まとまりは`|`で区切り、横並びのまとまりは`=`で始め、サブメニューは`名前[中身]`、開いてから読む項目は`…`で表す。
+    /// 項目の名前。グループは`|`で区切り、横並びのグループは`=`で始め、サブメニューは`名前[中身]`、開いてから読む項目は`…`で表す。
     static func describe<C>(_ nodes: [MenuNode<C>]) -> String {
         nodes.map { node in
             switch node.content {
@@ -27,7 +27,7 @@ struct MenuNodeTests {
         #expect(short.headingTitle == short.title)
     }
 
-    /// 区切り線で分けたまとまりごとに並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
+    /// 区切り線で分けたグループごとに並べ、「その他」の中身はサブメニューにする。中身のないグループと「その他」は出さない。
     @Test func groupsBecomeInlineGroupsAndMoreSubmenu() {
         let layout = MenuLayout<LinkMenuItem>(elements: [
             .rowSeparator(.medium), .item(.openInBrowser, isVisible: true), .item(.share, isVisible: true),
@@ -52,7 +52,7 @@ struct MenuNodeTests {
         #expect(Self.describe(single) == "カスタマイズ")
     }
 
-    /// URLの項目は、URLがないか、選んだ場所で開けなければ押せない。
+    /// URLの項目は、URLがないか、選んだ場所で開けなければ無効。
     @Test func urlItemsAreDisabledWithoutURLOrBrowser() throws {
         let page = try #require(URL(string: "https://example.social/@alice/1"))
         let mail = try #require(URL(string: "mailto:alice@example.social"))
@@ -64,7 +64,7 @@ struct MenuNodeTests {
         #expect(URLMenuAction.share.node(title: "@aliceを共有", url: page, linkBrowser: .inApp).title == "@aliceを共有")
     }
 
-    /// 1項目だけの並びで組んだメニューは、押せる項目が1つならそれを行い、押せなければ理由を添えて知らせ、サブメニューが1つなら中身を出す。
+    /// 1項目だけの並びで組んだメニューは、有効な項目が1つならそれを行い、無効なら理由を添えて知らせ、サブメニューが1つなら中身を出す。
     @Test func singleItemOutcome() {
         let enabled = MenuNode<Int>.submenu("", [.group([.action("返信", 1)])])
         let disabled = MenuNode<Int>.submenu("", [.group([.action("編集", subtitle: "締め切りまで5分を切った投票は編集できません", isEnabled: false, 2)])])

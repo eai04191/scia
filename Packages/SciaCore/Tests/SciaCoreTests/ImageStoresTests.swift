@@ -66,7 +66,7 @@ struct ImageStoresTests {
         #expect(viewer.width == 8)
     }
 
-    /// 元の画像を読むかと先読みするかは回線と設定で、プレビュー画像を引き伸ばしてよい倍率はチューニングで決める。
+    /// 元の画像を読むかとプリフェッチするかは回線と設定で、プレビュー画像を引き伸ばしてよい倍率はチューニングで決める。
     @Test func thumbnailPolicyCombinesNetworkSettingsAndTuning() throws {
         let settings = AppSettings(defaults: TestScratch.defaults("ImageStoresTests"))
         let tuning = TuningStore(defaults: nil)
@@ -75,7 +75,7 @@ struct ImageStoresTests {
 
         #expect(network.thumbnailPolicy(settings: settings, tuning: tuning) == MediaThumbnailPolicy(enhancement: .enhancement(onExpensiveNetwork: true), upscaleTolerance: 1.5, prefetch: .prefetch))
 
-        // モバイル通信では先読みしない。設定で元の画像を読まないなら、元の画像も読まない。
+        // モバイル通信ではプリフェッチしない。設定で元の画像を読まないなら、元の画像も読まない。
         network.receive(isSatisfied: true, conditions: NetworkConditions(isConstrained: false, isExpensive: true))
         settings.usesOriginalThumbnailsOnExpensiveNetwork = false
         #expect(network.thumbnailPolicy(settings: settings, tuning: tuning) == MediaThumbnailPolicy(enhancement: nil, upscaleTolerance: 1.5, prefetch: nil))

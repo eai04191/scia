@@ -44,7 +44,7 @@ public struct KeychainCredentialStore: CredentialStorage {
         case errSecSuccess:
             guard let items = result as? [[String: Any]] else { throw KeychainError.unexpectedStatus(errSecDecode) }
             // 中身を読めない項目が1件あっても、残りのアカウントで使えるよう、記録して飛ばす。消さずに残すので、読める形に直れば次に読める。
-            // Keychainそのものの失敗（ロック中など）は一時的なことがあるので、飛ばさずに投げ、呼び出し側が読み直せるようにする。
+            // Keychainそのものの失敗（ロック中など）は一時的なことがあるので、飛ばさずに投げ、呼び出し側が再読み込みできるようにする。
             return try items.compactMap { $0[kSecAttrAccount as String] as? String }.compactMap { account in
                 do {
                     return try load(account: account)

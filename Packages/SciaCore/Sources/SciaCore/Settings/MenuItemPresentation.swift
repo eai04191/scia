@@ -6,7 +6,7 @@ public protocol MenuItemPresentable {
     /// 名前だけでは同じ並びのほかの項目と見分けられないときに、名前の下に添える文字。
     var detail: String? { get }
     var symbolName: String { get }
-    /// 並びの画面で、「その他」の境目の前と後ろに分けた節の見出しと、見出しだけでは伝わらないことを添える注記。
+    /// 並びの画面で、「その他」の境目の前と後ろに分けたセクションの見出しと、見出しだけでは伝わらないことを添える注記。
     /// 境目の前と後ろの項目をどこへ入れるかは、項目の種類ごとに違う。
     static var mainSectionTitle: String { get }
     static var mainSectionNote: String? { get }
@@ -16,11 +16,11 @@ public protocol MenuItemPresentable {
     static var supportsSeparators: Bool { get }
     /// 横並びの区切り線を足せるか。
     static var supportsRowSeparators: Bool { get }
-    /// 「その他」の境目の後ろの節でも、横並びの区切り線が効くか。
+    /// 「その他」の境目の後ろのセクションでも、横並びの区切り線が効くか。
     static var arrangesRowsInMoreSection: Bool { get }
     /// 表示する項目を1つは残すか。残すなら、最後の1つのスイッチを切れなくする。
     static var requiresVisibleItem: Bool { get }
-    /// 並びの画面に、「その他」の境目の後ろの節を出すか。境目を持たない並び（アクションバー）では出さない。
+    /// 並びの画面に、「その他」の境目の後ろのセクションを出すか。境目を持たない並び（アクションバー）では出さない。
     static var hasMoreSection: Bool { get }
 }
 
@@ -40,9 +40,9 @@ extension MenuItemPresentable {
 
 /// メニューの項目の中身。名前とアイコンはここから決める。
 public enum MenuItemContent {
-    /// URLに対する共通の項目。名前、アイコン、押したときの動きは共通の項目のものを使う。
+    /// URLに対する共通の項目。名前、アイコン、選択したときの動きは共通の項目のものを使う。
     case url(URLMenuAction)
-    /// このメニューだけの項目。押したときの動きは、メニューを組む側で決める。
+    /// このメニューだけの項目。選択したときの動きは、メニューを組む側で決める。
     case own(title: String, symbolName: String)
 }
 
@@ -214,7 +214,7 @@ extension HashtagMenuItem: MenuItemContentProviding {
 }
 
 /// 投稿、ユーザー、リンク、ハッシュタグのメニューに共通の、ページのURLに対する項目。
-/// どのメニューに置くかはメニューごとの項目のリストで決め、ここでは名前とアイコンと、押せる状態かどうかと、開く項目がどこで開くかをそろえる。
+/// どのメニューに置くかはメニューごとの項目のリストで決め、ここでは名前とアイコンと、有効かどうかと、開く項目がどこで開くかをそろえる。
 public enum URLMenuAction: Sendable {
     case copyLink
     case share
@@ -254,7 +254,7 @@ public enum URLMenuAction: Sendable {
         switch self {
         case .openInBrowser: setting.browser(for: url)
         case .openInDefaultBrowser: .external
-        // アプリ内のSafariは、httpとhttps以外のURLを渡すと例外で落ちる。黙って既定のブラウザで開くと選んだ場所と違うため、押せないようにする。
+        // アプリ内のSafariは、httpとhttps以外のURLを渡すと例外で落ちる。黙って既定のブラウザで開くと選んだ場所と違うため、無効にする。
         // 出し方は、設定でアプリ内のSafariを全画面にしていれば全画面、そうでなければシートにする。
         case .openInAppSafari:
             Self.inAppBrowser(following: setting).browser(for: url).opensInApp ? Self.inAppBrowser(following: setting) : nil
@@ -317,7 +317,7 @@ extension TabItem: MenuItemPresentable {
     public static var mainSectionTitle: String { "タブバー" }
     public static var moreSectionTitle: String { "切り替えタブ" }
     public static var moreSectionNote: String? { "タブバーの最後のタブにまとめて表示されます。" }
-    /// タブは1つずつ並ぶだけで、まとまりを分けるものがないため、区切り線を足させない。
+    /// タブは1つずつ並ぶだけで、グループを分けるものがないため、区切り線を足させない。
     public static var supportsSeparators: Bool { false }
     public static var supportsRowSeparators: Bool { false }
     /// タブバーを空にできないため、最後の1つは無効にさせない。

@@ -1,13 +1,13 @@
 import Foundation
 
 
-/// 一時的な失敗で、自動で送り直す回数と間隔。
+/// 一時的な失敗で、自動で再送する回数と間隔。
 ///
-/// 送り直すのは、何度送っても結果が変わらないGETと、`Idempotency-Key`付きの投稿だけ。
-/// お気に入りなどは、サーバーに届いていたかどうか分からないまま送り直すと、意図しない結果になりうるため送り直さない。
+/// 再送するのは、何度送っても結果が変わらないGETと、`Idempotency-Key`付きの投稿だけ。
+/// お気に入りなどは、サーバーに届いていたかどうか分からないまま再送すると、意図しない結果になりうるため再送しない。
 public struct RetryPolicy: Sendable {
     public var maxRetries: Int
-    /// 1回目の送り直しの前に待つ時間。送り直すたびに倍にする。
+    /// 1回目の再送の前に待つ時間。再送するたびに倍にする。
     public var initialDelay: Duration
     public var jitter: Jitter
 
@@ -19,7 +19,7 @@ public struct RetryPolicy: Sendable {
 
     public static let standard = RetryPolicy(maxRetries: 2, initialDelay: .seconds(1), jitter: .standard)
 
-    /// - Parameter retry: 何回目の送り直しか。1から数える。
+    /// - Parameter retry: 何回目の再送か。1から数える。
     func delay(beforeRetry retry: Int) -> Duration {
         Backoff(initial: initialDelay, maximum: nil, jitter: jitter).delay(afterFailures: retry)
     }
@@ -29,12 +29,12 @@ public struct RetryPolicy: Sendable {
         return method == "GET" || request.value(forHTTPHeaderField: "Idempotency-Key") != nil
     }
 
-    /// 少し待てば通りうる失敗。再開の時刻を示した429や503は、送り直さずに自動の通信を止める側で扱う。
+    /// 少し待てば通りうる失敗。再開の時刻を示した429や503は、再送せずに自動の通信を止める側で扱う。
     static func isTemporary(statusCode: Int) -> Bool {
         [502, 503, 504].contains(statusCode)
     }
 
-    /// 回線で控えた失敗（`HTTPFailure.unavailableOnNetwork`）は、同じ回線で送り直しても同じなので含めない。
+    /// 回線で控えた失敗（`HTTPFailure.unavailableOnNetwork`）は、同じ回線で再送しても同じなので含めない。
     static func isTemporary(_ error: URLError) -> Bool {
         HTTPFailure(error) != .unavailableOnNetwork && [.timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed].contains(error.code)
     }

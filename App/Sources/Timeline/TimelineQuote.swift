@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 extension TimelineViewController {
-    /// 投稿の中の引用の囲みと、その押下の処理。引用がなければnil。決まりは`docs/quote.md`。
+    /// 投稿の中の引用のカードと、その押下の処理。引用がなければnil。決まりは`docs/quote.md`。
     /// 引用元の注意書き、フィルターの警告、ぼかしは、引用元の投稿のIDで覚えている状態を当てる。
     /// - Parameter itemID: この中身を置く行。注意書きを開閉したり、ブロックした人の引用元を開いたりしたときに、この行の画面上の位置を保つ。
     /// - Parameter translatesBody: 引用元の本文を自動翻訳の訳文で出してよい。
@@ -24,8 +24,8 @@ extension TimelineViewController {
                 guard let self else { return }
                 recordOpenThread()
                 let frame = view.convert(view.bounds, to: nil)
-                // 引用元がさらに引用していると、その引用はIDだけで届いている。スレッドは押した投稿を読み直さないため、
-                // そのまま開くと、スレッドの中で入れ子の引用を出せない。読み直してから開く。
+                // 引用元がさらに引用していると、その引用はIDだけで届いている。スレッドは選択した投稿を再読み込みしないため、
+                // そのまま開くと、スレッドの中で入れ子の引用を出せない。再読み込みしてから開く。
                 if quoted.quote != nil {
                     onOpenStatusID?(quoted.id, frame)
                 } else {
@@ -53,7 +53,7 @@ extension TimelineViewController {
             if case .link(let nestedID) = NestedQuote(quoted.quote) {
                 actions.selectNote = { [weak self] _ in
                     guard let self else { return }
-                    // 押した行の位置にスレッドの投稿を置く。行が見えなくなっていれば、画面の上端に置く。
+                    // 選択した行の位置にスレッドの投稿を置く。行が見えなくなっていれば、画面の上端に置く。
                     let cell = itemID.flatMap { self.cell(for: $0) }
                     self.onOpenStatusID?(nestedID, cell.map { $0.convert($0.bounds, to: nil) } ?? .zero)
                 }
@@ -71,7 +71,7 @@ extension TimelineViewController {
         }
     }
 
-    /// ブロックかミュートしている人の引用元を開く。同じ投稿をブーストした行と通知の行もまとめて描き直し、押した行の画面上の位置を保つ。
+    /// ブロックかミュートしている人の引用元を開く。同じ投稿をブーストした行と通知の行もまとめて再描画し、選択した行の画面上の位置を保つ。
     func revealQuote(of status: Status, keeping anchorID: ItemID?) {
         quoteReveals.reveal(status)
         guard isViewLoaded else { return }
@@ -81,17 +81,17 @@ extension TimelineViewController {
         requestEmbedTranslations()
     }
 
-    /// 囲みで出す引用元が替わったので、見えている範囲が変わらなくても、訳すものを頼み直す。
+    /// カードで出す引用元が替わったので、見えている範囲が変わらなくても、訳すものを頼み直す。
     private func requestEmbedTranslations() {
         guard translations != nil, viewIfLoaded?.window != nil else { return }
         requestTranslationsAroundVisibleRows()
     }
 
-    /// 引用元の、受け取ったあとの変化を受け取り、その引用元を出している行を描き直す。
+    /// 引用元の、受け取ったあとの変化を受け取り、その引用元を出している行を再描画する。
     /// 使う人の操作によらない変化でも、見えている行の高さは下の行ごと動かしてつなぐ（docs/quote.md）。
     func applyQuoteSourceChanges(_ changes: QuoteSourceChanges, affecting change: QuoteSourceChange) {
         quoteSourceChanges = changes
-        // まだ開いていない画面は、開いたときにこの状態で描く。描き直しのために画面を読み込ませない。
+        // まだ開いていない画面は、開いたときにこの状態で描く。再描画のために画面を読み込ませない。
         guard isViewLoaded else { return }
         let ids = displayedItemIDs.filter { id in
             guard let quoted = self.status(for: id)?.displayed.quote?.quotedStatus else { return false }

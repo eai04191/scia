@@ -11,7 +11,7 @@ struct InstanceResponseCacheTests {
         return InstanceResponseCache.Response(data: Data(#"{"version":"4.5.0"}"#.utf8), response: response, request: URLRequest(url: url))
     }
 
-    /// 同じ読み込みを待つ呼び出しの1つを取り消すと、その呼び出しはその場で終わり、ほかの呼び出しのために読み続けて、読めた応答を覚える。
+    /// 同じ読み込みを待つ呼び出しの1つを取り消すと、その呼び出しはその場で終わり、ほかの呼び出しのために読み続けて、読めた応答をキャッシュする。
     @Test func cancellingOneWaiterKeepsLoadingForOthers() async throws {
         let gate = Gate()
         let cache = InstanceResponseCache()
@@ -73,7 +73,7 @@ struct InstanceResponseCacheTests {
         #expect(purposes.withLock { $0 } == [.display, .action])
     }
 
-    /// 待っている呼び出しがすべて取り消されたら読み込みも取り消し、次の呼び出しで読み直す。
+    /// 待っている呼び出しがすべて取り消されたら読み込みも取り消し、次の呼び出しで再読み込みする。
     @Test func cancellingAllWaitersCancelsLoad() async throws {
         let gate = Gate()
         let cache = InstanceResponseCache()

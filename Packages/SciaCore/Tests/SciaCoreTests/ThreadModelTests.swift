@@ -7,7 +7,7 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct ThreadModelTests {
-    /// 押した投稿は2で、その祖先は1。`failsContext`がtrueを返す間は、会話の読み込みを422で断る。
+    /// 選択した投稿は2で、その祖先は1。`failsContext`がtrueを返す間は、会話の読み込みを422で断る。
     private static func transport(failsContext: @escaping @Sendable () -> Bool = { false }) -> RoutedTransport {
         RoutedTransport { request in
             switch request.url?.path() {
@@ -27,7 +27,7 @@ struct ThreadModelTests {
         let model = ThreadModel(
             focus: try TimelineModelFixtures.status(2),
             client: MastodonClient(credential: TimelineModelFixtures.credential(), transport: transport),
-            // つながったときの読み直しが、確かめる読み込みと重ならないよう、つながらないハブにする。つなぎ直しは時計を進めない限り起きない。
+            // つながったときの再読み込みが、確かめる読み込みと重ならないよう、つながらないハブにする。再接続は時計を進めない限り起きない。
             streamingHub: TimelineModelFixtures.hub(ScriptedConnector([.init(handshake: .fail(URLError(.notConnectedToInternet)))])),
             tasks: TaskScope()
         )
@@ -36,7 +36,7 @@ struct ThreadModelTests {
         return (model, display)
     }
 
-    /// 押した投稿だけを並べて開き、会話は画面を移り終えてから、押した投稿の位置を保って並べる。
+    /// 選択した投稿だけを並べて開き、会話は画面遷移を終えてから、選択した投稿の位置を保って並べる。
     @Test func showsContextAfterTransitionKeepingFocus() async throws {
         let (model, display) = try makeModel(transport: Self.transport())
         var deferred: [@MainActor () -> Void] = []
@@ -58,7 +58,7 @@ struct ThreadModelTests {
         #expect(firstLoadShownCount == 1)
     }
 
-    /// 会話を読めなかったら、フッターに失敗を出し、再試行で読み直す。
+    /// 会話を読めなかったら、フッターに失敗を出し、再試行で再読み込みする。
     @Test func retryReloadsAfterFailure() async throws {
         let failsContext = Mutex(true)
         let (model, display) = try makeModel(transport: Self.transport { failsContext.withLock { $0 } })

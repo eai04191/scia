@@ -47,7 +47,7 @@ public final class StatusDeletion {
         self.didDelete = didDelete
     }
 
-    /// 削除を送る。ブーストを渡せば、ブーストされた投稿を消す。送り終える前に確かめ直して押しても、同じ削除を重ねて送らない。
+    /// 削除を送る。ブーストを渡せば、ブーストされた投稿を消す。送り終える前に確かめ直して選択しても、同じ削除を重ねて送らない。
     /// - Parameter onFailure: 消せなかったときに呼ぶ。一覧にも投稿欄にも触れない。
     public func delete(_ status: Status, onFailure: @escaping @MainActor (any Error) async -> Void) {
         let id = status.displayed.id

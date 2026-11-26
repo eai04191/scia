@@ -265,7 +265,7 @@ struct FeedTimelineModelTests {
         }
     }
 
-    /// サーバーが読ませないタイムラインは、読めないと伝え、購読をやめ、引っぱった読み直し、電波の回復、前面に戻ったとき、再試行でも読まない。
+    /// サーバーが読ませないタイムラインは、読めないと伝え、購読をやめ、pull to refresh、電波の回復、前面に戻ったとき、再試行でも読まない。
     /// Fedibirdは、ローカルのタイムラインを空で返し、購読を断るため（docs/tabs.md）。
     @Test func unavailableFeedStopsLoadingAndStreaming() async throws {
         let requests = Mutex(0)
@@ -672,7 +672,7 @@ struct FeedTimelineModelTests {
         #expect(model.isSubscribedToStreaming)
     }
 
-    /// ストリーミングで新着を受け取るタイムラインでは、`setShown`を呼んでも間隔をおいて読み直さない。
+    /// ストリーミングで新着を受け取るタイムラインでは、`setShown`を呼んでも間隔をおいて再読み込みしない。
     @Test func setShownDoesNotPollStreamedFeeds() async throws {
         let transport = Self.homeTransport([2, 1])
         let clock = TestClock()
@@ -689,7 +689,7 @@ struct FeedTimelineModelTests {
         #expect(transport.requests(to: "/api/v1/timelines/home").count == loads)
     }
 
-    /// ユーザーのハッシュタグのタイムラインは、画面に出たら新着を読み、出ている間は間隔をおいて読み直す。見えなくなったらやめる。
+    /// ユーザーのハッシュタグのタイムラインは、画面に出たら新着を読み、出ている間は間隔をおいて再読み込みする。見えなくなったらやめる。
     @Test func setShownPollsAccountHashtag() async throws {
         let transport = RoutedTransport { request in
             guard request.url?.path() == "/api/v1/accounts/2/statuses" else { return (404, Data(#"{"error":"Not found"}"#.utf8)) }

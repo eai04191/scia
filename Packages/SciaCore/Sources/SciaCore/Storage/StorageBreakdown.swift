@@ -5,7 +5,7 @@ public struct StorageBreakdown: Sendable, Equatable {
     public enum Category: Sendable, Hashable, CaseIterable {
         /// 添付ファイルの元のファイルのキャッシュ。
         case mediaFiles
-        /// ビューアで開く画像を先読みした置き場。開いていない画像なので、メディアのキャッシュとは分ける。
+        /// ビューアで開く画像をプリフェッチした置き場。開いていない画像なので、メディアのキャッシュとは分ける。
         case mediaPrefetch
         /// カスタム絵文字とUnicodeの絵文字の画像と、サーバーごとのカスタム絵文字のリスト。
         case emojis
@@ -115,7 +115,7 @@ extension StorageBreakdown {
         let reports = StorageUsage.allocatedSize(of: locations.discomfortReports)
         let settings = StorageUsage.allocatedSize(of: locations.preferences)
         // 実機では、アプリ内のSafariのデータはSafariのサービスの持ち物で、アプリからは中を読めない（iOS 27のiPhone SE 3で確かめた）。
-        // 0と出すと、何もないように見えて消すボタンも押せなくなるため、測れないものとして出す。
+        // 0と出すと、何もないように見えて消すボタンも無効になるため、測れないものとして出す。
         let safari = StorageUsage.allocatedSizeIfReadable(of: locations.inAppSafari)
         let emojis = locations.emojis.map { ($0, StorageUsage.allocatedSize(of: $0)) }
         let emojiBytes = emojis.reduce(0) { $0 + $1.1 }
@@ -158,10 +158,10 @@ extension StorageBreakdown {
     }
 }
 
-/// ストレージの画面の消すボタン。空き容量を増やすためのボタンなので、消してもまた見れば読み直すものは、1つのボタンでまとめて消す。
+/// ストレージの画面の消すボタン。空き容量を増やすためのボタンなので、消してもまた見れば再読み込みするものは、1つのボタンでまとめて消す。
 /// 消せない項目は、使う人のデータか、なくなるとアプリが動かないもの。
 public enum StorageRemoveTarget: CaseIterable, Hashable, Sendable {
-    /// 消しても、また見れば読み直すもの。
+    /// 消しても、また見れば再読み込みするもの。
     case caches
     /// 消すとサイトからログアウトするので、キャッシュと分ける。
     case inAppSafari
@@ -199,7 +199,7 @@ public enum StorageRemoveTarget: CaseIterable, Hashable, Sendable {
         }
     }
 
-    /// 消せる大きさ。測れない項目が1つでもあればnilにして、消せるものがあるかもしれないので押せるままにする。
+    /// 消せる大きさ。測れない項目が1つでもあればnilにして、消せるものがあるかもしれないので有効のままにする。
     public func removableBytes(in breakdown: StorageBreakdown) -> Int64? {
         categories.reduce(Int64(0)) { sum, category in
             guard let sum, let bytes = breakdown.item(category).map(\.removableBytes) ?? 0 else { return nil }
@@ -214,15 +214,15 @@ public enum StorageRemoveTarget: CaseIterable, Hashable, Sendable {
 }
 
 extension StorageBreakdown {
-    /// 内訳の節の見出し。
+    /// 内訳のセクションの見出し。
     public static let dataHeader = "書類とデータ"
     /// 内訳の合計の行の名前。
     public static let totalTitle = "合計"
-    /// 測れなかった項目があるときに、内訳の節の下に出す説明。
+    /// 測れなかった項目があるときに、内訳のセクションの下に出す説明。
     public static let unmeasuredFooter = "“不明”の項目は合計に入っていません。"
     /// 測れなかった大きさの値。
     public static let unmeasuredValue = "不明"
-    /// 表示済みと先読みを合わせた、メディアのキャッシュの名前。合計の行の下に、表示済みと先読みの2段に分けて並べる（docs/image-loading.md）。
+    /// 表示済みとプリフェッチを合わせた、メディアのキャッシュの名前。合計の行の下に、表示済みとプリフェッチの2段に分けて並べる（docs/image-loading.md）。
     public static let mediaCacheTitle = "メディアのキャッシュ"
     /// アプリ本体の大きさの行の名前。
     public static let appTitle = "アプリ本体"

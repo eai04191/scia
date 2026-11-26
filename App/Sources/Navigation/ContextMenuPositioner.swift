@@ -61,7 +61,7 @@ final class ContextMenuPositioner: NSObject {
 
     /// 毎コマ呼ぶ。テストでは直接呼ぶ。
     @objc func updatePosition() {
-        // 画面を閉じたりログアウトしたりして窓がなくなったら、閉じる知らせを待たずに止める。
+        // 画面を閉じたりログアウトしたりしてウィンドウがなくなったら、閉じるコールバックを待たずに止める。
         guard let window, let limit = bottomLimit?() else {
             stop()
             return
@@ -74,7 +74,7 @@ final class ContextMenuPositioner: NSObject {
         // UIKitはメニューの位置を変形（transform）でも決めるため、変形を含めた位置で下端を測る。変形を除いて`center`と大きさから測ると、移しすぎた。
         // 開く動きの間はUIKitが毎コマ大きさを変えるので、広がりきるまでの数コマは、UIKitが決めた位置から少しずつ上へずれて見える。
         let frame = menu.convert(menu.bounds, to: window)
-        // 上端は安全領域の上端より上へ出さない。UIKitはメニューを自分が決めた位置に収まる高さにしているため、項目が多くて高いメニューを下端に合わせて移すと、
+        // 上端はセーフエリアの上端より上へ出さない。UIKitはメニューを自分が決めた位置に収まる高さにしているため、項目が多くて高いメニューを下端に合わせて移すと、
         // 先頭の項目がステータスバーの下に隠れ、中をスクロールしても見えなくなる。そのときは、下端が投稿欄より下に残っても、上端で止める。
         let headroom = max(0, frame.minY - window.safeAreaInsets.top)
         let delta = max(-headroom, min(0, limit - frame.maxY))

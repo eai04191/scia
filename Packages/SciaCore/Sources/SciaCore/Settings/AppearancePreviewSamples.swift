@@ -118,7 +118,7 @@ public struct AppearancePreviewSamples: Sendable {
         posts.filter { !$0.displayed.spoilerText.isEmpty }
     }
 
-    /// プレビューに並べる見本。引用の囲みを出した投稿は、いつも最後に並べる。Xの投稿の囲みも同じ値で描くが、Xの投稿は設定でオンにしたときだけ出すため、見本には出さない。
+    /// プレビューに並べる見本。引用のカードを出した投稿は、いつも最後に並べる。Xの投稿のカードも同じ値で描くが、Xの投稿は設定でオンにしたときだけ出すため、見本には出さない。
     /// - Parameters:
     ///   - isDark: ダークの外観で描く。リンクカードの画像を外観に合わせる。
     ///   - groups: 見本を出す分類。渡すと、その分類の見本（`sampleIDs(for:focus:appearance:)`）だけを返す。nilならすべての見本を返す。
@@ -159,7 +159,7 @@ public struct AppearancePreviewSamples: Sendable {
     ]
 
     /// 分類のうち一部の項目にしか要らない見本。上限を見せる大きい見本などは、ふだん出すと見本の枠からはみ出すので、その項目を触っている間だけ出す。
-    /// 右に並べる写真にだけ効く項目は、投稿の添付ファイルを本文の下に並べ、囲みの添付ファイルだけを右に並べるときは、引用の見本で見せる。
+    /// 右に並べる写真にだけ効く項目は、投稿の添付ファイルを本文の下に並べ、カードの添付ファイルだけを右に並べるときは、引用の見本で見せる。
     private static func focusSamples(_ focus: AppearanceFocus?, appearance: AppearanceChoices) -> [String] {
         let onlyEmbedIsBeside = appearance.mediaArrangement == .belowBody && appearance.resolvedEmbedMediaArrangement == .besideBody
         return switch focus {
@@ -178,7 +178,7 @@ public struct AppearancePreviewSamples: Sendable {
 
     private static let quoteID = "preview-quote"
 
-    /// 投稿を引用した投稿。引用元には、囲みの中の部品が出るよう、本文と画像を付ける。
+    /// 投稿を引用した投稿。引用元には、カードの中の部品が出るよう、本文と画像を付ける。
     private static func quote(now: Date, sources: PreviewSampleSources) -> Status {
         let image = sources.photos[.wide]
         let avatar = sources.avatar
@@ -304,7 +304,7 @@ public struct AppearancePreviewSamples: Sendable {
             // 分類を並べた画面に出す、部品の少ない投稿。
             status("basic", minutes: 1, account: scia, content: "<p>設定を変えるとタイムラインの投稿がこのように表示されます。</p>"),
             boost,
-            // 注意書きのある投稿の画像はぼかされ、サムネイル同士のすき間が見えないため、画像は注意書きのない投稿に付ける。
+            // 注意書きのある投稿の画像はぼかされ、サムネイル同士のgapが見えないため、画像は注意書きのない投稿に付ける。
             status("thread", minutes: 20, account: scia, content: PreviewPhoto.credit([.gridFirst, .gridSecond]), media: [describedImage, image]),
             // 公開範囲の記号と編集済みの「*」を見せるため、未収載で編集した投稿にする。
             status("reply", minutes: 12, account: friend, content: "<p>注意書きの下の本文です。</p>", spoiler: "注意書き", replyingTo: scia, visibility: .unlisted, edited: true),
@@ -322,7 +322,7 @@ public struct AppearancePreviewSamples: Sendable {
             // 名前の行の部品を1件で見せる投稿。入りきらない名前、公開範囲の記号、編集済みの「*」を出し、名前と画像のあいだを見せるため本文を付けないので、写真のクレジットは書かない。
             // 画像は、見本の枠に収まるよう横長にする。
             status("name", minutes: 1.5, account: longNamed, content: "", media: [wideImage], visibility: .unlisted, edited: true),
-            // 段落のあいだ、引用の字下げ、本文の絵文字を見せる投稿。
+            // 段落のあいだ、引用のインデント、本文の絵文字を見せる投稿。
             status("paragraphs", minutes: 1.2, account: friend, content: "<p>段落の1つ目です🎉:scia:</p><blockquote><p>引用した文です。</p></blockquote><p>段落の2つ目です。</p>", emojis: emojis),
             plainBoost,
             // 行の余白と区切り線を見せる、部品の少ない投稿の次に並べる1行の投稿。
@@ -339,7 +339,7 @@ public struct NotificationAppearancePreviewSamples: Sendable {
     public static let myAccountID = AppearancePreviewSamples.myAccountID
 
     /// 見本の通知が使う写真。UIは、この写真とアイコン（`PreviewSampleSources.avatar`）だけを用意すればよい。
-    /// サムネイル同士のすき間が見えるよう、違う写真を2枚付ける。同じ人の写真にし、クレジットを1行に収める。
+    /// サムネイル同士のgapが見えるよう、違う写真を2枚付ける。同じ人の写真にし、クレジットを1行に収める。
     public static let photos: [PreviewPhoto] = [.gridFirst, .gridSecond]
 
     private let notifications: [MastodonNotification]
@@ -363,7 +363,7 @@ public struct NotificationAppearancePreviewSamples: Sendable {
     }
 
     /// 分類ごとに出す見本。その分類の項目が効く部品の出る、なるべく小さい通知を選び、既定の設定では見本の枠に収まるようにする。
-    /// 種類の記号の文字の列とのすき間は、メンションなどの名前の上の行の記号にも効くので、メンションも出す。
+    /// 種類の記号の文字の列とのgapは、メンションなどの名前の上の行の記号にも効くので、メンションも出す。
     private static let groupSamples: [AppearanceGroup.ID: [String]] = [
         "group": ["group"],
         "header": ["follow"],

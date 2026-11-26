@@ -1,6 +1,6 @@
 public import Foundation
 
-/// Xの投稿。リンクカードの代わりに、引用のような囲みで、作者、本文、添付ファイルを出すために読む。
+/// Xの投稿。リンクカードの代わりに、引用のようなカードで、作者、本文、添付ファイルを出すために読む。
 ///
 /// サーバーのカードは、Xの投稿には画像を1枚しか付けず、動画のURLも2枚目以降の画像もないため、fxtwitterのAPIから読む。
 /// https://github.com/FxEmbed/FxEmbed
@@ -45,11 +45,11 @@ public struct XPost: Hashable, Sendable {
     }
 }
 
-/// Xの投稿が引用している投稿。囲みは1段だけにし、引用していることを示す1行だけを出す（docs/link-card.md）。
+/// Xの投稿が引用している投稿。カードは1段だけにし、引用していることを示す1行だけを出す（docs/link-card.md）。
 public enum XPostQuote: Hashable, Sendable {
-    /// 押すと、このURLの投稿を開く。
+    /// 選択すると、このURLの投稿を開く。
     case link(URL)
-    /// 押せず、出せない理由を出す。
+    /// 選択できず、出せない理由を出す。
     case unavailable(QuoteDisplay.Reason)
 }
 
@@ -64,7 +64,7 @@ public enum XPostLink {
     /// Xの短縮URLのホスト。
     static let shortenerHost = "t.co"
 
-    /// `status`のリンクカードの代わりに囲みで出す、Xの投稿のID。ブーストなら、ブーストされた投稿を渡す。
+    /// `status`のリンクカードの代わりにカードで出す、Xの投稿のID。ブーストなら、ブーストされた投稿を渡す。
     /// 本文のカードを付けうるリンクのうち、t.coを飛ばした最初のリンクで決める（docs/link-card.md）。
     /// そのリンクがXの投稿でなくても、ほかの短縮URLからたどった先のように、サーバーのカードのURLがXの投稿なら、そのID。
     /// 行を描くたびと、Xの投稿が届くたびにタイムラインの全件で呼ぶため、Xの投稿へのリンクがありえない本文は解析しない。
@@ -139,7 +139,7 @@ struct FxTwitterResponse: Decodable {
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
-            // 囲みを押すと開く先なので、Mastodonの投稿のURLと同じくhttpとhttpsだけを受け付ける。
+            // カードを選択すると開く先なので、Mastodonの投稿のURLと同じくhttpとhttpsだけを受け付ける。
             url = try container.decodeRequiredURL(.destination, forKey: .url)
             rawText = try container.decode(RawText.self, forKey: .rawText)
             lang = try container.decodeIfPresent(String.self, forKey: .lang)
@@ -151,7 +151,7 @@ struct FxTwitterResponse: Decodable {
     }
 
     /// 引用している投稿。出せないときは、投稿の代わりに`type`が`tombstone`のものが入る。
-    /// 中身は出さず、押して開く先だけを読む。
+    /// 中身は出さず、選択して開く先だけを読む。
     enum Quote: Decodable {
         case post(url: URL?)
         /// `deleted`、`suspended`、`private`、`blocked`、`unavailable`。

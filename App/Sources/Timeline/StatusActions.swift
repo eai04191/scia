@@ -34,7 +34,7 @@ extension TimelineViewController {
         return statusMenu(for: entry, id: id, groups: groups)?.menu
     }
 
-    /// ハッシュタグの行のハッシュタグのメニュー。「すべての投稿」は、行を押したときと同じく、そのハッシュタグのタイムラインを開く。投稿がないので「投稿したユーザーの投稿」は出さない。
+    /// ハッシュタグの行のハッシュタグのメニュー。「すべての投稿」は、行を選択したときと同じく、そのハッシュタグのタイムラインを開く。投稿がないので「投稿したユーザーの投稿」は出さない。
     private func hashtagRowMenu(for hashtag: Hashtag, id: ItemID) -> UIMenu? {
         HashtagMenu(
             name: hashtag.name,
@@ -47,8 +47,8 @@ extension TimelineViewController {
         ).built(groups: settings.hashtagMenuLayout.groups)?.menu
     }
 
-    /// メニューの木と描き方。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
-    /// 項目の出し分けはSciaCoreの`StatusMenuTree`が決め、ここでは画面の状態（スレッドを開けるか、ぼかしているか、本文を選べるか）を渡し、押された操作を行う。
+    /// メニューのツリーと描き方。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
+    /// 項目の出し分けはSciaCoreの`StatusMenuTree`が決め、ここでは画面の状態（スレッドを開けるか、ぼかしているか、本文を選べるか）を渡し、選択された操作を行う。
     /// 出す項目がなければnil。
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときと、ほかの対象のメニューの中のサブメニューで組むときに渡す。渡したときは、フォローリクエストの承認と却下を置かない。
@@ -87,13 +87,13 @@ extension TimelineViewController {
         }
         var tree = statusMenuTree(status: status, notification: notification, id: id, canSelectText: body != nil)
         tree.customEmoji = { emojis.node(for: $0) }
-        // メニューを開くので、ハッシュタグの状態と、ほかのアカウントのアイコンを、次に開くときのために読み直す。
+        // メニューを開くので、ハッシュタグの状態と、ほかのアカウントのアイコンを、次に開くときのために再読み込みする。
         tree.hashtagActions = hashtagMenuActions
         tree.otherAccounts = otherAccounts?.list() ?? []
         let built = tree.menu(groups: groups ?? defaultStatusMenuGroups(for: id, status: status), includesFollowRequest: groups == nil)
         reloadRelations(built.shownUserIDs, groups: tree.userMenu)
         built.refreshOtherAccountUsers()
-        // 前に別のアカウントで見つけた投稿は、組んだメニューでは覚えていた状態で出し、探し直した状態は次に開いたときから使う。
+        // 前に別のアカウントで見つけた投稿は、組んだメニューではキャッシュしていた状態で出し、探し直した状態は次に開いたときから使う。
         if built.showsOtherAccounts, let status {
             otherAccounts?.refresh(status, people: built.otherAccountPeople, relationIDs: built.otherAccountRelationIDs)
         }
@@ -101,8 +101,8 @@ extension TimelineViewController {
         return built.root.map { BuiltMenu(root: $0, renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() } }
     }
 
-    /// 設定の並びで組む投稿のメニューの並び。アクションバーを出している投稿のメニューでは、設定に従って、アクションバーに並べた項目とボタンの長押しで出す項目を、押せないものも含めて除く（docs/post-action-bar.mdの「ボタン」）。並びを渡して組むメニュー（ほかのメニューの中のサブメニュー、割り当てた1項目）は、ここを通らないので除かない。
-    /// 引用の囲みのメニューは、囲みのある投稿の`id`で引用元の投稿について組むので、メニューの投稿がその投稿そのものでなければ除かない。アクションバーは引用元への操作ではないため。
+    /// 設定の並びで組む投稿のメニューの並び。アクションバーを出している投稿のメニューでは、設定に従って、アクションバーに並べた項目とボタンの長押しで出す項目を、無効なものも含めて除く（docs/post-action-bar.mdの「ボタン」）。並びを渡して組むメニュー（ほかのメニューの中のサブメニュー、割り当てた1項目）は、ここを通らないので除かない。
+    /// 引用のカードのメニューは、カードのある投稿の`id`で引用元の投稿について組むので、メニューの投稿がその投稿そのものでなければ除かない。アクションバーは引用元への操作ではないため。
     func defaultStatusMenuGroups(for id: ItemID, status: Status?) -> MenuLayout<StatusMenuItem>.Groups {
         let groups = settings.statusMenuLayout.groups
         guard let status, self.status(for: id)?.id == status.id, showsActionBar(itemID: id, shown: status.displayed) else { return groups }
@@ -113,8 +113,8 @@ extension TimelineViewController {
         return groups.excluding(removed)
     }
 
-    /// 投稿のメニューの木。項目の出し分けに要る画面の状態を渡す。カスタム絵文字のメディアのメニューは、組む側が足す。
-    /// 組むだけでは通信しない。メニューに出る人の関係を読み直すのは、メニューを出す側が行う。
+    /// 投稿のメニューのツリー。項目の出し分けに要る画面の状態を渡す。カスタム絵文字のメディアのメニューは、組む側が足す。
+    /// 組むだけでは通信しない。メニューに出る人の関係を再読み込みするのは、メニューを出す側が行う。
     func statusMenuTree(status: Status?, notification: MastodonNotification?, id: ItemID, canSelectText: Bool) -> StatusMenuTree {
         var tree = StatusMenuTree(status: status, notification: notification, now: now(), linkBrowser: settings.linkBrowser)
         tree.rowStatus = self.status(for: id)
@@ -122,7 +122,7 @@ extension TimelineViewController {
         tree.canOpenThread = status.map(canOpenThread(of:)) ?? false
         tree.mediaIsCovered = status.map { mediaCover(for: $0) != nil } ?? false
         tree.canSelectText = canSelectText
-        // 訳文で出すのは、行の投稿の本文と、その行の引用の囲みの本文。通知の行では、どちらも訳文で出さない。
+        // 訳文で出すのは、行の投稿の本文と、その行の引用のカードの本文。通知の行では、どちらも訳文で出さない。
         if notification == nil, let shown = status?.displayed, let row = entry(for: id)?.postStatus?.displayed,
            translationSources(of: row).contains(where: { $0.id == .status(shown.id) }), translations?.hasTranslation(of: TranslationSource(shown)) == true {
             tree.translationDisplay = translations?.isShowingOriginal(TranslationSource(shown)) == true ? .original : .translation
@@ -145,15 +145,15 @@ extension TimelineViewController {
         settings.userMenuLayout.submenuGroups(actions: settings.userActions)
     }
 
-    /// メニューに出る人の関係を、まとめて1回で読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
-    /// 覚えていなかった人の関係の項目は、この読み直しを待って中身を渡す。関係で中身が変わる項目を出していなければ読まない。
+    /// メニューに出る人の関係を、まとめて1回で再読み込みする。組んだメニューはキャッシュしていた関係のまま出し、再読み込みした関係は次に開いたときから使う。
+    /// キャッシュになかった人の関係の項目は、この再読み込みを待って中身を渡す。関係で中身が変わる項目を出していなければ読まない。
     /// - Parameter groups: ユーザーのメニューを組んだ並び。サブメニューでは隠した関係の項目も出るので、組んだ並びで決める。
     private func reloadRelations(_ ids: [String], groups: MenuLayout<UserMenuItem>.Groups) {
         guard !ids.isEmpty, groups.needsRelationship else { return }
         userMenuActions?.reloadRelations(ids)
     }
 
-    /// 投稿のメニューの描き方と、押された操作の行い方。
+    /// 投稿のメニューの描き方と、選択された操作の行い方。
     /// - Parameter selectableBody: 「テキストを選択」で選ぶ本文。メニューを組んだときの行のものを使う。
     private func statusMenuRenderer(status: Status?, notification: MastodonNotification?, request: NotificationRequest?, id: ItemID, selectableBody: PostBodyView?, emojis: CustomEmojiMenus) -> MenuRenderer<StatusMenuCommand> {
         MenuRenderer { [weak self, weak selectableBody] command in
@@ -251,7 +251,7 @@ extension TimelineViewController {
 
     /// 絵文字の画像を、メニューのアイコンの大きさの正方形に収め、元の色のまま描く。
     /// メニューは並べるときはアイコンの枠に縮めるが、開いたサブメニューの見出しでは画像を元の大きさのまま置き、メニューの外まではみ出したため。
-    /// アイコンの大きさは、本文の文字の大きさの設定に合わせる。
+    /// アイコンの大きさは、本文のDynamic Typeに合わせる。
     static func menuIcon(_ image: UIImage) -> UIImage {
         let side = menuIconSide
         guard image.size.width > 0, image.size.height > 0 else { return image }
@@ -311,7 +311,7 @@ extension TimelineViewController {
         return menu.built(groups: groups ?? settings.linkMenuLayout.groups)
     }
 
-    /// Xの投稿の囲みのような、ほかのサービスの投稿を長押ししたときに出すメニュー。出す項目がなければnil。
+    /// Xの投稿のカードのような、ほかのサービスの投稿を長押ししたときに出すメニュー。出す項目がなければnil。
     /// - Parameters:
     ///   - text: コピーや翻訳に渡す本文。本文がなければnilで、本文を使う項目を出さない。
     ///   - groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
@@ -486,7 +486,7 @@ extension TimelineViewController {
     private func loadMenuIcon(of account: Account, replacing placeholder: UIImage, displaySettings: AppSettings? = nil) {
         guard let key = userMenuIconKey(of: account, displaySettings: displaySettings) else { return }
         Task(.action) { [weak self] in
-            // 使う人が開いたメニューなので、前に読めなかったアイコンも間隔を待たずに読み直す。
+            // 使う人が開いたメニューなので、前に読めなかったアイコンも間隔を待たずに再読み込みする。
             guard let self, let image = try? await avatarImages.image(for: key, retriesNow: true),
                   let icon = Self.userMenuIcon(image, shape: settings.appearance.avatarShape) else { return }
             contextMenuIcons.setIcon(icon, for: placeholder)
@@ -515,7 +515,7 @@ extension TimelineViewController {
         }
     }
 
-    /// プロフィールのハンドルを押したときの、コピーのメニュー。決まりはdocs/profile.mdの「ハンドル」にある。
+    /// プロフィールのハンドルを選択したときの、コピーのメニュー。決まりはdocs/profile.mdの「ハンドル」にある。
     func profileHandleMenu(for account: Account) -> UIMenu? {
         // コピーの項目だけを出すので、共有のシートは出さない。
         let menu = UserMenu(subject: UserMenuSubject(.account(account)), actions: userMenuActions, handlers: profileURLHandlers(shareFrom: nil), host: self)
@@ -574,7 +574,7 @@ extension TimelineViewController {
         return item
     }
 
-    /// プロフィールのヘッダーの部品から出すメニューの、URLの項目の動き。共有のシートは押した部品から出す。
+    /// プロフィールのヘッダーの部品から出すメニューの、URLの項目の動き。共有のシートは選択した部品から出す。
     private func profileURLHandlers(shareFrom view: UIView) -> URLMenuHandlers {
         profileURLHandlers { [weak view] in $0.sourceView = view }
     }

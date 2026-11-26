@@ -163,7 +163,7 @@ struct OperationFailureStoreTests {
         #expect(notices.timeText(of: lastYear, calendar: calendar, locale: locale) == "2025/9/21 23:13")
     }
 
-    /// シートを開いたまま日付が変わったら、今日の失敗として時刻だけを出していた行を描き直す。
+    /// シートを開いたまま日付が変わったら、今日の失敗として時刻だけを出していた行を再描画する。
     @Test func dayChangeRedrawsTheTimeText() {
         let notices = OperationStatus { date }
         let failure = notices.recordFailure(title: "お気に入りを変更できませんでした", reason: reason)

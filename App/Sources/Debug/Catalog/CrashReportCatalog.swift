@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 隔離した投稿について開発者に送る内容の画面。クラッシュと非公開の投稿を用意せずに、状態を並べる。送るボタンを押しても何も送らない。
+/// 隔離した投稿について開発者に送る内容の画面。クラッシュと非公開の投稿を用意せずに、状態を並べる。送るボタンを選択しても何も送らない。
 enum CrashReportCatalog {
     private struct Failure: LocalizedError {
         var errorDescription: String? { "カタログの読み込みの失敗" }

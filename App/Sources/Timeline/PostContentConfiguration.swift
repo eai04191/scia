@@ -23,9 +23,9 @@ struct PostContentConfiguration: UIContentConfiguration {
         /// `text`のうち、名前の後ろに添える部分（ハンドルなど）。「投稿の見た目」のプレビューで、名前の部分と分けて場所を示すのに使う。
         var secondaryRange: NSRange?
         let accessibilityText: String
-        /// 押すと開くプロフィールの人の名前。VoiceOverの、プロフィールを開く操作の名前に使う。人を指さない行ではnil。
+        /// 選択すると開くプロフィールの人の名前。VoiceOverの、プロフィールを開く操作の名前に使う。人を指さない行ではnil。
         var accountName: String?
-        /// 押すと`onOpenContextAccount`を呼ぶ。返信のラベルは押せる見た目にせず、押下を行に渡してスレッドを開かせるため、受けない。
+        /// 選択すると`onOpenContextAccount`を呼ぶ。返信のラベルは選択できる見た目にせず、押下を行に渡してスレッドを開かせるため、受けない。
         var opensAccount = true
     }
 
@@ -69,7 +69,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     var translationWipeDuration: TimeInterval = 0
     /// 自動翻訳で、語ごとに文字を入れ替える時間。
     var translationWordDuration: TimeInterval = 0
-    /// 自動翻訳で、濃さを変える幅の、1行に対する割合。
+    /// 自動翻訳で、不透明度を変える幅の、1行に対する割合。
     var translationFadeWidth: Double = 0
     /// 公開以外なら、時刻と編集済みのアイコンの前に、投稿欄で選ぶときと同じ記号を付ける。
     var visibility: Status.Visibility = .public
@@ -95,7 +95,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     var poll: PollView.Content?
     /// リンクカードを出さなければnil。
     var card: LinkCardView.Content?
-    /// 引用かXの投稿の囲み。あれば、リンクカードの代わりに出す。
+    /// 引用かXの投稿のカード。あれば、リンクカードの代わりに出す。
     var embed: EmbeddedPostView.Content?
     /// 表示している投稿。ブーストなら、ブーストされた投稿。
     var statusID: Status.ID?
@@ -111,14 +111,14 @@ struct PostContentConfiguration: UIContentConfiguration {
     var emojiImages: EmojiImageStore<UIImage>?
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
-    /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが押されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
+    /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが選択されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
-    /// 注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。
+    /// 注意書きかフィルターの警告が選択されたときに、選択したボックスの種類を渡して呼ぶ。
     var onToggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
-    /// 本文が編集で変わったら、変わらない文字を前の位置から動かす。タイムラインが、行の高さの変化を下の行ごと動かして描き直すときだけ立てる。
+    /// 本文が編集で変わったら、変わらない文字を前の位置から動かす。タイムラインが、行の高さの変化を下の行ごと動かして再描画するときだけ立てる。
     /// 行を動かさずに替えるときに文字だけを動かすと、行は一度に伸び縮みするのに中身が遅れて動き、空きが見える。
     var animatesTextEdit = false
-    /// 切った本文の「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    /// 切った本文の「続きを読む」が選択されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onExpandBody: (() -> Void)?
     /// アイコンがタップされたときに呼ぶ。投稿した人のプロフィールを開く。
     var onOpenAccount: (() -> Void)?
@@ -135,11 +135,11 @@ struct PostContentConfiguration: UIContentConfiguration {
     var opensLinksOnTapOnly = false
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
-    /// 囲みの押下と、囲みの中の部品の押下で呼ぶ処理。
+    /// カードの押下と、カードの中の部品の押下で呼ぶ処理。
     var embedActions = EmbedActions()
     /// リンクカードのタップと長押し。決まりはdocs/object-actions.mdにある。
     var linkCardTarget: (any ObjectActionTarget)?
-    /// 投票の選択肢やボタンが押されたときに呼ぶ。
+    /// 投票の選択肢やボタンが選択されたときに呼ぶ。
     var onPollAction: ((PollView.Action) -> Void)?
     /// 絵文字のリアクション。サーバーが対応していないか、リアクションがなければnil（docs/emoji-reaction.md）。
     var reactions: [ReactionChipsView.Reaction]?
@@ -147,13 +147,13 @@ struct PostContentConfiguration: UIContentConfiguration {
     var reactionTransitionDuration: TimeInterval = 0
     /// リアクションのボタンのタップと長押しの対象。絵文字の名前を渡して受け取る。nilなら、タップで`onToggleReaction`を呼ぶ。
     var reactionTarget: ((String) -> (any ObjectActionTarget)?)?
-    /// リアクションのボタンが押されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
+    /// リアクションのボタンが選択されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
     var onToggleReaction: ((String) -> Void)?
-    /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
+    /// リアクションの列の「＋」が選択されたときに呼ぶ。nilなら「＋」を出さない。
     var onAddReaction: (() -> Void)?
     /// 投稿の一番下に置くアクションバー。出さなければnil（docs/post-action-bar.md）。
     var actionBar: PostActionBarContent?
-    /// アクションバーのボタンが押されたときに、その項目と、押したボタンを渡して呼ぶ。
+    /// アクションバーのボタンが選択されたときに、その項目と、選択したボタンを渡して呼ぶ。
     var onActionBarPress: ((PostActionBarItem, UIView) -> Void)?
     /// アクションバーのボタンを長押しして出すメニューの対象。項目を渡して受け取る。nilならメニューを出さない。
     var actionBarLongPressTarget: ((PostActionBarItem) -> (any ObjectActionTarget)?)?
@@ -165,9 +165,9 @@ struct PostContentConfiguration: UIContentConfiguration {
         var boosterAvatarSize: CGFloat
         /// 名前が入りきらないときに、行末をぼかす幅。
         var nameFadeWidth: CGFloat
-        /// 名前の上の行の記号と、その右の文字やアイコンとのすき間。
+        /// 名前の上の行の記号と、その右の文字やアイコンとのgap。
         var contextSymbolSpacing: CGFloat
-        /// 名前の上の行の、ブーストした人のアイコンと文字のすき間。
+        /// 名前の上の行の、ブーストした人のアイコンと文字のgap。
         var contextAvatarTextSpacing: CGFloat
         /// アイコンの列と、文字の列のあいだ。
         var avatarSpacing: CGFloat
@@ -175,7 +175,7 @@ struct PostContentConfiguration: UIContentConfiguration {
         var contextSpacing: CGFloat
         /// 返信をつなぐ線の太さ。
         var replyLineWidth: CGFloat
-        /// 返信をつなぐ線と、アイコンのあいだのすき間。
+        /// 返信をつなぐ線と、アイコンのあいだのgap。
         var replyLineGap: CGFloat
         /// 名前の行と本文のあいだ。
         var nameBodySpacing: CGFloat
@@ -187,9 +187,9 @@ struct PostContentConfiguration: UIContentConfiguration {
         var bodyLinkCardSpacing: CGFloat
         /// 本文と投票のあいだ。
         var bodyPollSpacing: CGFloat
-        /// 名前の行で、太字の部分と後ろに添える部分のすき間。
+        /// 名前の行で、太字の部分と後ろに添える部分のgap。
         var namePartsSpacing: CGFloat
-        /// 名前と時刻の最小のすき間。
+        /// 名前と時刻の最小のgap。
         var nameTimeSpacing: CGFloat
         /// 名前を2段に分けるとき、1段目の字面の下端から2段目の字面の上端まで。
         var nameStackSpacing: CGFloat = 2
@@ -198,15 +198,15 @@ struct PostContentConfiguration: UIContentConfiguration {
         var timeFont: UIFont
         /// 名前の上の行の文字。記号の大きさもこれに合わせる。
         var contextFont: UIFont
-        /// 時刻の前の公開範囲の記号と、時刻のすき間。
+        /// 時刻の前の公開範囲の記号と、時刻のgap。
         var visibilitySymbolSpacing: CGFloat = 4
-        /// 時刻の前の編集済みの「*」と、時刻のすき間。
+        /// 時刻の前の編集済みの「*」と、時刻のgap。
         var editedMarkSpacing: CGFloat = 0
         /// 本文などと、自分のフィルターに一致したことを示す注記のあいだ。
         var filterNoteSpacing: CGFloat = 10
         /// 名前の上の行の先頭に、ブーストや返信を示す記号を出す。
         var showsContextSymbol = true
-        /// 本文か添付ファイルと、囲みのあいだ。
+        /// 本文か添付ファイルと、カードのあいだ。
         var bodyEmbedSpacing: CGFloat = 10
         /// 上の部品と、絵文字のリアクションの列のあいだ。
         var reactionsSpacing: CGFloat = 10
@@ -292,7 +292,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.bodyTextGeometry
     }
     private let textGuide = UILayoutGuide()
-    /// 名前の最後のベースラインの位置。名前の行の下のすき間は字面から測るので、「投稿の見た目」のプレビューで字面の下端を求めるのに使う。
+    /// 名前の最後のベースラインの位置。名前の行の下のgapは字面から測るので、「投稿の見た目」のプレビューで字面の下端を求めるのに使う。
     private let nameBaselineGuide = UILayoutGuide()
     /// 名前の段の最後の行のベースラインの位置。2段に分けていれば2段目、分けていなければ1段目のベースラインにする。
     private let nameLastBaselineGuide = UILayoutGuide()
@@ -330,12 +330,12 @@ final class PostContentView: UIView, UIContentView {
         current.poll?.display
     }
 
-    /// 表示中の、引用かXの投稿の囲み。
+    /// 表示中の、引用かXの投稿のカード。
     var embed: EmbeddedPostView? {
         bodyView.embed
     }
 
-    /// 表示中の、囲みのサムネイル。
+    /// 表示中の、カードのサムネイル。
     var embedMediaGrid: MediaGridView? {
         bodyView.embed?.mediaGrid
     }
@@ -376,7 +376,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onPollAction = { [weak self] action in self?.current.onPollAction?(action) }
         bodyView.onToggleReaction = { [weak self] name in self?.current.onToggleReaction?(name) }
         bodyView.onActionBarPress = { [weak self] item, button in self?.current.onActionBarPress?(item, button) }
-        // 名前の行は押下を受けず、行全体の押下に渡す。受けると、1行の投稿では行を押せる場所が本文の1行ほどしか残らない。
+        // 名前の行は押下を受けず、行全体の押下に渡す。受けると、1行の投稿では行のヒット領域が本文の1行ほどしか残らない。
         avatarView.isUserInteractionEnabled = true
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
         authorInteraction = ObjectInteraction(on: avatarView, tapsSelf: false, lift: .shape)
@@ -433,7 +433,7 @@ final class PostContentView: UIView, UIContentView {
         nameRow.addArrangedSubview(timeLabel)
         nameRow.axis = .horizontal
         nameRow.alignment = .firstBaseline
-        // すき間は、名前の表記と設定に合わせて、適用のたびに決める。時刻を右端に寄せるため、2つ目の名前が余りの幅を受け持つ。
+        // gapは、名前の表記と設定に合わせて、適用のたびに決める。時刻を右端に寄せるため、2つ目の名前が余りの幅を受け持つ。
         // ベースラインで揃えたスタックは、上下の端が中の文字より外にあればよいという制約になり、高さが決まらない。
         // セルは大きな高さを目安に測るため、何もしないと行がその高さまで伸びる。文字が収まる最小の高さに寄せる。
         let compactNameRow = nameRow.heightAnchor.constraint(equalToConstant: 0)
@@ -515,7 +515,7 @@ final class PostContentView: UIView, UIContentView {
         let firstLineCount = configuration.firstLineNameParts.count
         // 1段目の名前が1つなら、その名前が余りの幅を受け持つ。
         nameLabels[0].setContentHuggingPriority(firstLineCount > 1 ? .required : .defaultLow, for: .horizontal)
-        // 時刻の前のすき間は、1段目に出している最後の名前のあとに取る。隠したラベルのあとのすき間は使われないため。
+        // 時刻の前のgapは、1段目に出している最後の名前のあとに取る。隠したラベルのあとのgapは使われないため。
         nameRow.spacing = metrics.namePartsSpacing
         let lastName = nameLabels[min(max(firstLineCount, 1), nameLabels.count) - 1]
         for label in nameLabels {
@@ -531,14 +531,14 @@ final class PostContentView: UIView, UIContentView {
         bodyView.embedActions = configuration.embedActions
         bodyView.opensLinksOnTapOnly = configuration.opensLinksOnTapOnly
         bodyView.cardTarget = configuration.linkCardTarget
-        // 「＋」を出すかは渡すかどうかで決まるので、適用のたびに渡し直す。押したときは今の構成を読むので、使い回しても古くならない。
+        // 「＋」を出すかは渡すかどうかで決まるので、適用のたびに渡し直す。選択したときは今の構成を読むので、使い回しても古くならない。
         bodyView.onAddReaction = configuration.onAddReaction == nil ? nil : { [weak self] in self?.current.onAddReaction?() }
         bodyView.reactionTarget = configuration.reactionTarget == nil ? nil : { [weak self] name in self?.current.reactionTarget?(name) }
         bodyView.actionBarLongPressTarget = configuration.actionBarLongPressTarget == nil ? nil : { [weak self] item in self?.current.actionBarLongPressTarget?(item) }
         if translationChanged {
             bodyView.prepareTextReplacement(duration: configuration.translationWipeDuration, shiftDuration: configuration.translationFadeDuration, wordDuration: configuration.translationWordDuration, fadeWidth: configuration.translationFadeWidth)
         } else if embedTranslationChanged {
-            // 本文も同時に替わるときは、本文より下の部品として囲みごと動かしている。
+            // 本文も同時に替わるときは、本文より下の部品としてカードごと動かしている。
             bodyView.prepareEmbedTextReplacement(shiftDuration: configuration.translationFadeDuration)
         }
         bodyView.animatesTextEdit = configuration.animatesTextEdit
@@ -635,12 +635,12 @@ final class PostContentView: UIView, UIContentView {
         return [frame]
     }
 
-    /// 名前が入りきらず時刻に詰まっているときの、1段目の最後の名前と時刻のすき間。名前が短ければ、最小のすき間より広く空くのでnil。
+    /// 名前が入りきらず時刻に詰まっているときの、1段目の最後の名前と時刻のgap。名前が短ければ、最小のgapより広く空くのでnil。
     private func nameTimeMinGapFrame() -> [CGRect]? {
         // 2段に分けたときの2段目は、時刻と並ばないので測らない。
         let firstLine = nameLabels.prefix(current.firstLineNameParts.count)
         guard current.showsNameRow, !timeLabel.isHidden,
-              // 押し縮められて幅0になったハンドルも、時刻との最小のすき間はそのラベルのあとに取るので、幅によらず最後のラベルから測る。
+              // 押し縮められて幅0になったハンドルも、時刻との最小のgapはそのラベルのあとに取るので、幅によらず最後のラベルから測る。
               let last = firstLine.last(where: { !$0.isHidden }),
               firstLine.contains(where: { !$0.isHidden && $0.intrinsicContentSize.width > $0.bounds.width + 0.5 })
         else { return nil }
@@ -727,8 +727,8 @@ final class PostContentView: UIView, UIContentView {
         return frames
     }
 
-    /// 時刻の中の、公開範囲の記号と「*」と、それぞれと時刻のすき間。時刻のラベルは文字の幅に合わせて置くので、左端から測る。
-    /// すき間は設定の値ではなく、描く文字列の幅から測る。すき間が効いていなければ、それが帯の太さに出るようにするため。
+    /// 時刻の中の、公開範囲の記号と「*」と、それぞれと時刻のgap。時刻のラベルは文字の幅に合わせて置くので、左端から測る。
+    /// gapは設定の値ではなく、描く文字列の幅から測る。gapが効いていなければ、それが帯の太さに出るようにするため。
     private func timePreviewFrames() -> AppearancePreviewFrames {
         let text = timeLabel.isHidden ? NSAttributedString() : timeLabel.attributedText ?? NSAttributedString()
         // 時刻のラベルは名前の行の中にあるので、この行の座標に直す。ラベルに何も出していなければ、ラベルを置く名前の行の右端で示す。
@@ -744,10 +744,10 @@ final class PostContentView: UIView, UIContentView {
         var index = 0
         if current.visibility != .public {
             if current.visibilitySymbolName != nil {
-                // 記号の画像、すき間を作る空白の順に並ぶ。
+                // 記号の画像、gapを作る空白の順に並ぶ。
                 let symbolEnd = width(upTo: 1)
                 frames[.visibilitySymbol] = band(from: 0, to: symbolEnd)
-                // 記号の後ろに何も出していなければ、すき間を作る空白も置いていない。
+                // 記号の後ろに何も出していなければ、gapを作る空白も置いていない。
                 index = min(2, text.length)
                 if index == 2 {
                     frames[.visibilitySymbolGap] = band(from: symbolEnd, to: width(upTo: 2))
@@ -771,7 +771,7 @@ final class PostContentView: UIView, UIContentView {
         return frames
     }
 
-    /// 名前の段の字面の枠。上端と下端は、ベースラインからem枠で測る。大きくした絵文字が上や下へ伸びていれば、その端にする。並びも同じ測り方で、アイコンの上端を揃え、本文やメディアとのすき間を取っている。
+    /// 名前の段の字面の枠。上端と下端は、ベースラインからem枠で測る。大きくした絵文字が上や下へ伸びていれば、その端にする。並びも同じ測り方で、アイコンの上端を揃え、本文やメディアとのgapを取っている。
     /// 2段に分けていれば、1段目の上端から2段目の下端まで。
     private func nameGlyphsFrame() -> [CGRect]? {
         guard !current.nameParts.isEmpty || current.showsTimeLabel, let row = nameRow.previewFrame(in: self)?.first, let top = nameFirstLineGlyphs()?.minY else { return nil }
@@ -810,7 +810,7 @@ final class PostContentView: UIView, UIContentView {
         guard let range = current.context?.secondaryRange, range.location <= text.length else {
             return [.contextText: [line]]
         }
-        // 名前の部分の幅は、すき間の字送りを除いて測る。字送りは名前の最後の文字の後ろに付いている。
+        // 名前の部分の幅は、gapの字送りを除いて測る。字送りは名前の最後の文字の後ろに付いている。
         let primary = NSMutableAttributedString(attributedString: text.attributedSubstring(from: NSRange(location: 0, length: range.location)))
         let spacing = primary.length > 0 ? (primary.attribute(.kern, at: primary.length - 1, effectiveRange: nil) as? CGFloat ?? 0) : 0
         primary.removeAttribute(.kern, range: NSRange(location: 0, length: primary.length))
@@ -841,12 +841,12 @@ final class PostContentView: UIView, UIContentView {
         let font = configuration.metrics.timeFont
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
         let result = NSMutableAttributedString()
-        // 記号や「*」と時刻のすき間は、空白ではなく、その後ろに足す字送りで取る。空白の幅は文字の大きさで変わり、すき間だけを決められないため。
+        // 記号や「*」と時刻のgapは、空白ではなく、その後ろに足す字送りで取る。空白の幅は文字の大きさで変わり、gapだけを決められないため。
         if let symbolName = configuration.visibilitySymbolName,
            let image = UIImage(systemName: symbolName, withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
             result.append(NSAttributedString(attachment: NSTextAttachment(image: image)))
-            // 画像の添付の文字にも幅0の文字にも字送りが効かないので、後ろに空白を置き、空白の幅を差し引いた字送りで、すき間を設定の値にする。
-            // 後ろに何も出さなければ、すき間は要らない。
+            // 画像の添付の文字にも幅0の文字にも字送りが効かないので、後ろに空白を置き、空白の幅を差し引いた字送りで、gapを設定の値にする。
+            // 後ろに何も出さなければ、gapは要らない。
             if !text.isEmpty {
                 let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
                 result.append(NSAttributedString(string: " ", attributes: [.kern: configuration.metrics.visibilitySymbolSpacing - spaceWidth]))
@@ -982,7 +982,7 @@ final class PostContentView: UIView, UIContentView {
         NSLayoutConstraint.activate(constraints)
     }
 
-    /// 2段目の名前を、1段目の字面の下端から設定のすき間だけ離して、文字の列の幅いっぱいに置く制約。2段に分けていなければ空。
+    /// 2段目の名前を、1段目の字面の下端から設定のgapだけ離して、文字の列の幅いっぱいに置く制約。2段に分けていなければ空。
     private func nameStackConstraints(for configuration: PostContentConfiguration) -> [NSLayoutConstraint] {
         guard configuration.isNameStacked else { return [] }
         let second = nameLabels[1]
@@ -1065,7 +1065,7 @@ final class PostContentView: UIView, UIContentView {
         accessibilityReflectsTruncation = bodyView.isBodyTruncated
         textAccessibilityElement.accessibilityCustomActions = bodyView.spoilerAccessibilityActions() + [bodyView.readMoreAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
             + profileAccessibilityActions(for: configuration)
-        // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
+        // 枠はlayoutSubviewsで決める。大きさの変わらない再描画（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
         // 「テキストを選択」で本文を選んでいる間は、選べるテキストビューを本文の要素の後ろに置き、読み上げでも選べるようにする。
@@ -1095,7 +1095,7 @@ final class PostContentView: UIView, UIContentView {
         return actions
     }
 
-    /// アクションバーの上下の、何も受けない空きを押されたら、その列のボタンが受ける。部品が受ける場所は部品に渡す。
+    /// アクションバーの上下の、何も受けない空きを選択されたら、その列のボタンが受ける。部品が受ける場所は部品に渡す。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
         guard hit === self || hit === bodyView else { return hit }

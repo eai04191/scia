@@ -8,7 +8,7 @@ public final class TaskScope {
     public enum Overlap: Sendable {
         /// 前のものを取り消して始め直す。期限を待ち直すときなど。
         case replacing
-        /// 走っている間は始めない。送り終える前に押し直されても、同じ要求を重ねて送らないため。
+        /// 走っている間は始めない。送り終える前に選択し直されても、同じ要求を重ねて送らないため。
         case skippingWhileRunning
     }
 

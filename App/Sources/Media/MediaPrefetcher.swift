@@ -2,7 +2,7 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// タイムラインのスクロールが止まったときに画面に出ている画像を、ビューアで開く元の画像で1つずつ先読みする（docs/image-loading.mdの「ビューアで開く画像のプリフェッチ」）。
+/// タイムラインのスクロールが止まったときに画面に出ている画像を、ビューアで開く元の画像で1つずつプリフェッチする（docs/image-loading.mdの「ビューアで開く画像のプリフェッチ」）。
 /// セッションごとに1つ持ち、そのセッションのどのタイムラインから渡されても同時には1つしか読まない。送るかは、読み始めるたびに回線と設定（`NetworkUsePolicy.prefetch`）で決める。
 @MainActor
 final class MediaPrefetcher {
@@ -16,7 +16,7 @@ final class MediaPrefetcher {
         }
     }
 
-    /// 先読みする画像を差し替える。並びから外れた画像の読み込みは止める。空なら、読んでいる途中のものも止める。
+    /// プリフェッチする画像を差し替える。並びから外れた画像の読み込みは止める。空なら、読んでいる途中のものも止める。
     func prefetch(_ attachments: some Sequence<MediaAttachment>) {
         queue.replace(with: MediaPrefetch.urls(of: attachments))
     }

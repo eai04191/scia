@@ -62,7 +62,7 @@ struct ConfirmationTests {
     }
 
     /// 予約の書き直し中の返信と引用は、返信先や引用元を付け替えて書き直しを続けるので、確かめずに進める。
-    /// 投稿するアカウントを替えて始めるときは、書き直しを続けられないので、やめてよいか確かめる。押しても何も起きないままにしない。
+    /// 投稿するアカウントを替えて始めるときは、書き直しを続けられないので、やめてよいか確かめる。選択しても何も起きないままにしない。
     @Test func startingWhileRewritingScheduleAsksOnlyWhenSwitchingAccount() {
         let model = draft()
         model.beginRewriting(scheduled())
@@ -119,7 +119,7 @@ struct ConfirmationTests {
         #expect(Confirmation.discardingDraft(draft: rewriting)?.message == "書き直し中の内容は破棄されます。元の予約は残ります。")
     }
 
-    /// 引用付きの予約投稿を書き直している間は、引用の投稿を読み直していないので`quoteTarget`がない。それでも引用を理由に断る。
+    /// 引用付きの予約投稿を書き直している間は、引用の投稿を再読み込みしていないので`quoteTarget`がない。それでも引用を理由に断る。
     @Test func unattachableRefusalExplainsQuoteWhileRewritingScheduledQuote() {
         let model = draft()
         model.beginRewriting(ScheduledStatus(

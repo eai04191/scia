@@ -122,14 +122,14 @@ public enum EmojiCompletion {
 /// 入力欄の補完の状態。打った語から候補を探し、出すものを決める。
 ///
 /// メンションとハッシュタグは、打つのが止まるまで少し待ってから問い合わせ、語が変わったら前の問い合わせを取り消す。
-/// 取り消しが間に合わず届いた古い応答は捨てる。一度引いた語は覚えておき、消して打ち直したときに問い合わせ直さない。
+/// 取り消しが間に合わず届いた古い応答は捨てる。一度引いた語はキャッシュしておき、消して打ち直したときに問い合わせ直さない。
 /// カスタム絵文字はリストをまとめて一度だけ取り、手元で絞る。
 /// ハッシュタグは、プロフィールに載せているタグと最近使ったタグも一度だけ取り、打った語に合うものを検索結果より上に出す。
-/// 最近使ったタグは、投稿や編集で使ったタグ、最近の投稿のタグ、よく使うタグの順に並べる。投稿で使ったタグは、読み直さずに応答から足す。
+/// 最近使ったタグは、投稿や編集で使ったタグ、最近の投稿のタグ、よく使うタグの順に並べる。投稿で使ったタグは、再読み込みせずに応答から足す。
 /// メンションは、返信先の人と補完で選んだことのある人を、同じく検索結果より上に出す。
 /// サーバーの検索は自分が使ったかを見ず、名前の短い順やサーバー全体の人気で並べるため、よく使うタグや人が候補から押し出されることがある。
 /// 打った文字数がサーバーで探す文字数に届くまでは、問い合わせずに、この手元の候補だけを出す。記号だけの時点から出せるようにするため。
-/// 失敗しても、打つのは止めない。候補の場所で知らせ、押すと問い合わせ直す。
+/// 失敗しても、打つのは止めない。候補の場所で知らせ、選択すると問い合わせ直す。
 @MainActor
 @Observable
 public final class CompletionModel {
@@ -220,7 +220,7 @@ public final class CompletionModel {
         case loading
         /// 探したが、合うものがなかった。
         case empty
-        /// 探せなかった。理由の文言を持つ。押すと問い合わせ直す。
+        /// 探せなかった。理由の文言を持つ。選択すると問い合わせ直す。
         case failed(ErrorPresentation)
         /// 検索は失敗したが、合う自分のタグは出せる。自分のタグの下に失敗を出す。
         case candidatesWithFailure([CompletionCandidate], ErrorPresentation)
@@ -248,7 +248,7 @@ public final class CompletionModel {
         guard let token, !isDismissed else { return nil }
         let candidates = candidates.filter { !hidesCandidate($0) }
         // 出さない候補しかなければ、「一致しない」と出さずに閉じておく。すでに足したものを打ったときに、ないように見せないため。
-        // 失敗と読み込み中は、押して読み直せるよう、候補の場所で知らせ続ける。
+        // 失敗と読み込み中は、選択して再読み込みできるよう、候補の場所で知らせ続ける。
         if candidates.isEmpty, !self.candidates.isEmpty, failure == nil, !isLoading { return nil }
         // 手元の候補だけを出す間は、合うものがなければ何も出さない。「一致しない」と出すと、記号を打つたびに候補のリストが出るため。
         // 日本語の文の`：`かもしれない語も、合うものがなければ、読み込み中や失敗も含めて何も出さない。文を書くたびに候補のリストが出るため。
@@ -286,24 +286,24 @@ public final class CompletionModel {
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var emojiTask: Task<Void, Never>?
     /// 候補に出す絵文字。読み終えるまではnil。絵文字のパレットも、このリストを並べる。
-    /// 端末に残したリストを渡されたときは、読み直すまでそのリストを出す。
+    /// 端末に残したリストを渡されたときは、再読み込みするまでそのリストを出す。
     public private(set) var emojis: [ServerEmoji]?
-    /// `emojis`を、この起動のうちにサーバーから読んだか。端末に残したリストなら読み直す。
+    /// `emojis`を、この起動のうちにサーバーから読んだか。端末に残したリストなら再読み込みする。
     @ObservationIgnored private var emojisAreFresh = false
-    /// 最後に見た、残しているリストを消した回数（`CustomEmojiCache.Snapshot.generation`）。変わっていれば、設定のストレージで消したので、持っているリストも捨てて読み直す。
+    /// 最後に見た、残しているリストを消した回数（`CustomEmojiCache.Snapshot.generation`）。変わっていれば、設定のストレージで消したので、持っているリストも捨てて再読み込みする。
     @ObservationIgnored private var cachedEmojisGeneration: Int?
     /// 探すサーバーを替えた回数。絵文字のパレットが、開いた時点のリストを並べ続けるか、替えた先のリストに並べ直すかを決めるのに使う。
     public private(set) var emojiSourceGeneration = 0
     @ObservationIgnored private var personalEmojiSetTask: Task<Void, Never>?
-    /// 絵文字のパレットに並べる個人セット。読み終えるまでと、サーバーが対応していないときはnil。読み直せなかったときは、前に読んだものを残す。
+    /// 絵文字のパレットに並べる個人セット。読み終えるまでと、サーバーが対応していないときはnil。再読み込みできなかったときは、前に読んだものを残す。
     public private(set) var personalEmojiSet: PersonalEmojiSet?
-    /// 絵文字のリストを読めなかった理由の文言。パレットに出す。読み直し始めたらnilに戻す。
+    /// 絵文字のリストを読めなかった理由の文言。パレットに出す。再読み込みを始めたらnilに戻す。
     public private(set) var emojiFailure: ErrorPresentation?
-    /// プロフィールに載せているタグ、よく使うタグ、最近の投稿のタグ。読めるまではnilで、次に書き始めたときに読み直す。
+    /// プロフィールに載せているタグ、よく使うタグ、最近の投稿のタグ。読めるまではnilで、次に書き始めたときに再読み込みする。
     @ObservationIgnored private var featuredTags: [FeaturedTag]?
     @ObservationIgnored private var recentTags: [Hashtag]?
     @ObservationIgnored private var statusTags: [Hashtag]?
-    /// 起動してから投稿や編集で使ったタグ。新しく使ったものから並ぶ。投稿のたびに最近の投稿を読み直さずに済ませるため、応答のタグをここに足す。
+    /// 起動してから投稿や編集で使ったタグ。新しく使ったものから並ぶ。投稿のたびに最近の投稿を再読み込みせずに済ませるため、応答のタグをここに足す。
     @ObservationIgnored private var usedTags: [Hashtag] = []
     @ObservationIgnored private var ownTagsTask: Task<Void, Never>?
     /// 自分のタグを忘れた回数。忘れる前に読み始めた応答で、古いタグに戻さない。
@@ -319,13 +319,13 @@ public final class CompletionModel {
     @ObservationIgnored private var recentMentions: RecentMentions?
     /// 返信先でメンションされた人のうち、読んだアカウント。
     @ObservationIgnored private var participantAccounts: [String: Account] = [:]
-    /// 読み始めた人。失敗しても読み直さない。アイコンと表示名がなくても、ハンドルで選べるため。
+    /// 読み始めた人。失敗しても再読み込みしない。アイコンと表示名がなくても、ハンドルで選べるため。
     @ObservationIgnored private var requestedParticipantIDs: Set<String> = []
-    /// 返信先の人を読み始めた回数。テストで、読み直していないことを確かめる。
+    /// 返信先の人を読み始めた回数。テストで、再読み込みしていないことを確かめる。
     @ObservationIgnored private(set) var replyParticipantLoadCount = 0
     @ObservationIgnored private var cache: [SearchKey: [CompletionCandidate]] = [:]
     @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
-    /// 覚えておく語の数。超えたら全部忘れる。
+    /// キャッシュする語の数。超えたら全部忘れる。
     private static let cacheLimit = 64
 
     private struct SearchKey: Hashable {
@@ -375,8 +375,8 @@ public final class CompletionModel {
     /// カーソルだけが動いたら、カーソルの位置の語を渡す。同じ語の中なら今のままにし、語の外へ出たら閉じる。
     /// 打たずにカーソルで語に入っただけでは出さない。
     ///
-    /// UIKitは打った文字を入れたとき、本文が変わった知らせより先にカーソルが動いた知らせを送る。
-    /// そのため語の中身は比べず、どこから始まる語かだけを見て、語が伸びたことは本文が変わった知らせで扱う。
+    /// UIKitは打った文字を入れたとき、本文が変わったコールバックより先にカーソルが動いたコールバックを送る。
+    /// そのため語の中身は比べず、どこから始まる語かだけを見て、語が伸びたことは本文が変わったコールバックで扱う。
     /// ただし、日本語の文の`：`かもしれない語かどうかが変わったら閉じる。`:cat|です`からカーソルを後ろへ動かすと、語は`catです`になり、
     /// 出したままの`cat`の候補をReturnで確定すると、置き換える範囲はいまのカーソルで決め直すので「です」まで消すため。
     public func selectionDidChange(_ new: CompletionToken?) {
@@ -410,7 +410,7 @@ public final class CompletionModel {
         storedSelectedIndex = min(max(selectedIndex + offset, 0), candidates.count - 1)
     }
 
-    /// 失敗の表示を押したら、問い合わせ直す。
+    /// 失敗の表示を選択したら、問い合わせ直す。
     public func retry() {
         guard token != nil else { return }
         failure = nil
@@ -418,8 +418,8 @@ public final class CompletionModel {
     }
 
     /// 書き始めたときに、絵文字のリストと自分のタグを先に読んでおく。打ったときに待たずに出せるようにするため。
-    /// 絵文字のリストが読めなかったら、絵文字の語を打ったときに読み直す。
-    /// 自分のタグは補助なので、読めなくても知らせず、次に書き始めたときに読み直す。
+    /// 絵文字のリストが読めなかったら、絵文字の語を打ったときに再読み込みする。
+    /// 自分のタグは補助なので、読めなくても知らせず、次に書き始めたときに再読み込みする。
     public func prefetch() {
         loadEmojisIfNeeded()
         loadParticipantAccounts()
@@ -433,7 +433,7 @@ public final class CompletionModel {
         usedTags = Hashtag.unique(tags.map { Hashtag(name: $0.name, url: $0.url) } + usedTags)
     }
 
-    /// 自分のタグを忘れ、次に書き始めたときに読み直す。プロフィールに載せるタグを変えたあとに呼ぶ。
+    /// 自分のタグを忘れ、次に書き始めたときに再読み込みする。プロフィールに載せるタグを変えたあとに呼ぶ。
     /// よく使うタグも忘れるのは、サーバーがプロフィールに載せているタグを除いて返すため。
     /// 最近の投稿のタグと投稿で使ったタグは、プロフィールのタグに左右されないので残す。
     public func forgetOwnTags() {
@@ -599,7 +599,7 @@ public final class CompletionModel {
         storedSelectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
     }
 
-    /// 届いた応答が今の語のものなら出す。語が変わっていれば、覚えるだけで出さない。
+    /// 届いた応答が今の語のものなら出す。語が変わっていれば、キャッシュするだけで出さない。
     private func receive(_ candidates: [CompletionCandidate], for key: SearchKey) {
         if cache.count >= Self.cacheLimit {
             cache.removeAll()
@@ -621,7 +621,7 @@ public final class CompletionModel {
         failure = Self.failure(for: error)
     }
 
-    /// 候補の場所に出す、失敗の理由。止められている間の文言は、補完では自動で読み込み直さないため、押せば読み込めることを伝える。
+    /// 候補の場所に出す、失敗の理由。止められている間の文言は、補完では自動で再読み込みしないため、選択すれば読み込めることを伝える。
     public nonisolated static func failure(for error: any Error) -> ErrorPresentation {
         if let paused = error as? AutomaticRequestsPaused {
             return ErrorPresentation(message: "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(paused.until.formatted(date: .omitted, time: .shortened))を過ぎたらタップして再読み込みできます。", code: nil)
@@ -629,8 +629,8 @@ public final class CompletionModel {
         return ErrorPresentation(error)
     }
 
-    /// 絵文字のパレットを開いたときに呼ぶ。この起動のうちにまだ読めていなければ読む。失敗していたら読み直す。
-    /// 端末に残したリストがあれば、読み直す間もそれを出す。ほかの画面がこの起動のうちに読めていれば、読まずにそのリストにする。
+    /// 絵文字のパレットを開いたときに呼ぶ。この起動のうちにまだ読めていなければ読む。失敗していたら再読み込みする。
+    /// 端末に残したリストがあれば、再読み込みする間もそれを出す。ほかの画面がこの起動のうちに読めていれば、読まずにそのリストにする。
     public func loadEmojisIfNeeded() {
         loadPersonalEmojiSet()
         adoptCachedEmojis()
@@ -679,7 +679,7 @@ public final class CompletionModel {
         }
     }
 
-    /// 個人セットは、ほかの端末やwebで並べ替えられるので、呼ばれるたびに読み直す。読めなくても、絵文字を選ぶのは止めない。
+    /// 個人セットは、ほかの端末やwebで並べ替えられるので、呼ばれるたびに再読み込みする。読めなくても、絵文字を選ぶのは止めない。
     private func loadPersonalEmojiSet() {
         guard personalEmojiSetTask == nil else { return }
         let generation = serverGeneration
@@ -726,7 +726,7 @@ public final class CompletionModel {
     }
 
     /// まだ持っていないものを並べて読み、届いたものから持って候補に混ぜる。最近の投稿のタグは投稿を読むので遅く、ほかを待たせないため。
-    /// 読めなかったものはログに残し、次に書き始めたときに読み直す。
+    /// 読めなかったものはログに残し、次に書き始めたときに再読み込みする。
     private func loadOwnTags() {
         guard ownTagsTask == nil else { return }
         let loadsFeatured = featuredTags == nil
@@ -791,7 +791,7 @@ public final class CompletionModel {
         }
     }
 
-    /// 返信先でメンションされた人のアカウントを、まだ読んでいなければまとめて読む。届いたら、出しているメンションの候補を描き直す。
+    /// 返信先でメンションされた人のアカウントを、まだ読んでいなければまとめて読む。届いたら、出しているメンションの候補を再描画する。
     private func loadParticipantAccounts() {
         let ids = replyParticipants().filter { !$0.hasProfile && !requestedParticipantIDs.contains($0.id) }.map(\.id)
         guard !ids.isEmpty else { return }

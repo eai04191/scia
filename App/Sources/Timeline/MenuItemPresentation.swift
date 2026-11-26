@@ -3,25 +3,25 @@ import UIKit
 
 @MainActor
 extension MenuLayout.Groups {
-    /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
-    /// 横並びのまとまりは、その大きさで横に並べる。横に並ぶ数（`MenuRowSize.capacity`）を超えた項目は、その下にふだんの行として続く。
+    /// グループごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないグループと「その他」は出さない。
+    /// 横並びのグループは、その大きさで横に並べる。横に並ぶ数（`MenuRowSize.capacity`）を超えた項目は、その下にふだんの行として続く。
     func menuElements(_ elements: (Item) -> [UIMenuElement]) -> [UIMenuElement] {
         arranged(elements, group: { UIMenu.group($0, row: $1) }, more: { UIMenu(title: TimelineScreenTexts.moreMenu, image: UIImage(systemName: "ellipsis.circle"), children: $0) })
     }
 }
 
-/// 横並びのまとまりの項目に、サブタイトルを出すか。
+/// 横並びのグループの項目に、サブタイトルを出すか。
 @MainActor
 enum MenuRowSubtitles {
-    /// VoiceOverでは見た目の幅や高さが関わらず、押せない理由などを読み上げで伝えるため、出したままにする。
+    /// VoiceOverでは見た目の幅や高さが関わらず、無効の理由などを読み上げで伝えるため、出したままにする。
     static var areShown: Bool { UIAccessibility.isVoiceOverRunning }
 }
 
 @MainActor
 extension UIMenu {
-    /// 区切り線で分けたまとまり。横並びなら、その大きさで横に並べ、横に並ぶ項目のサブタイトルを出さない。
+    /// 区切り線で分けたグループ。横並びなら、その大きさで横に並べ、横に並ぶ項目のサブタイトルを出さない。
     /// 狭い幅では長い文字が途中で切れ、出たときだけ段が高くなって下の項目を押し出すため。横に並ぶ数を超えてふだんの行で出る項目には残す。
-    /// 開いてから中身を読む項目（`UIDeferredMenuElement`）は、UIKitが中身を見せないので、読んだ項目のサブタイトルは残る。木から描くメニュー（`MenuRenderer`）では、読んだ項目からも除く。
+    /// 開いてから中身を読む項目（`UIDeferredMenuElement`）は、UIKitが中身を見せないので、読んだ項目のサブタイトルは残る。ツリーから描くメニュー（`MenuRenderer`）では、読んだ項目からも除く。
     static func group(_ children: [UIMenuElement], row: MenuRowSize?) -> UIMenu {
         let menu = UIMenu(options: .displayInline, children: children)
         guard let row else { return menu }
@@ -49,13 +49,13 @@ extension MenuItemContentProviding {
 }
 
 /// ハッシュタグのメニュー。本文のハッシュタグの長押しと、投稿のメニューの「ハッシュタグ」で、同じ並びから組む。決まりはdocs/menus.mdの「メニューの単位」にある。
-/// 項目の名前、並び、出す条件、見出しはSciaCoreの`HashtagMenuTree`が決め、ここではUIKitのメニューに描いて、押した項目の動きを呼ぶ。
+/// 項目の名前、並び、出す条件、見出しはSciaCoreの`HashtagMenuTree`が決め、ここではUIKitのメニューに描いて、選択した項目の動きを呼ぶ。
 /// 出す場所は、タグと、その場所でしかできないこと（共有のシートを出す起点、タイムラインを開く先）だけを渡す。
 @MainActor
 struct HashtagMenu {
     /// `#`を除いた名前。
     let name: String
-    /// サーバーのハッシュタグのページ。分からなければ、URLの項目を押せないまま並べる。
+    /// サーバーのハッシュタグのページ。分からなければ、URLの項目を無効のまま並べる。
     let url: URL?
     /// 「投稿したユーザーの投稿」で開くユーザー。nilなら項目を出さない。
     let account: Account?

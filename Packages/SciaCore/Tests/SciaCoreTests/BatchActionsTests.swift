@@ -147,8 +147,8 @@ struct BatchActionsTests {
         #expect(log.sent == ["reblog 1", "unreblog 2", "reblog 2", "reblog 3"])
     }
 
-    /// 取り消した直後のブーストが、サーバーが前のブーストを消し終えていないことで断られたら、間をおいて送り直す。付けるときは取り消したあとの状態から送る。
-    /// 送り直しを使い切ったら失敗にする。
+    /// 取り消した直後のブーストが、サーバーが前のブーストを消し終えていないことで断られたら、間をおいて再送する。付けるときは取り消したあとの状態から送る。
+    /// 再送を使い切ったら失敗にする。
     @Test func reblogAfterUnreblogRetriesWhileRemovalIsPending() async throws {
         let clock = TestClock()
         let log = Log()
@@ -220,7 +220,7 @@ struct BatchActionsTests {
         #expect(interactions.mayBeReblogged(status("2", reblogged: true)))
     }
 
-    /// 走っている間にもう一度走らせても、重ねて送らない。失敗のチップを続けて押したときに、同じ投稿へ2本で送らないため。
+    /// 走っている間にもう一度走らせても、重ねて送らない。失敗のチップを続けて選択したときに、同じ投稿へ2本で送らないため。
     @Test func runDoesNotOverlap() async throws {
         let gate = Gate()
         let log = Log()

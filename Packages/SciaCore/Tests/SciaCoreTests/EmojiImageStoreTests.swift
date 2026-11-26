@@ -17,7 +17,7 @@ struct EmojiImageStoreTests {
     }
 
     /// - Parameters:
-    ///   - upgradePurpose: 持っている画像より高く読み直す通信の目的。nilなら、読み直しの通信を送れない回線として扱う。
+    ///   - upgradePurpose: 持っている画像より高く再読み込みする通信の目的。nilなら、再読み込みの通信を送れない回線として扱う。
     ///   - storedLocally: 端末に元の画像を置いているか。置いていれば、通信せずに`data`を返す。
     private func makeStore(_ data: Data, upgradePurpose: RequestPurpose? = .enhancement(onExpensiveNetwork: false), storedLocally: Bool = false) -> EmojiImageStore<CGImage> {
         EmojiImageStore(
@@ -32,7 +32,7 @@ struct EmojiImageStoreTests {
         }
     }
 
-    /// 先読みで読めなかった画像は、表示の読み込みと同じく覚え、続けて先読みしない。通信の失敗でなければ覚えない。
+    /// プリフェッチで読めなかった画像は、表示の読み込みと同じく覚え、続けてプリフェッチしない。通信の失敗でなければ覚えない。
     @Test func remembersPrefetchFailures() {
         let store = makeStore(Data())
         let other = URL(string: "https://example.com/other.png")!
@@ -100,12 +100,12 @@ struct EmojiImageStoreTests {
         return data as Data
     }
 
-    /// 読めなかった絵文字は、読み直してよくなった時刻に知らせ、まだ描いている画面が描き直して読み直す。描き直しを待たない。
-    /// 描き直されない画面で、間隔が過ぎても`:shortcode:`のまま残らないため（docs/network.md）。
+    /// 読めなかった絵文字は、再読み込みしてよくなった時刻に知らせ、まだ描いている画面が再描画して再読み込みする。再描画を待たない。
+    /// 再描画されない画面で、間隔が過ぎても`:shortcode:`のまま残らないため（docs/network.md）。
     @Test func asksToRedrawFailedStillWhenRetryIsAllowed() async throws {
         let clock = TestClock()
         let store = makeStore(try Self.png(width: 96, height: 96), failingFirst: 1, clock: clock)
-        // 絵文字を描いている画面は、知らせを受けたら描き直し、描き直しで画像を求める。
+        // 絵文字を描いている画面は、通知を受けたら再描画し、再描画で画像を求める。
         store.addListener(owner: clock) { [url] urls in
             if urls.contains(url) { _ = store.image(for: url) }
         }
@@ -117,7 +117,7 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
-    /// 動く絵文字も、読めなかったら静止画で描き、読み直してよくなった時刻に知らせて、描いている画面に読み直させる。
+    /// 動く絵文字も、読めなかったら静止画で描き、再読み込みしてよくなった時刻に知らせて、描いている画面に再読み込みさせる。
     @Test func asksToRedrawFailedAnimationWhenRetryIsAllowed() async throws {
         let clock = TestClock()
         let store = makeStore(try Self.gif(size: 96, frameCount: 2), failingFirst: 1, clock: clock)
@@ -131,7 +131,7 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
-    /// 取り消しのように失敗として覚えないものは、読み直してよくなった知らせを送らない。送ると、描き直した画面がすぐ読み、また取り消されて、待たずに繰り返すため。
+    /// 取り消しのように失敗として覚えないものは、再読み込みしてよくなった通知を送らない。送ると、再描画した画面がすぐ読み、また取り消されて、待たずに繰り返すため。
     @Test func doesNotAskToRedrawAnimationAfterCancellation() async throws {
         let clock = TestClock()
         let other = URL(string: "https://example.com/other.gif")!
@@ -152,14 +152,14 @@ struct EmojiImageStoreTests {
         }
         _ = store.animation(for: url)
         try await waitUntil { store.hasFinishedLoadingAnimation(for: url) }
-        // 知らせるなら、あとから求めた絵文字より先に読み直す。あとから求めた絵文字を読み終えるまで待ってから、読み直していないことを確かめる。
+        // 知らせるなら、あとから求めた絵文字より先に再読み込みする。あとから求めた絵文字を読み終えるまで待ってから、再読み込みしていないことを確かめる。
         _ = store.animation(for: other)
         try await waitUntil { store.hasFinishedLoadingAnimation(for: other) }
         #expect(fetches.count.withLock { $0 } == 1)
         #expect(clock.sleeperCount == 0)
     }
 
-    /// 知らせを受けても描き直す画面がなければ（画面から外れた、隠れているなど）、読み直さない。
+    /// 通知を受けても再描画する画面がなければ（画面から外れた、隠れているなど）、再読み込みしない。
     @Test func doesNotRetryFailedStillWithoutRedraw() async throws {
         let clock = TestClock()
         let store = makeStore(try Self.png(width: 96, height: 96), failingFirst: 1, clock: clock)
@@ -207,7 +207,7 @@ struct EmojiImageStoreTests {
         #expect(!store.isKnownStill(url))
     }
 
-    /// 読めた応答の出どころを数えて、状態ダンプに出す。捨てた画像の読み直しが通信になっているかを、違和感レポートで見るため。
+    /// 読めた応答の出どころを数えて、状態ダンプに出す。捨てた画像の再読み込みが通信になっているかを、違和感レポートで見るため。
     @Test func countsWhereResponsesCameFrom() async throws {
         let data = try Self.png(width: 100, height: 100)
         let store = EmojiImageStore(
@@ -242,7 +242,7 @@ struct EmojiImageStoreTests {
         #expect(store.stateDump().contains("animationFetched: network 0 cache 0 file 0 unknown 0 shared 1"))
     }
 
-    /// 静止画とアニメーションで分け合った1回の通信が失敗したら、失敗は1回と数える。2回と数えると、1回の失敗で、読み直すまでの間隔が2回失敗したときの長さになる。
+    /// 静止画とアニメーションで分け合った1回の通信が失敗したら、失敗は1回と数える。2回と数えると、1回の失敗で、再読み込みするまでの間隔が2回失敗したときの長さになる。
     @Test func countsFailureOfSharedFetchOnce() async throws {
         let clock = TestClock()
         let store = makeStore(try Self.gif(size: 96, frameCount: 2), failingFirst: 1, clock: clock)
@@ -297,7 +297,7 @@ struct EmojiImageStoreTests {
         #expect(next.animationDiagnosis(of: url).contains("animationState: nil"), "読み始めない")
     }
 
-    /// 大きすぎて動かせないと分かった元の画像の静止画を、メモリから捨てたあとに読み直したときも、端末に置いたファイルを消させる。
+    /// 大きすぎて動かせないと分かった元の画像の静止画を、メモリから捨てたあとに再読み込みしたときも、端末に置いたファイルを消させる。
     @Test(.scratch) func discardsOversizedOriginalWhenStillIsReloaded() async throws {
         let record = OversizedEmojiRecord(file: TestScratch.url("EmojiImageStoreTests").appending(path: "reloaded.json"))
         record.record(url, width: 1_100, height: 1_000, frameCount: 2)
@@ -360,7 +360,7 @@ struct EmojiImageStoreTests {
         #expect(unreadable.withLock { $0 } == [urls[0]])
     }
 
-    /// 既定より大きく描くと、そのURLを描く高さで読み直す。読み終えるまでは前の画像を返し、読み終えたら、小さく描く場所にも同じ1枚を返す。
+    /// 既定より大きく描くと、そのURLを描く高さで再読み込みする。読み終えるまでは前の画像を返し、読み終えたら、小さく描く場所にも同じ1枚を返す。
     @Test func reloadsAtLargerHeightAndKeepsOneImagePerURL() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400))
         #expect(store.image(for: url) == nil)
@@ -378,7 +378,7 @@ struct EmojiImageStoreTests {
 
     private final class Owner {}
 
-    /// 持ち主を渡して高さを上げて読み直したときは、読み終えたことをその持ち主の知らせ先にだけ知らせる。前の画像で描けているほかの画面を描き直させないため。
+    /// 持ち主を渡して高さを上げて再読み込みしたときは、読み終えたことをその持ち主の通知先にだけ知らせる。前の画像で描けているほかの画面を再描画させないため。
     @Test func notifiesOnlyRequesterOfUpgrade() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400))
         let requester = Owner()
@@ -398,7 +398,7 @@ struct EmojiImageStoreTests {
         #expect(otherNotified == [[url]], "前の画像で描けているほかの画面には知らせない")
     }
 
-    /// 持ち主を渡して高く読み直している間に前の画像がメモリから捨てられ、ほかの画面が求めて画像を得られなかったら、その画面にも読み終えたことを知らせる。
+    /// 持ち主を渡して高く再読み込みしている間に前の画像がメモリから捨てられ、ほかの画面が求めて画像を得られなかったら、その画面にも読み終えたことを知らせる。
     @Test func notifiesDrawerThatMissedEvictedImageDuringUpgrade() async throws {
         let png = try Self.png(width: 400, height: 400)
         let gate = Gate()
@@ -427,7 +427,7 @@ struct EmojiImageStoreTests {
         try await waitUntil { otherNotified.count >= 2 }
     }
 
-    /// 持ち主を渡さずに同じURLを高く求めた描く側がいれば、誰が待っているか分からないので、すべての知らせ先に知らせる。
+    /// 持ち主を渡さずに同じURLを高く求めた描く側がいれば、誰が待っているか分からないので、すべての通知先に知らせる。
     @Test func notifiesEveryoneWhenUnknownDrawerAlsoWaitsForUpgrade() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400))
         let requester = Owner()
@@ -444,7 +444,7 @@ struct EmojiImageStoreTests {
         #expect(store.image(for: url)?.height == 200)
     }
 
-    /// 動く絵文字を持ち主を渡して高く読み直したときも、その持ち主の知らせ先にだけ知らせる。
+    /// 動く絵文字を持ち主を渡して高く再読み込みしたときも、その持ち主の通知先にだけ知らせる。
     @Test func notifiesOnlyRequesterOfAnimationUpgrade() async throws {
         let store = makeStore(try Self.gif(size: 512, frameCount: 4))
         let requester = Owner()
@@ -463,7 +463,7 @@ struct EmojiImageStoreTests {
         #expect(otherNotified.count == 1, "前のコマで動かせているほかの画面には知らせない")
     }
 
-    /// 元の画像が求めた高さより小さければ、元の大きさで読み、それより高く描くことになっても読み直さない。拡大しても、ぼけは消えないため。
+    /// 元の画像が求めた高さより小さければ、元の大きさで読み、それより高く描くことになっても再読み込みしない。拡大しても、ぼけは消えないため。
     @Test func doesNotReloadBeyondSourceSize() async throws {
         let store = makeStore(try Self.png(width: 128, height: 128))
         _ = store.image(for: url, pixelHeight: 300)
@@ -475,8 +475,8 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 1)
     }
 
-    /// 動く絵文字を大きく描くと読み直し、その高さでは`AnimatedImage.maxByteCount`を超えるなら、動きを止めずに、収まる中で一番高く読む。
-    /// それより高く描くことになっても、同じ上限に当たるので読み直さない。
+    /// 動く絵文字を大きく描くと再読み込みし、その高さでは`AnimatedImage.maxByteCount`を超えるなら、動きを止めずに、収まる中で一番高く読む。
+    /// それより高く描くことになっても、同じ上限に当たるので再読み込みしない。
     @Test func reloadsAnimationAtLargestHeightWithinByteLimit() async throws {
         let store = makeStore(try Self.gif(size: 512, frameCount: 20))
         #expect(store.animation(for: url) == nil)
@@ -496,7 +496,7 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
-    /// 読み直しの通信を送れない回線で、端末に元の画像もなければ、持っている画像より高く読み直さず、持っている画像を拡大して描く。
+    /// 再読み込みの通信を送れない回線で、端末に元の画像もなければ、持っている画像より高く再読み込みせず、持っている画像を拡大して描く。
     /// 初めて読むときは、大きく描くための高さでも通信は同じなので、その高さで読む。
     @Test func doesNotReloadWithoutEnhancementPurpose() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400), upgradePurpose: nil)
@@ -513,7 +513,7 @@ struct EmojiImageStoreTests {
         #expect(store.image(for: other, pixelHeight: 200)?.height == 200)
     }
 
-    /// 端末に元の画像があれば、読み直しの通信を送れない回線（低データモード）でも、通信せずに端末の画像から描く高さで作り直す。
+    /// 端末に元の画像があれば、再読み込みの通信を送れない回線（低データモード）でも、通信せずに端末の画像から描く高さで作り直す。
     @Test func reloadsFromStoredDataWithoutUpgradePurpose() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400), upgradePurpose: nil, storedLocally: true)
         _ = store.image(for: url)
@@ -526,7 +526,7 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == fetchesBefore)
     }
 
-    /// 持っている画像の1.1倍（`upscaleTolerance`）までの高さなら、読み直さずに拡大して描く。初めて読むときも、既定の高さの1.1倍までなら既定の高さで読む。
+    /// 持っている画像の1.1倍（`upscaleTolerance`）までの高さなら、再読み込みせずに拡大して描く。初めて読むときも、既定の高さの1.1倍までなら既定の高さで読む。
     @Test func drawsWithinUpscaleToleranceWithoutReloading() async throws {
         let store = makeStore(try Self.png(width: 400, height: 400))
         _ = store.image(for: url, pixelHeight: 105)
@@ -544,8 +544,8 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 3)
     }
 
-    /// とても大きく描くときも、静止画1枚は`maxStillPixelCount`に収まる高さで止める。1枚でキャッシュの上限を超えると、入れたそばから捨てられて読み直し続けるため。
-    /// 止めたら、それより高く描くことになっても読み直さない。
+    /// とても大きく描くときも、静止画1枚は`maxStillPixelCount`に収まる高さで止める。1枚でキャッシュの上限を超えると、入れたそばから捨てられて再読み込みし続けるため。
+    /// 止めたら、それより高く描くことになっても再読み込みしない。
     @Test func limitsStillToMaxPixelCount() async throws {
         let store = makeStore(try Self.png(width: 3_072, height: 3_072))
         _ = store.image(for: url)
@@ -561,7 +561,7 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
-    /// 極端に横長な画像は、幅の上限のために求めた高さより低く読むが、元の画像には余裕があるので、高く描くときは読み直す。
+    /// 極端に横長な画像は、幅の上限のために求めた高さより低く読むが、元の画像には余裕があるので、高く描くときは再読み込みする。
     @Test func reloadsWideStillLimitedByAspectRatio() async throws {
         let store = makeStore(try Self.png(width: 2_048, height: 128))
         _ = store.image(for: url)
@@ -573,7 +573,7 @@ struct EmojiImageStoreTests {
         #expect(store.image(for: url, pixelHeight: 128)?.height == 64)
     }
 
-    /// 動く絵文字も、幅の上限のために低く読んだものは、高く描くときに読み直す。
+    /// 動く絵文字も、幅の上限のために低く読んだものは、高く描くときに再読み込みする。
     @Test func reloadsWideAnimationLimitedByAspectRatio() async throws {
         let store = makeStore(try Self.gif(width: 1_024, height: 64, frameCount: 2))
         _ = store.animation(for: url)
@@ -585,7 +585,7 @@ struct EmojiImageStoreTests {
         #expect(store.animation(for: url, pixelHeight: 128)?.image.frameHeight == 64)
     }
 
-    /// メモリ警告で手放すのは、使っていない絵文字だけ。描いているアニメーションは、手放したあとも読み直さずに同じものを返す。
+    /// メモリ警告で手放すのは、使っていない絵文字だけ。描いているアニメーションは、手放したあとも再読み込みせずに同じものを返す。
     @Test func releasingUnusedMemoryKeepsDrawnAnimation() async throws {
         let store = makeStore(try Self.gif(size: 96, frameCount: 2))
         _ = store.animation(for: url)
@@ -598,7 +598,7 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 1)
     }
 
-    /// 使っていない静止画は、メモリ警告で手放し、また描くときに読み直す。
+    /// 使っていない静止画は、メモリ警告で手放し、また描くときに再読み込みする。
     @Test func releasingUnusedMemoryDropsUnusedStill() async throws {
         let store = makeStore(try Self.png(width: 96, height: 96))
         _ = store.image(for: url)
@@ -611,7 +611,7 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
-    /// 手放した静止画の高さは、メモリ警告のときに一緒に消す。通り過ぎて描き直さない絵文字の高さを、起動している間ずっと溜めないため。
+    /// 手放した静止画の高さは、メモリ警告のときに一緒に消す。通り過ぎて再描画しない絵文字の高さを、起動している間ずっと溜めないため。
     @Test func releasingUnusedMemoryForgetsResolutionsOfReleasedStills() async throws {
         let store = makeStore(try Self.png(width: 96, height: 96))
         let urls = try (0..<3).map { try #require(URL(string: "https://example.com/emoji\($0).png")) }

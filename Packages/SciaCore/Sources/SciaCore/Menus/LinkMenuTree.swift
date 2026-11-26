@@ -1,6 +1,6 @@
 public import Foundation
 
-/// リンクのメニューの項目を押したときの操作。
+/// リンクのメニューの項目を選択したときの操作。
 public enum LinkMenuCommand: Equatable, Sendable {
     case url(URLMenuCommand)
     /// リンク先をプロフィールとしてサーバーで探して開く。
@@ -10,7 +10,7 @@ public enum LinkMenuCommand: Equatable, Sendable {
 }
 
 /// リンクのメニュー。本文のリンクの長押しと、リンクカードの長押しで、同じ並びから組む。決まりはdocs/menus.mdの「メニューの単位」にある。
-/// 項目の名前、並び、出す条件、見出しはここだけが知る。押したときの動き（共有のシートを出す起点、プロフィールを開く先）は、出す場所が決める。
+/// 項目の名前、並び、出す条件、見出しはここだけが知る。選択したときの動き（共有のシートを出す起点、プロフィールを開く先）は、出す場所が決める。
 public struct LinkMenuTree {
     public let url: URL
     /// 開く場所の設定。メニューを組むときの値で決める。
@@ -41,14 +41,14 @@ public struct LinkMenuTree {
         return children.isEmpty ? nil : .submenu(url.absoluteString, children)
     }
 
-    /// 「プロフィールとして開く」。サーバーはhttpとhttps以外をURLとして探さず、ふつうの文字列の検索になるため、そのリンクでは押せないようにする。
+    /// 「プロフィールとして開く」。サーバーはhttpとhttps以外をURLとして探さず、ふつうの文字列の検索になるため、そのリンクでは無効にする。
     private func openAsProfileNode(_ item: LinkMenuItem) -> MenuNode<LinkMenuCommand> {
         let isWeb = ["http", "https"].contains(url.scheme?.lowercased())
         return .action(item.title, icon: .symbol(item.symbolName), isEnabled: isWeb, .openAsProfile)
     }
 }
 
-/// ほかのサービスの投稿のメニューの項目を押したときの操作。
+/// ほかのサービスの投稿のメニューの項目を選択したときの操作。
 public enum ExternalPostMenuCommand: Equatable, Sendable {
     case url(URLMenuCommand)
     case copyText(String)
@@ -58,7 +58,7 @@ public enum ExternalPostMenuCommand: Equatable, Sendable {
     case customize
 }
 
-/// Xの投稿の囲みのような、ほかのサービスの投稿を長押ししたときに出すメニュー。
+/// Xの投稿のカードのような、ほかのサービスの投稿を長押ししたときに出すメニュー。
 public struct ExternalPostMenuTree {
     /// 元の投稿のURL。
     public let url: URL

@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// リアクションを、絵文字と数のボタンで並べ、入りきらなければ折り返す。最後に、絵文字のシートを開く「＋」を置く。サーバーのお知らせと投稿で使う。
+/// リアクションを、絵文字と数のボタンで並べ、入りきらなければ折り返す。最後に、絵文字ピッカーを開く「＋」を置く。サーバーのお知らせと投稿で使う。
 final class ReactionChipsView: UIView {
     struct Reaction {
         var name: String
@@ -28,9 +28,9 @@ final class ReactionChipsView: UIView {
         }
     }
 
-    /// リアクションを押したときに、その絵文字の名前を渡して呼ぶ。
+    /// リアクションを選択したときに、その絵文字の名前を渡して呼ぶ。
     var onToggle: ((String) -> Void)?
-    /// 「＋」を押したときに呼ぶ。
+    /// 「＋」を選択したときに呼ぶ。
     var onAdd: (() -> Void)?
     /// リアクションのボタンのタップと長押しの対象。絵文字の名前を渡して受け取る。nilなら、タップで`onToggle`を呼び、メニューは出さない（サーバーのお知らせ）。
     /// 決まりはdocs/emoji-reaction.mdの「リアクションのボタンのメニュー」にある。
@@ -55,28 +55,28 @@ final class ReactionChipsView: UIView {
 
     /// 並べている順のボタン。最後は「＋」。
     private var buttons: [UIControl] = []
-    /// 絵文字の名前ごとのボタン。描き直しでも同じリアクションのボタンは使い回し、押している途中のボタンを作り替えてタップを取り消さない。
+    /// 絵文字の名前ごとのボタン。再描画でも同じリアクションのボタンは使い回し、押されている状態のボタンを作り替えてタップを取り消さない。
     private var reactionButtons: [String: ReactionChipButton] = [:]
     private lazy var addButton = makeAddButton()
     /// 最後に知らせた高さ。置かれた幅で並べた高さと違えば、測り直させる。
     private var reportedHeight: CGFloat?
-    /// 次に並べるときに、前の位置から動かすか。動かす描き直しの`apply`で立て、並べたら下ろす。
-    /// 動きはどれも`apply`では始めず、並べるときに始める。タイムラインは行の中身を動きを止めた描き直し（`apply(_:animatingDifferences: false)`）の中で当てるため、その中で始めた`UIView.animate`は効かない。
+    /// 次に並べるときに、前の位置から動かすか。動かす再描画の`apply`で立て、並べたら下ろす。
+    /// 動きはどれも`apply`では始めず、並べるときに始める。タイムラインは行の中身を動きを止めた再描画（`apply(_:animatingDifferences: false)`）の中で当てるため、その中で始めた`UIView.animate`は効かない。
     private var animatesNextLayout = false
-    /// 次に並べるときに、その場で浮かび上がらせるボタン。新しく付いたリアクションと、列ごと出てきたときの「＋」。
+    /// 次に並べるときに、その場でフェードインさせるボタン。新しく付いたリアクションと、列ごと出てきたときの「＋」。
     private var enteringButtons: Set<ObjectIdentifier> = []
     /// 次に並べるときに、縮めながら薄くして外すボタン。
     private var leavingButtons: [ReactionChipButton] = []
-    /// 消えている途中から戻すボタン。浮かび上がらせるときに、小さく薄い状態に戻さず、今の状態から動かす。
+    /// 消えている途中から戻すボタン。フェードインさせるときに、小さく薄い状態に戻さず、今の状態から動かす。
     private var revivingButtons: Set<ObjectIdentifier> = []
-    /// 次に並べるときに、浮かび上がるボタンを、ほかのボタンが場所を空けてから浮かび上がらせるか。すでにボタンのある列に付いたときに立てる。
+    /// 次に並べるときに、フェードインするボタンを、ほかのボタンが場所を空けてからフェードインさせるか。すでにボタンのある列に付いたときに立てる。
     private var delaysEntering = false
     /// 消えている途中のボタンを、絵文字の名前ごとに覚える。消え終える前に同じ絵文字がまた付いたら、新しいボタンを作らずに、このボタンを今の状態から戻す。
     /// 別のボタンを作ると、同じリアクションが消えかけの位置と新しい位置に同時に見えるため。
     private var leavingByName: [String: ReactionChipButton] = [:]
 
-    /// - Parameter animated: 前の中身から動かして替える。付いたボタンはその場で浮かび上がり、なくなったボタンは縮みながら消え、残るボタンは新しい位置へ動き、数は入れ替わる（docs/emoji-reaction.mdの「動き」）。
-    ///   同じ投稿の描き直しで、画面に出ているときだけ渡す。視差効果を減らす設定と、時間が0のときは動かさない。
+    /// - Parameter animated: 前の中身から動かして替える。付いたボタンはその場でフェードインし、なくなったボタンは縮みながら消え、残るボタンは新しい位置へ動き、数は入れ替わる（docs/emoji-reaction.mdの「動き」）。
+    ///   同じ投稿の再描画で、画面に出ているときだけ渡す。視差効果を減らす設定と、時間が0のときは動かさない。
     func apply(_ reactions: [Reaction], style: Style = .standard, animated: Bool = false) {
         let animates = animated && transitionDuration > 0 && window != nil && !UIAccessibility.isReduceMotionEnabled
         if style != self.style {
@@ -89,7 +89,7 @@ final class ReactionChipsView: UIView {
         for reaction in reactions {
             var existing = reactionButtons[reaction.name]
             if existing == nil, let leaving = leavingByName.removeValue(forKey: reaction.name) {
-                // 消えている途中のボタンを戻す。並べるときに、今の大きさと濃さから元へ戻す。
+                // 消えている途中のボタンを戻す。並べるときに、今の大きさと不透明度から元へ戻す。
                 leavingButtons.removeAll { $0 === leaving }
                 leaving.isUserInteractionEnabled = true
                 leaving.isAccessibilityElement = true
@@ -114,7 +114,7 @@ final class ReactionChipsView: UIView {
                 button.removeFromSuperview()
             }
         }
-        // 列ごと出てきたときは、「＋」もリアクションと一緒に浮かび上がらせる。
+        // 列ごと出てきたときは、「＋」もリアクションと一緒にフェードインさせる。
         if animates, wasEmpty, !reactions.isEmpty, showsAddButton {
             enteringButtons.insert(ObjectIdentifier(addButton))
         }
@@ -163,8 +163,8 @@ final class ReactionChipsView: UIView {
     /// 消えるボタンの動きの時間の、ほかの動きの時間に対する割合。
     private static let leavingDurationRatio = 0.5
 
-    /// すでにボタンのある列で、浮かび上がるボタンを待たせる時間の、ほかの動きの時間に対する割合。
-    /// 新しいボタンは、そこにいた「＋」などが動いて空ける場所に浮かび上がる。同時に始めると、動き出したばかりのボタンに重なって見えるため（録画で確かめた）。
+    /// すでにボタンのある列で、フェードインするボタンを待たせる時間の、ほかの動きの時間に対する割合。
+    /// 新しいボタンは、そこにいた「＋」などが動いて空ける場所にフェードインする。同時に始めると、動き出したばかりのボタンに重なって見えるため（録画で確かめた）。
     /// 半分の時間で、動くボタンは道のりの8割ほどを進み、縮めてある新しいボタンの範囲から出る。
     private static let enteringDelayRatio = 0.5
 
@@ -205,7 +205,7 @@ final class ReactionChipsView: UIView {
         }
         leavingButtons.removeAll()
         for (button, frame) in zip(buttons, frames) {
-            // 浮かび上がる途中のボタンは縮めてあるので、枠ではなく中心と大きさで置く。
+            // フェードインする途中のボタンは縮めてあるので、枠ではなく中心と大きさで置く。
             let place = {
                 button.bounds.size = frame.size
                 button.center = CGPoint(x: frame.midX, y: frame.midY)
@@ -365,7 +365,7 @@ final class ReactionChipButton: UIControl {
     var padding = ReactionChipsView.Style.standard.padding {
         didSet { setNeedsLayout() }
     }
-    /// 押せる範囲の高さ。見た目は小さくても、押せる範囲は44pt取る。
+    /// ヒット領域の高さ。見た目は小さくても、ヒット領域は44pt取る。
     private static let minimumHitHeight: CGFloat = 44
 
     private(set) var isMine = false
@@ -493,7 +493,7 @@ final class ReactionChipButton: UIControl {
     }
 
     /// `setCount`で決めた動きを始める。並べ終えてから呼ぶ。
-    /// タイムラインは行の中身を動きを止めた描き直しの中で当てるため、`setCount`の中では始めない。
+    /// タイムラインは行の中身を動きを止めた再描画の中で当てるため、`setCount`の中では始めない。
     func startPendingAnimations() {
         if let change = pendingColorChange {
             pendingColorChange = nil
@@ -565,7 +565,7 @@ final class ReactionChipButton: UIControl {
         return bounds.insetBy(dx: 0, dy: -extra).contains(point)
     }
 
-    // 枠の色はCGColorで、ティントカラーが変わっても描き直されないため、変わったら当て直す。
+    // 枠の色はCGColorで、ティントカラーが変わっても再描画されないため、変わったら当て直す。
     override func tintColorDidChange() {
         super.tintColorDidChange()
         updateColors()

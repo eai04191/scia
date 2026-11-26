@@ -32,18 +32,18 @@ final class AnnouncementsViewController: UIViewController {
     private let stack = UIStackView()
     private var items: [AnnouncementListItem] = []
     private var state = AnnouncementsContentState.loading
-    /// 並べているお知らせの行。描き直しても同じお知らせの行は使い回し、押しているボタンの下で行を作り替えない。
+    /// 並べているお知らせの行。再描画しても同じお知らせの行は使い回し、押されている状態のボタンの下で行を作り替えない。
     private var entryViews: [Announcement.ID: AnnouncementEntryView] = [:]
     /// 画面に出ている。出ている間に見えた行を既読にする。
     private var isShown = false
-    /// いま画面に出ている行。画面の外から入ってきた行だけを既読にする。描き直しや並べ直しのたびに送ると、既読の送信が失敗し続けたときに送り直しが止まらないため。
+    /// いま画面に出ている行。画面の外から入ってきた行だけを既読にする。再描画や並べ直しのたびに送ると、既読の送信が失敗し続けたときに再送が止まらないため。
     private var visibleIDs: Set<Announcement.ID> = []
-    /// リンクのメニューを出している。閉じるまで描き直さない。
+    /// リンクのメニューを出している。閉じるまで再描画しない。
     private var isLinkMenuShown = false
     private var needsRender = false
     private lazy var emojiPalette = makeEmojiPalette()
     private var emojiSheet: EmojiPaletteSheet?
-    /// 絵文字のシートを開いたお知らせ。
+    /// 絵文字ピッカーを開いたお知らせ。
     private var reactingAnnouncementID: Announcement.ID?
 
     init(
@@ -111,7 +111,7 @@ final class AnnouncementsViewController: UIViewController {
             stack.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor),
         ])
-        // 文字は描いた時点の大きさで持つため、文字の大きさの設定が変わったら描き直す。
+        // 文字は描いた時点の大きさで持つため、Dynamic Typeが変わったら再描画する。
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.render()
         }
@@ -206,7 +206,7 @@ final class AnnouncementsViewController: UIViewController {
     }
 
     /// 読んでいる行と、その上端の画面上の位置。一番上にいるときはnilで、上に増えたお知らせを見せる。
-    /// 描き直したあとも残る行から選ぶ。消える行を基準にすると、消えた分だけ下の行が動くため。
+    /// 再描画したあとも残る行から選ぶ。消える行を基準にすると、消えた分だけ下の行が動くため。
     private func readingAnchor(keeping remaining: Set<Announcement.ID>) -> (id: Announcement.ID, y: CGFloat)? {
         let top = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
         guard top > 0 else { return nil }
@@ -272,7 +272,7 @@ final class AnnouncementsViewController: UIViewController {
         return padded(label)
     }
 
-    /// 読めていた行を残したまま、シートで開いたときか引っぱったときの失敗を、お知らせのリストの上に出す。
+    /// 読めていた行を残したまま、シートで開いたときかpull to refreshしたときの失敗を、お知らせのリストの上に出す。
     private func failureRow(_ reason: ErrorPresentation) -> UIView {
         let title = UILabel()
         title.font = .preferredFont(forTextStyle: .subheadline).bold
@@ -345,7 +345,7 @@ final class AnnouncementsViewController: UIViewController {
         }
     }
 
-    // MARK: - 絵文字のシート
+    // MARK: - 絵文字ピッカー
 
     private func makeEmojiPalette() -> EmojiPaletteView {
         let palette = EmojiPaletteView(emojiImages: emojiImages)
@@ -426,7 +426,7 @@ extension AnnouncementsViewController: UIScrollViewDelegate {
     }
 }
 
-/// お知らせを並べるスクロールビュー。リンクやリアクションのボタンを押して少し止めてから引いても、スクロールできるようにする。
+/// お知らせを並べるスクロールビュー。リンクやリアクションのボタンを押下して少し止めてから引いても、スクロールできるようにする。
 private final class AnnouncementsScrollView: UIScrollView {
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is UIControl || super.touchesShouldCancel(in: view)
@@ -477,7 +477,7 @@ extension AnnouncementsViewController: LinkMenuHost {
 }
 
 /// お知らせのシートの入れ物。開いている間は、アプリ内通知のチップの列をシートの上へ出し、ナビゲーションバーのすぐ下に置く。
-/// シートの中で起きた失敗（リアクション）や、リンクのメニューのコピーの知らせが、シートに覆われて見えなくならないようにするため。
+/// シートの中で起きた失敗（リアクション）や、リンクのメニューのコピーのチップが、シートに覆われて見えなくならないようにするため。
 final class AnnouncementsNavigationController: UINavigationController, NoticeScreen {
     func noticePlacement(below: CGFloat) -> NoticePlacement {
         guard let view = viewIfLoaded, view.window != nil else { return NoticePlacement(top: below) }

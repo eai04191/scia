@@ -5,7 +5,7 @@ public enum ScheduledStatusTexts {
     public static let reschedule = "日時を変える"
     public static let rewrite = "投稿欄に戻して書き直す"
     public static let cancel = "取り消す"
-    /// 行を押すと日時を変えることの、読み上げのヒント。
+    /// 行を選択すると日時を変えることの、読み上げのヒント。
     public static let rescheduleHint = "日時を変えます。"
 
     public static let loadFailure = "読み込めませんでした"

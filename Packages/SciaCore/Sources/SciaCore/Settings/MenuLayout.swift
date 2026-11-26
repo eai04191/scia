@@ -11,7 +11,7 @@ extension MenuItemKind {
     public static var customizeItem: Self? { nil }
 }
 
-/// 横並びのまとまりの大きさ。`rawValue`は設定に保存するため、一度使った値は変えない。
+/// 横並びのグループの大きさ。`rawValue`は設定に保存するため、一度使った値は変えない。
 public enum MenuRowSize: String, CaseIterable, Hashable, Sendable {
     /// アイコンと名前を縦に積んで並べる。
     case medium
@@ -33,16 +33,16 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         /// 非表示にした項目も、同じ場所に残す。
         case item(Item, isVisible: Bool)
         case separator
-        /// 区切り線と同じくまとまりを分け、これより下のまとまりの項目をメニューでその大きさで横に並べる。
+        /// 区切り線と同じくグループを分け、これより下のグループの項目をメニューでその大きさで横に並べる。
         case rowSeparator(MenuRowSize)
         /// これより下の項目は「その他」のサブメニューに入る。並びに1つだけある。
         case more
     }
 
-    /// 区切り線で分けたメニューの1つのまとまり。
+    /// 区切り線で分けたメニューの1つのグループ。
     public struct Group: Equatable, Sendable {
         public var items: [Item]
-        /// 横並びの区切り線で始まったまとまりなら、項目を横に並べる大きさ。
+        /// 横並びの区切り線で始まったグループなら、項目を横に並べる大きさ。
         public var row: MenuRowSize?
 
         public init(_ items: [Item], row: MenuRowSize? = nil) {
@@ -51,13 +51,13 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         }
     }
 
-    /// メニューに出す項目を、区切り線で分けたまとまりにしたもの。空のまとまりは含めない。
+    /// メニューに出す項目を、区切り線で分けたグループにしたもの。空のグループは含めない。
     public struct Groups: Equatable, Sendable {
         public var main: [Group]
         /// 「その他」のサブメニューの中身。空なら「その他」を出さない。
         public var more: [Group]
 
-        /// 1つのまとまりだけの並び。アクションバーのボタンを長押しして出すメニューのように、決まった項目だけを、メニューと同じ組み方で組むために使う。
+        /// 1つのグループだけの並び。アクションバーのボタンを長押しして出すメニューのように、決まった項目だけを、メニューと同じ組み方で組むために使う。
         public static func items(_ items: [Item]) -> Groups {
             Groups(main: [Group(items)], more: [])
         }
@@ -67,8 +67,8 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
             Groups(main: [Group([item])], more: [])
         }
 
-        /// `items`を除いた並び。項目がなくなったまとまりは含めない。出す場所で意味のない項目（ハッシュタグのタイムラインの「すべての投稿」など）を除くのに使う。
-        /// 並び（`MenuLayout`）から除くと、足りない項目として既定の位置に差し込み直されるため、まとまりにしてから除く。
+        /// `items`を除いた並び。項目がなくなったグループは含めない。出す場所で意味のない項目（ハッシュタグのタイムラインの「すべての投稿」など）を除くのに使う。
+        /// 並び（`MenuLayout`）から除くと、足りない項目として既定の位置に差し込み直されるため、グループにしてから除く。
         /// 除いたせいで「その他」の外が空になったら、「その他」の中身をそのまま並べる。「その他」1つだけのメニューを開かせないため。
         /// 使う人が「その他」の外をみな隠した並びは、除く前から外が空なので、そのまま「その他」に残す。
         public func excluding(_ items: Set<Item>) -> Groups {
@@ -136,7 +136,7 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     }
 
     /// ほかの対象のメニューの中に、この対象のサブメニューで出すときの並び。タップと長押しに割り当てた項目は、隠していても並びの位置に出す。
-    /// 1段目のメニューではタップや長押しで行えるので隠すが、メニューの中で対象を選んだときは、閉じて押し直させないため。決まりはdocs/menus.mdの「並びの設定」にある。
+    /// 1段目のメニューではタップや長押しで行えるので隠すが、メニューの中で対象を選んだときは、閉じて選択し直させないため。決まりはdocs/menus.mdの「並びの設定」にある。
     public func submenuGroups(actions: ObjectActions<Item>) -> Groups {
         groups(revealing: actions.assignedItems)
     }
@@ -225,7 +225,7 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     }
 
     /// 項目を`index`に入れ、既定の並びでその側にある区切り線を足す。並びの端と「その他」の境目に接する側と、すでに区切り線がある側には足さない。
-    /// 前に区切り線が要り、入れる位置のすぐ後ろがもう区切り線なら、並びの先頭や「その他」の境目でも、その区切り線の後ろに入れる。区切り線を2本並べず、既定で横並びの区切り線の下にある項目を、その下のまとまりに戻すため。
+    /// 前に区切り線が要り、入れる位置のすぐ後ろがもう区切り線なら、並びの先頭や「その他」の境目でも、その区切り線の後ろに入れる。区切り線を2本並べず、既定で横並びの区切り線の下にある項目を、その下のグループに戻すため。
     private static func insert(_ element: Element, at index: Int, separatorBefore: Element?, separatorAfter: Element?, into result: inout [Element]) {
         var index = index
         if separatorBefore != nil, index < result.count, separator(result[index]) != nil {
@@ -258,9 +258,9 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     case favourite
     case reblog
     case bookmark
-    /// 投稿欄で投稿を引用して書き始める。引用に対応したサーバーでだけ出て、引用できない投稿では押せない。
+    /// 投稿欄で投稿を引用して書き始める。引用に対応したサーバーでだけ出て、引用できない投稿では無効になる。
     case quote
-    /// 絵文字のシートを開き、選んだ絵文字で投稿にリアクションする。絵文字のリアクションに対応したサーバーでだけ出る（docs/emoji-reaction.md）。
+    /// 絵文字ピッカーを開き、選んだ絵文字で投稿にリアクションする。絵文字のリアクションに対応したサーバーでだけ出る（docs/emoji-reaction.md）。
     case emojiReaction
     /// 投稿の会話をミュートする。自分の投稿、通知、自分へのメンションを含む投稿でだけ出る。
     case muteConversation
@@ -322,7 +322,7 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     case customEmojis
     /// 投稿のハッシュタグごとの、ハッシュタグのメニュー。ハッシュタグのある投稿でだけ出る。
     case hashtags
-    /// 投稿をサーバーから読み直し、APIの応答のJSONを出す。サーバーが付けた値（言語など）を確かめるためのもの。
+    /// 投稿をサーバーから再読み込みし、APIの応答のJSONを出す。サーバーが付けた値（言語など）を確かめるためのもの。
     case apiResponse
 
     /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
@@ -387,7 +387,7 @@ public enum UserMenuItem: String, BundledMenuDefaults {
     public static let defaultsKey = "user"
     public static let defaultLayout = MenuLayout<UserMenuItem>.bundledDefault()
 
-    /// コピーの項目。プロフィールのハンドルを押したときのメニューも、この順に並べる。
+    /// コピーの項目。プロフィールのハンドルを選択したときのメニューも、この順に並べる。
     public static let copyItems: [UserMenuItem] = [.copyHandle, .copyUsername, .copyServer, .copyLink]
 
     /// コピーの項目のうち、ハンドルの一部をコピーするもの。ほかの項目はnil。
@@ -404,7 +404,7 @@ public enum UserMenuItem: String, BundledMenuDefaults {
     public var dependsOnRelationship: Bool {
         switch self {
         case .follow, .showReblogs, .notify, .endorse, .note, .mute, .block, .blockDomain: true
-        // 「別のアカウントで」の中の関係は、そのアカウントで読み直す（`UserMenuTree.refreshOtherAccounts(groups:)`）。
+        // 「別のアカウントで」の中の関係は、そのアカウントで再読み込みする（`UserMenuTree.refreshOtherAccounts(groups:)`）。
         case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .autoTranslation, .editDisplay, .report, .otherAccounts, .customize: false
         }
     }
@@ -423,7 +423,7 @@ public enum LinkMenuItem: String, BundledMenuDefaults {
     case openInBrowser
     /// 開く場所の設定にかかわらず、既定のブラウザで開く。
     case openInDefaultBrowser
-    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。httpとhttps以外のリンクでは押せない。
+    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。httpとhttps以外のリンクでは無効になる。
     case openInAppSafari
     /// リンク先をプロフィールとして探し、見つかればプロフィールを開く。
     /// `@`の付かないURL（Pixelfedなど）もあり、URLの形や本文のHTMLやリンクのカードからはプロフィールか見分けられないため、使う人に選んでもらう。
@@ -440,7 +440,7 @@ public enum LinkMenuItem: String, BundledMenuDefaults {
     public static let defaultLayout = MenuLayout<LinkMenuItem>.bundledDefault()
 }
 
-/// ほかのサービスの投稿（Xの投稿の囲みなど）を長押ししたときのメニューの項目。決まりはdocs/menus.mdの「メニューの単位」にある。
+/// ほかのサービスの投稿（Xの投稿のカードなど）を長押ししたときのメニューの項目。決まりはdocs/menus.mdの「メニューの単位」にある。
 public enum ExternalPostMenuItem: String, BundledMenuDefaults {
     /// 元の投稿を、開く場所の設定に従って開く。
     case openInBrowser
@@ -613,7 +613,7 @@ public enum MenuLayoutMove: Sendable, CaseIterable {
     }
 
     /// `count`個の並びで、`index`の行を取り出して入れ直す位置。動かないならnil。
-    /// 「その他」の境目も並びの1つとして数えるので、上下に1つ動かして境目と入れ替わると、行は境目の反対側の節に入る。
+    /// 「その他」の境目も並びの1つとして数えるので、上下に1つ動かして境目と入れ替わると、行は境目の反対側のセクションに入る。
     public func destination(from index: Int, count: Int) -> Int? {
         guard (0..<count).contains(index) else { return nil }
         let destination = switch self {

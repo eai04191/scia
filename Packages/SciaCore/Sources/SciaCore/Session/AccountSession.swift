@@ -11,7 +11,7 @@ import os
 /// - レート制限が明けたときと、電波が戻ったときに、ストリーミングとタイムラインの失敗したままの読み込みをすぐやり直させる
 /// - 閉じたら、申し込みが残っていてもストリーミングを切り、セッションで始めた処理を止める
 /// - アカウントごとに1つ持つ部品（読んだアカウントと関係、接続の状態、Xの投稿、投票、自動翻訳）を作り、設定の変化を流し、閉じたら止める。
-///   UIごとに作ると、同じ投稿を画面ごとに読み直したり、設定をオフにしても通信が止まらなかったりする
+///   UIごとに作ると、同じ投稿を画面ごとに再読み込みしたり、設定をオフにしても通信が止まらなかったりする
 /// - 使い始めるときの手順（`start(networkRecoveryCount:)`）を1つの入口で行う
 ///
 /// タイムラインのモデルは、`init(…session:…)`で作ると、ここに登録され、やり直しと止めるのをまとめて受け取る。
@@ -44,13 +44,13 @@ public final class AccountSession {
     public let diagnostics: ConnectionDiagnostics
     /// fxtwitterから読んだXの投稿。どの一覧でも同じ投稿を1回だけ読む。設定で展開をオフにしたら、読み込みをやめる（docs/link-card.md）。
     public let xPosts: XPostStore
-    /// 投票と、投票の結果の読み直し。結果はどの一覧にも反映する。
+    /// 投票と、投票の結果の再読み込み。結果はどの一覧にも反映する。
     public let polls: PollVoting
     /// 投稿の本文の自動翻訳（docs/auto-translation.md）。訳す部品（`StatusTranslationSetup`）を渡さなければnil。
     public let translations: StatusTranslationStore?
     /// ストリーミングの状態か申し込みが変わったときに呼ぶ。`streamingHub.onChange`はセッションが使うので、UIはここに置く。
     public var onStreamingChange: () -> Void = {}
-    /// 自動翻訳の設定（オンオフ、訳す言語、対象外の人、翻訳先、方式）が変わり、`translations`に入れ終えたあとに呼ぶ。出している投稿を描き直す。
+    /// 自動翻訳の設定（オンオフ、訳す言語、対象外の人、翻訳先、方式）が変わり、`translations`に入れ終えたあとに呼ぶ。出している投稿を再描画する。
     public var onTranslationSettingsChange: () -> Void = {}
     /// トークンが無効になり、ストリーミングと登録したタイムラインを止めたあとに呼ぶ。ログインし直しを促す表示はアプリが出す。
     public var onCredentialsInvalid: () -> Void = {}
@@ -59,7 +59,7 @@ public final class AccountSession {
     /// 読めたアカウントの設定。まだ読めていなければnil。
     public private(set) var preferences: ServerPreferences?
     /// 設定を入れ替えたか、既定を保存した回数。読み始めたあとに増えていたら、その読み込みの応答は古いので使わない。
-    /// 起動時の読み込み、画面を開いたときの読み直し、保存のあとの読み直しのどれが遅れて届いても、新しい設定を古い値で上書きしないため。
+    /// 起動時の読み込み、画面を開いたときの再読み込み、保存のあとの再読み込みのどれが遅れて届いても、新しい設定を古い値で上書きしないため。
     @ObservationIgnored private var preferencesVersion = 0
     private var instanceConfiguration: InstanceConfiguration?
     private let configurationLoad = SharedLoad()
@@ -88,7 +88,7 @@ public final class AccountSession {
     ///   - pollOperations: セッションのクライアントから、投票の通信の口を作る。省略すると、そのクライアントで送る。
     ///   - requestLog: 失敗の記録。デバッグ版では応答の本文も残すものを渡す。
     ///   - tuning: ストリーミングの新着の扱いを、つなぎ始めるたびに読む。
-    ///   - clock: ストリーミングのつなぎ直しや、トークンを確かめ直さない間、レート制限が明けるまでを数える。テストでは手で進める時計を渡す。
+    ///   - clock: ストリーミングの再接続や、トークンを確かめ直さない間、レート制限が明けるまでを数える。テストでは手で進める時計を渡す。
     ///   - now: 429や503の応答が示した再開の時刻を、待つ長さに直すための今の日付。
     public init(
         credential: Credential,
@@ -177,7 +177,7 @@ public final class AccountSession {
 
     /// アカウントを使い始める。画面を出すときに1度呼ぶ。通信はしない。次を行う。
     /// - レート制限が明けたときと、電波が戻ったときのやり直しを始める（`observeRecoveries`）
-    /// - サーバーの設定に従う項目を、読み直すまで、前に読めたサーバーの値で描かせる（`AppSettings.followServerPreferences`）
+    /// - サーバーの設定に従う項目を、再読み込みするまで、前に読めたサーバーの値で描かせる（`AppSettings.followServerPreferences`）
     ///
     /// サーバーから読むものは`loadServerInfo()`で始める。
     /// - Parameter networkRecoveryCount: 電波がつながっていない状態から戻った回数（`NetworkConditionsMonitor.recoveryCount`）。Observationで追える値を返す。
@@ -215,7 +215,7 @@ public final class AccountSession {
         }
     }
 
-    /// 設定でXの投稿の展開をオフにしたら、読み込み中のfxtwitterへの通信と読み直しの待ちをやめる。オフのあいだ通信しないため（docs/link-card.md）。
+    /// 設定でXの投稿の展開をオフにしたら、読み込み中のfxtwitterへの通信と再読み込みの待ちをやめる。オフのあいだ通信しないため（docs/link-card.md）。
     private func observeXPostSetting() {
         withObservationTracking {
             _ = settings.expandsXPosts
@@ -310,7 +310,7 @@ public final class AccountSession {
         logger.info("recover reason=\(reason, privacy: .public)")
         tasks.run(.display) { [weak self] in _ = await self?.loadUserDisplayDomain() }
         loadCapabilities()
-        // つながっていなければ、待っている間隔を飛ばしてつなぎ直す。
+        // つながっていなければ、待っている間隔を飛ばして再接続する。
         streamingHub.recover()
         for list in lists.compactMap(\.list) {
             list.recover()
@@ -347,7 +347,7 @@ public final class AccountSession {
 
     // MARK: - 投稿欄の既定値
 
-    /// インスタンスの上限。一度読めたら使い回す。読めなければnilを返し、次に呼ばれたときに読み直す。
+    /// インスタンスの上限。一度読めたら使い回す。読めなければnilを返し、次に呼ばれたときに再読み込みする。
     public func loadInstanceConfiguration() async -> InstanceConfiguration? {
         await configurationLoad.run(cached: { instanceConfiguration }) {
             do {
@@ -372,7 +372,7 @@ public final class AccountSession {
     }
 
     /// 投稿欄が使う上限と既定値を、書き始める前に読んでおく。書き始めてから読むと、応答の遅いサーバーでは、届くまで投稿できないため。
-    /// 読めなければ、書き始めたときに読み直す。
+    /// 読めなければ、書き始めたときに再読み込みする。
     public func preloadComposeDefaults() {
         tasks.run(.display) { [weak self] in _ = await self?.loadInstanceConfiguration() }
         tasks.run(.display) { [weak self] in await self?.loadPreferences() }
@@ -381,7 +381,7 @@ public final class AccountSession {
     /// 走っている上限と既定値の読み込みを待っている呼び出しの数。
     var composeDefaultsWaiterCount: Int { configurationLoad.waiterCount + preferencesLoad.waiterCount }
 
-    /// サーバーの機能の有無を読む。一度読めたら読み直さない。
+    /// サーバーの機能の有無を読む。一度読めたら再読み込みしない。
     /// 読めなかったら、次にやり直すとき（通信が戻ったときなど）にまた読む。起動のときの一時的な失敗で、ずっとMastodonと同じ扱いのままにしないため。
     public func loadCapabilities() {
         guard capabilitiesState == .unknown else { return }
@@ -431,7 +431,7 @@ public final class AccountSession {
         case unknown, loading, loaded
     }
 
-    /// アカウントの設定。一度読めたら使い回す。読めなければnilを返し、次に呼ばれたときに読み直す。
+    /// アカウントの設定。一度読めたら使い回す。読めなければnilを返し、次に呼ばれたときに再読み込みする。
     @discardableResult
     public func loadPreferences() async -> ServerPreferences? {
         await preferencesLoad.run(cached: { preferences }) {
@@ -444,7 +444,7 @@ public final class AccountSession {
         }
     }
 
-    /// アカウントの設定を読み直す。ほかのクライアントで変えた値を拾うために、設定を見せる画面を開くときに呼ぶ。読めなければ投げ、手元の設定は変えない。
+    /// アカウントの設定を再読み込みする。ほかのクライアントで変えた値を拾うために、設定を見せる画面を開くときに呼ぶ。読めなければ投げ、手元の設定は変えない。
     @discardableResult
     public func reloadPreferences() async throws -> ServerPreferences {
         let version = preferencesVersion
@@ -464,7 +464,7 @@ public final class AccountSession {
     }
 
     /// 新しく投稿するときの既定を1つ変え、変えたあとのアカウントの設定を返す。決まりはdocs/account-screen.mdの「投稿のデフォルト」にある。
-    /// 保存できたら設定を読み直す。読み直せなければ、送った変更を手元の設定に当てる。保存できなければ投げ、手元の設定は変えない。
+    /// 保存できたら設定を再読み込みする。再読み込みできなければ、送った変更を手元の設定に当てる。保存できなければ投げ、手元の設定は変えない。
     @discardableResult
     public func updatePostingDefault(_ change: PostingDefaultChange) async throws -> ServerPreferences? {
         try await client.updatePostingDefault(change)
@@ -475,7 +475,7 @@ public final class AccountSession {
         return adoptPreferences(updated, readAt: version)
     }
 
-    /// 投稿欄で使う、インスタンスの上限とアカウントの設定。読めなかった値はnilで、次に呼ばれたときに読み直す。
+    /// 投稿欄で使う、インスタンスの上限とアカウントの設定。読めなかった値はnilで、次に呼ばれたときに再読み込みする。
     public func composeDefaults() async -> (configuration: InstanceConfiguration?, preferences: ServerPreferences?) {
         async let configuration = loadInstanceConfiguration()
         async let preferences = loadPreferences()
@@ -483,7 +483,7 @@ public final class AccountSession {
     }
 
     /// インスタンスの上限と、アカウントの既定の公開範囲、閲覧注意、言語を読み、投稿欄に反映する。
-    /// `ComposeModel`は反映するまで投稿させないので、書き始めるときに呼ぶ。読めなかった値は既定のまま使えるようにし、次に呼ばれたときに読み直す。
+    /// `ComposeModel`は反映するまで投稿させないので、書き始めるときに呼ぶ。読めなかった値は既定のまま使えるようにし、次に呼ばれたときに再読み込みする。
     /// - Parameter adjustingConfiguration: 反映する前に上限を差し替える。デバッグ版で、送る前に縮める流れを確かめるのに使う。
     public func applyComposeDefaults<Thumbnail>(
         to model: ComposeModel<Thumbnail>,
@@ -526,7 +526,7 @@ private struct WeakList {
     weak var list: (any SessionList)?
 }
 
-/// 一度読めたら使い回す値の読み込みを、同時に1つだけ走らせる。走っている間に呼ばれたら、送り直さずにそれを待つ。
+/// 一度読めたら使い回す値の読み込みを、同時に1つだけ走らせる。走っている間に呼ばれたら、再送せずにそれを待つ。
 @MainActor
 private final class SharedLoad {
     /// 読み込みが走っている間だけ、待っている呼び出し。
@@ -537,7 +537,7 @@ private final class SharedLoad {
     /// - Parameter cached: 読めていれば、その値。
     /// - Parameter load: 読んで、読めたら`cached`が返す場所に入れる。
     func run<Value>(cached: () -> Value?, load: () async -> Void) async -> Value? {
-        // 待っていた読み込みが読めずに終わったら、自分で読み直す。目的が違うと、レート制限で止められている間に送られるかが違うため。
+        // 待っていた読み込みが読めずに終わったら、自分で再読み込みする。目的が違うと、レート制限で止められている間に送られるかが違うため。
         while waiters != nil {
             await withCheckedContinuation { waiters?.append($0) }
             if let value = cached() { return value }

@@ -42,7 +42,7 @@ struct PostCrashReportView: View {
 
     /// 通知のチップや行から来た人は、何が起きたのかを知らないので、最初に説明する。
     private var explanation: some View {
-        // 押せるものでも項目でもないので、行の形にせず、普通の文として置く。
+        // 選択できるものでも項目でもないので、行の形にせず、普通の文として置く。
         Section {
             VStack(alignment: .leading, spacing: 8) {
                 Text(CrashReportTexts.Screen.apology)

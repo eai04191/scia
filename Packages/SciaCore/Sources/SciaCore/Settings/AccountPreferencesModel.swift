@@ -15,7 +15,7 @@ public final class AccountPreferencesModel {
     public var runningTaskCount: Int { tasks.runningCount }
 
     /// - Parameters:
-    ///   - initial: すでに読めているアカウント設定。読み直すまでの表示に使う。
+    ///   - initial: すでに読めているアカウント設定。再読み込みするまでの表示に使う。
     ///   - tasks: セッションの持ち主の子。閉じたセッションで読んだ値を覚えさせないため。
     public init(initial: ServerPreferences?, load: @escaping @MainActor @Sendable () async throws -> ServerPreferences, tasks: TaskScope) {
         preferences = initial
@@ -23,7 +23,7 @@ public final class AccountPreferencesModel {
         self.tasks = tasks
     }
 
-    /// 読み直す。読んでいる途中なら、それを止めてから読む。ウェブで設定を変えて戻ったときに、変える前に始めた読み込みの応答で上書きしないため。
+    /// 再読み込みする。読んでいる途中なら、それを止めてから読む。ウェブで設定を変えて戻ったときに、変える前に始めた読み込みの応答で上書きしないため。
     /// 読めなければ、前に読めた値はそのまま出す。
     public func reload(purpose: RequestPurpose) {
         loading?.cancel()

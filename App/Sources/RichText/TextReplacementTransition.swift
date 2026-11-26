@@ -3,8 +3,8 @@ import UIKit
 
 /// 本文を別の文章（原文と訳文）へ置き換えるときの動き。
 ///
-/// 翻訳の単位（段落）ごとに、先頭の語から順に、前の文字を薄くし、そこへ新しい文字を少し下から浮かび上がらせる。
-/// 語ごとに少しずつ遅らせ、1行を横切る時間の一部（`fadeWidth`）で濃さを変え、スプリングの移動と合わせる（WWDC24「Create custom visual effects with SwiftUI」の文字の出現と同じ組み立て。ブラーは`CALayer`に公開の手段がないので使わない）。
+/// 翻訳の単位（段落）ごとに、先頭の語から順に、前の文字を薄くし、そこへ新しい文字を少し下からフェードインさせる。
+/// 語ごとに少しずつ遅らせ、1行を横切る時間の一部（`fadeWidth`）で不透明度を変え、スプリングの移動と合わせる（WWDC24「Create custom visual effects with SwiftUI」の文字の出現と同じ組み立て。ブラーは`CALayer`に公開の手段がないので使わない）。
 /// 前の文字と新しい文字の描画を語ごとに切り出す。動かしている間は、ラベル自身の描画と動く絵文字の層を隠す。
 /// まだ順番が来ていない段落の前の文字は、新しい位置へ`rowSpring`で動かす。
 @MainActor
@@ -26,7 +26,7 @@ final class TextReplacementTransition {
         var duration: TimeInterval
     }
 
-    /// 新しい文字が浮かび上がる距離の、行の高さに対する割合。
+    /// 新しい文字がフェードインするときに動く距離の、行の高さに対する割合。
     private static let riseRatio: CGFloat = 0.3
     /// 新しい本文の高さに入らない行が薄くなる時間の、高さを動かす時間に対する割合。
     private static let extraLineFadeRatio = 0.5
@@ -82,7 +82,7 @@ final class TextReplacementTransition {
         let scale = label.traitCollection.displayScale
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        // 濃さを変える時間は投稿の中でそろえる。短い行だけ速く消えると、前の行の語を追い越すため。前の文字が半分薄くなった語から、新しい文字を出す。
+        // 不透明度を変える時間は投稿の中でそろえる。短い行だけ速く消えると、前の行の語を追い越すため。前の文字が半分薄くなった語から、新しい文字を出す。
         let fade = Self.fadeDuration(slots: slots, fadeWidth: fadeWidth)
         for slot in slots {
             if let old = slot.old {
@@ -169,7 +169,7 @@ final class TextReplacementTransition {
         return slot.start + slot.duration * Double(position / span)
     }
 
-    /// 文字の濃さを変える時間。一番長い行を横切る時間の`fadeWidth`の割合。
+    /// 文字の不透明度を変える時間。一番長い行を横切る時間の`fadeWidth`の割合。
     static func fadeDuration(slots: [Slot], fadeWidth: Double) -> TimeInterval {
         (slots.map(\.duration).max() ?? 0) * fadeWidth
     }

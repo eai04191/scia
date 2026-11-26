@@ -32,7 +32,7 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         isEditable = false
         isSelectable = true
         isScrollEnabled = false
-        // 選んだ文字を持ち出すドラッグは、iPadとして動くMacでは既定で有効になる（iPhoneでは既定で無効）。全体を選んで始めるので、どこを押しても選んだ文字の上になり、
+        // 選んだ文字を持ち出すドラッグは、iPadとして動くMacでは既定で有効になる（iPhoneでは既定で無効）。全体を選んで始めるので、どこを押下しても選んだ文字の上になり、
         // マウスでドラッグすると、範囲を選び直す代わりに文字を持ち出すドラッグが始まるため止める。
         textDragInteraction?.isEnabled = false
         backgroundColor = .clear
@@ -133,7 +133,7 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         selectionFrame
     }
 
-    /// 同じ本文の描き直し（絵文字の画像が届いた、絵文字が編集されたなど）で、選んだ範囲を保ったまま中身を替える。
+    /// 同じ本文の再描画（絵文字の画像が届いた、絵文字が編集されたなど）で、選んだ範囲を保ったまま中身を替える。
     func replaceText(_ text: NSAttributedString) {
         let range = selectedRange
         // 中身を替えると選択が一度空になるので、その間は終わりを受け取らない。

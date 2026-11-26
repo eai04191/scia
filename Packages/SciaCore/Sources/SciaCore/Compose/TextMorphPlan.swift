@@ -4,15 +4,15 @@ public import CoreGraphics
 ///
 /// 文字は、Bの1行ずつに切ったかたまりで動かす。Aは1行なので、Bの1行に入る文字はAでも並びが同じで、かたまりのまま平行に動かせる。
 /// 両方ではっきり見えている文字のかたまりは、Aの位置からBの位置へ動かす。Aではっきり見えていない（カプセルの行末のぼかしの中か、その先にある）文字だけのBの行は、
-/// Aの位置から動かすと、前の行の上を通って横切るので、Bの位置で浮かび上がらせる。ぼかしの中の文字は、カプセルの行と一緒にその場で薄くする。
-/// 動かすかたまりがあれば、Bの見える範囲の外の行も浮かび上がらせるかたまりに入れる。浮かび上がらせるかたまりは動かすかたまりと一緒に動くので、
+/// Aの位置から動かすと、前の行の上を通って横切るので、Bの位置でフェードインさせる。ぼかしの中の文字は、カプセルの行と一緒にその場で薄くする。
+/// 動かすかたまりがあれば、Bの見える範囲の外の行もフェードインさせるかたまりに入れる。フェードインさせるかたまりは動かすかたまりと一緒に動くので、
 /// 入力欄をスクロールしていると、Aで見えている先頭の行からBで見えているカーソルの行までが、ひと続きの本文としてスクロールして見える。
 /// 外の行を描かないと、先頭の行が見える範囲を出てから、カーソルの行が入ってくるまで、欄が空になった。
-/// 返信の宛先のようにBにしかない文字も、Bの位置で浮かび上がらせる。
+/// 返信の宛先のようにBにしかない文字も、Bの位置でフェードインさせる。
 /// カプセルの行末のぼかしにかかっていて動かさない文字（行末）は、その前の動かすかたまりと一緒に動かしながら薄くする。その場に残して薄くすると、
 /// 動いていく行から離れて、欠けた文字が浮いて見えたため。
 /// Aにしかない文字（返信の宛先だけを書いたときの、カプセルの「いまどうしてる？」）は、動かす文字がなければ、Bにしかない文字と同じ場所に出入りする。
-/// 両方を同時に薄くしたり濃くしたりすると重なって見えるので、Aにしかない文字を先に消し切ってから、Bにしかない文字を浮かび上がらせる。
+/// 両方を同時に薄くしたり濃くしたりすると重なって見えるので、Aにしかない文字を先に消し切ってから、Bにしかない文字をフェードインさせる。
 ///
 /// 行の中の文字は左から右へ並ぶ前提で、境目の位置（`Line.boundaries`）は文字の順に右へ進むとしている。右から左へ書く文字（ヘブライ語、アラビア語）を含む本文では、
 /// この前提が崩れる。右から左の文字だけの本文では、カプセルの本物を隠す範囲がほぼ空になり、本物と動くかたまりが重なって見える。英字と混ざった本文では、
@@ -33,7 +33,7 @@ public struct TextMorphPlan: Equatable, Sendable {
         public let originInB: CGPoint
     }
 
-    /// Bの位置で浮かび上がらせる（閉じるときは薄くする）かたまり。
+    /// Bの位置でフェードインさせる（閉じるときは薄くする）かたまり。
     public struct Stay: Equatable, Sendable {
         public let key: Key
         public let originInB: CGPoint
@@ -77,7 +77,7 @@ public struct TextMorphPlan: Equatable, Sendable {
             if let (aLine, overlap) = shared, a.showsAnyCharacter(of: overlap, on: aLine) {
                 flights.append(Flight(key: Key(content: line.content, range: overlap), originInA: aLine.origin(of: overlap.lowerBound), originInB: line.origin(of: overlap.lowerBound)))
                 guard b.shows(line) else { continue }
-                // 同じ行のうちAにない部分（返信の宛先など）は、Bの位置で浮かび上がらせる。
+                // 同じ行のうちAにない部分（返信の宛先など）は、Bの位置でフェードインさせる。
                 for rest in [line.range.lowerBound ..< overlap.lowerBound, overlap.upperBound ..< line.range.upperBound] where !rest.isEmpty {
                     stays.append(Stay(key: Key(content: line.content, range: rest), originInB: line.origin(of: rest.lowerBound)))
                 }

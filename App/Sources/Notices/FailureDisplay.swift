@@ -13,7 +13,7 @@ protocol AccountReauthenticating: AnyObject {
     func reauthenticate(_ account: RequestAccount)
 }
 
-/// 「ログインし直す」を押した部品がのっているウインドウのシーンに、ログインし直しを頼む。ウインドウが複数あっても、押したウインドウで認可画面を出すため。
+/// 「ログインし直す」を選択した部品がのっているウインドウのシーンに、ログインし直しを頼む。ウインドウが複数あっても、選択したウインドウで認可画面を出すため。
 @MainActor
 private func logIn(_ account: RequestAccount, in scene: UIWindowScene?) {
     guard let reauthenticating = scene?.delegate as? any AccountReauthenticating else {
@@ -142,24 +142,24 @@ struct FailureReason: View {
 
     var body: some View {
         let shown = includesCode ? reason.text : reason.message
-        // ウインドウを覚えるビューは、理由の文字に付ける。ボタンに付けると、Formの行の幅いっぱいに押せるボタンではなくなるため。
+        // ウインドウを覚えるビューは、理由の文字に付ける。ボタンに付けると、Formの行の幅いっぱいがヒット領域のボタンではなくなるため。
         Text(lead.map { "\($0)\n\(shown)" } ?? shown)
             .background(SceneTrackerView(box: box))
         if let account = reason.loggedOutAccount {
-            // 理由の文字に付けた色（失敗の赤など）を引き継がず、押せる行としてアクセントカラーで出す。
+            // 理由の文字に付けた色（失敗の赤など）を引き継がず、選択できる行としてアクセントカラーで出す。
             Button(logInTitle) { logIn(account, in: box.scene) }
                 .foregroundStyle(.tint)
         }
     }
 }
 
-/// 行そのものが押せるボタンのところ（押すと読み直す補完の候補の失敗など）に置く、失敗の理由の行。
-/// ログアウトされていれば、押すと読み直す代わりに、そのアカウントでログインし直す。ログインし直さないと読み直しても同じ失敗になるため。
+/// 行そのものがボタンのところ（選択すると再読み込みする補完の候補の失敗など）に置く、失敗の理由の行。
+/// ログアウトされていれば、選択すると再読み込みする代わりに、そのアカウントでログインし直す。ログインし直さないと再読み込みしても同じ失敗になるため。
 struct FailureRowButton<Label: View, Style: ButtonStyle>: View {
     let reason: ErrorPresentation
     let retry: () -> Void
     let style: Style
-    /// 理由の文字と、押すとログインし直すかを受け取り、行の中身を作る。
+    /// 理由の文字と、選択するとログインし直すかを受け取り、行の中身を作る。
     @ViewBuilder let label: (_ reason: String, _ logsIn: Bool) -> Label
     @State private var box = SceneBox()
 
@@ -207,7 +207,7 @@ private struct FailureAlertModifier: ViewModifier {
 }
 
 enum FailureText {
-    /// ボタンを並べられないところ（押すと読み直す行の説明など）に出す理由の文字。「ログインし直す」は付かないので、
+    /// ボタンを並べられないところ（選択すると再読み込みする行の説明など）に出す理由の文字。「ログインし直す」は付かないので、
     /// 401にならない通信か、401になりうるのが今のアカウントだけで、ログインし直しの段から行えるところに限って使う。
     static func withoutLogIn(_ reason: ErrorPresentation) -> String {
         reason.text

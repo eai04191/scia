@@ -50,7 +50,7 @@ struct LinkTitlingTests {
         #expect(replacement.text == "題\nhttps://a.example/")
     }
 
-    /// 前にその行の空白しかなければ、行の頭とみなす。字下げの空白は残す。
+    /// 前にその行の空白しかなければ、行の頭とみなす。インデントの空白は残す。
     @Test func treatsIndentedURLAsStartOfLine() throws {
         let replacement = try #require(LinkTitling.replacement(of: "https://a.example/", title: "題", in: "見て\n  https://a.example/"))
         #expect(replacement.range == 5 ..< 23)
@@ -101,7 +101,7 @@ struct LinkTitlingTests {
         #expect(replacement.range == 3 ..< 21)
     }
 
-    /// ハイライトして押した2つ目を置き換える。読んでいる間に前で打たれてずれても、いちばん近いものを選ぶ。
+    /// ハイライトして選択した2つ目を置き換える。読んでいる間に前で打たれてずれても、いちばん近いものを選ぶ。
     @Test func replacesOccurrenceNearestToPressedLocation() throws {
         let text = "前に足した https://a.example/ と https://a.example/"
         let replacement = try #require(LinkTitling.replacement(of: "https://a.example/", title: "A", in: text, nearestTo: 20))
@@ -113,7 +113,7 @@ struct LinkTitlingTests {
         #expect(LinkTitling.occurrences(in: text).map(\.range) == [0 ..< 18, 19 ..< 37])
     }
 
-    /// 置き換えたあとの、タイトルとURLの範囲。浮かび上がらせる場所と、URLを動かす先を測るために使う。
+    /// 置き換えたあとの、タイトルとURLの範囲。フェードインさせる場所と、URLを動かす先を測るために使う。
     @Test func reportsTitleAndURLRangesAfterReplacement() throws {
         let replacement = try #require(LinkTitling.replacement(of: "https://a.example/", title: "題名", in: "見て https://a.example/"))
         #expect(replacement.titleRange == 3 ..< 5)

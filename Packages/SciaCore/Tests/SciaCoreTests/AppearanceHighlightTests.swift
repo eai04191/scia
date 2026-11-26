@@ -4,7 +4,7 @@ import Testing
 
 /// 「投稿の見た目」の項目が、プレビューのどの部品を示すかを確かめる。
 struct AppearanceHighlightTests {
-    /// 投稿は本文の下に並べ、引用とXの投稿だけを本文の右に出すとき、「右に並べるときの大きさ」は、大きさの効かない投稿のメディアではなく、囲みの右のメディアを示す。
+    /// 投稿は本文の下に並べ、引用とXの投稿だけを本文の右に出すとき、「右に並べるときの大きさ」は、大きさの効かない投稿のメディアではなく、カードの右のメディアを示す。
     @Test func besideSideHighlightsEmbedMediaWhenOnlyEmbedsAreBeside() throws {
         let postMedia = CGRect(x: 0, y: 0, width: 300, height: 200)
         let embedMedia = CGRect(x: 240, y: 40, width: 64, height: 64)

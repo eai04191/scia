@@ -12,7 +12,7 @@ struct EmojiPrefetchTests {
         let capacity = Mutex<Int?>(Int.max)
         let thumbnails = Mutex<Set<URL>>([])
         let fetched = Mutex<[URL]>([])
-        /// この数を取得したら、先読みを送れなくする。
+        /// この数を取得したら、プリフェッチを送れなくする。
         let allowedFetches = Mutex(Int.max)
         let imageSize = 1_024
 
@@ -41,7 +41,7 @@ struct EmojiPrefetchTests {
         try (0..<count).map { try #require(URL(string: "https://files.example.social/custom_emojis/\($0).png")) }
     }
 
-    /// 空きが足りれば、どれも取得し、小さい静止画を作り、元の画像をAとして持つ。
+    /// 空きが足りれば、どれも取得し、サムネイルを作り、元の画像をAとして持つ。
     @Test func fetchesAndKeepsOriginalsWithRoom() async throws {
         let world = World()
         let (prefetch, files) = make(world)
@@ -57,7 +57,7 @@ struct EmojiPrefetchTests {
         }
     }
 
-    /// 同時に取得した画像を、届いた順によらず、取得したURLの画像として置き、小さい静止画を作る。
+    /// 同時に取得した画像を、届いた順によらず、取得したURLの画像として置き、サムネイルを作る。
     /// 先頭のURLが先に届き、ほかがあとから届く順にする。Release構成で、最後に届いた画像を先頭のURLのものとして置いていたため。
     @Test func keepsEachImageUnderItsOwnURL() async throws {
         let urls = try urls(4)
@@ -89,7 +89,7 @@ struct EmojiPrefetchTests {
         }
     }
 
-    /// 空きが足りなければ、小さい静止画のない絵文字だけ取得して作り、元の画像は持たない。小さい静止画のある絵文字は取得しない。
+    /// 空きが足りなければ、サムネイルのない絵文字だけ取得して作り、元の画像は持たない。サムネイルのある絵文字は取得しない。
     @Test func fetchesOnlyForThumbnailsWithoutRoom() async throws {
         let world = World()
         world.capacity.withLock { $0 = 0 }
@@ -121,7 +121,7 @@ struct EmojiPrefetchTests {
         #expect(world.fetched.withLock { $0 } == [urls[1]])
     }
 
-    /// 前に読んだときは足りても、取得を始める前に読み直して足りなければ、元の画像は持たず、元の画像のためだけには取得しない。
+    /// 前に読んだときは足りても、取得を始める前に再読み込みして足りなければ、元の画像は持たず、元の画像のためだけには取得しない。
     @Test func rereadsCapacityBeforeEachRun() async throws {
         let world = World()
         world.capacity.withLock { $0 = 100 * 1_024 }
@@ -139,7 +139,7 @@ struct EmojiPrefetchTests {
         #expect(Set(world.fetched.withLock { $0 }) == [urls[0], urls[1]], "小さい静止画のある3つ目は、元の画像のためだけには取得しない")
     }
 
-    /// 先読みしない画像（前に読めなかった画像）は、失敗に数えずに飛ばし、残りは取得する。
+    /// プリフェッチしない画像（前に読めなかった画像）は、失敗に数えずに飛ばし、残りは取得する。
     @Test func skipsWithoutCountingFailure() async throws {
         let world = World()
         let urls = try urls(3)
@@ -162,7 +162,7 @@ struct EmojiPrefetchTests {
         #expect(result.stopped == false)
     }
 
-    /// 先読みを送れなくなったら（回線、低データモード、レート制限）、残りは取得せずに終える。
+    /// プリフェッチを送れなくなったら（回線、低データモード、レート制限）、残りは取得せずに終える。
     @Test func stopsWhenPrefetchIsNotAllowed() async throws {
         let world = World()
         world.allowedFetches.withLock { $0 = 1 }

@@ -50,7 +50,7 @@ struct ComposeToolPlacementTests {
         #expect(placement.menu.map(\.items) == [[.spoiler]])
     }
 
-    /// ＋のメニューの横並びは、まとまりに大きさを残す。ツールバーの節の横並びの区切り線は効かず、入りきらずに＋へ回した項目はふだんの行で出す。
+    /// ＋のメニューの横並びは、グループに大きさを残す。ツールバーのセクションの横並びの区切り線は効かず、入りきらずに＋へ回した項目はふだんの行で出す。
     @Test func keepsRowSizeOnlyInMenu() {
         let placement = placement([.rowSeparator(.small), .item(.spoiler, isVisible: true), .more, .rowSeparator(.small), .item(.media, isVisible: true)], available: 0)
 

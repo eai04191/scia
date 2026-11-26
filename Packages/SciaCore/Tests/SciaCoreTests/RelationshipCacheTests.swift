@@ -30,7 +30,7 @@ struct RelationshipCacheTests {
         func fetch(_ ids: [String]) async throws -> [Relationship] {
             let (failing, following) = state.withLock { ($0.failing, $0.following) }
             if holds {
-                // 止めておく登録を済ませてから届いたことを知らせ、知らせを受けた側の`release()`に漏れなく拾わせる。
+                // 止めておく登録を済ませてから届いたことを知らせ、受けた側の`release()`に漏れなく拾わせる。
                 await withCheckedContinuation { continuation in
                     resumeWaiters(afterRecording: ids, holding: continuation)
                 }
@@ -80,7 +80,7 @@ struct RelationshipCacheTests {
         RelationshipCache(limit: limit) { ids in try await server.fetch(ids) }
     }
 
-    /// 読み直しは、渡した目的を名乗って読む。覚えていない相手を待つときは、待っている側が名乗った目的で読む。
+    /// 再読み込みは、渡した目的を名乗って読む。キャッシュしていない相手を待つときは、待っている側が名乗った目的で読む。
     @Test func reloadDeclaresPurpose() async throws {
         let purposes = Mutex<[RequestPurpose?]>([])
         let cache = RelationshipCache { ids in
@@ -108,7 +108,7 @@ struct RelationshipCacheTests {
         #expect(cache["2"]?.following == true)
     }
 
-    /// 覚えている関係も読み直す。読み終えるまでは、覚えている関係をそのまま返す。
+    /// キャッシュした関係も再読み込みする。読み終えるまでは、キャッシュした関係をそのまま返す。
     @Test func reloadRefreshesKnownRelationshipsAndKeepsThemMeanwhile() async throws {
         let server = Server(holds: true)
         let cache = makeCache(server)
@@ -123,7 +123,7 @@ struct RelationshipCacheTests {
         #expect(try await cache.relationship("1")?.following == false)
     }
 
-    /// 読み直している途中のIDを続けて求められたら、二重に送らず、その読み直しを待つ。
+    /// 再読み込みしている途中のIDを続けて求められたら、二重に送らず、その再読み込みを待つ。
     @Test func waitsForRelationshipsBeingReloaded() async throws {
         let server = Server(holds: true)
         let cache = makeCache(server)
@@ -140,7 +140,7 @@ struct RelationshipCacheTests {
         #expect(server.requests == [["1"], ["2"]])
     }
 
-    /// 覚えていない相手は、求められたときに読む。覚えていて読み直していない相手は、送らずに返す。
+    /// キャッシュしていない相手は、求められたときに読む。キャッシュしていて再読み込みしていない相手は、送らずに返す。
     @Test func relationshipLoadsOnlyUnknownAccounts() async throws {
         let server = Server()
         let cache = makeCache(server)
@@ -151,7 +151,7 @@ struct RelationshipCacheTests {
         #expect(server.requests == [["2"]])
     }
 
-    /// サーバーが返さなかった相手はnil。読めなかったら、覚えている関係を残して投げる。
+    /// サーバーが返さなかった相手はnil。読めなかったら、キャッシュした関係を残して投げる。
     @Test func missingIsNilAndFailureKeepsKnownRelationship() async throws {
         let server = Server()
         let cache = makeCache(server)
@@ -167,7 +167,7 @@ struct RelationshipCacheTests {
         #expect(cache["1"]?.following == true)
     }
 
-    /// 覚えていた相手が応答に入らなかったら（削除の予定や凍結）、その関係を忘れる。
+    /// キャッシュしていた相手が応答に入らなかったら（削除の予定や凍結）、その関係を忘れる。
     @Test func reloadForgetsRelationshipsMissingFromResponse() async throws {
         let server = Server()
         let cache = makeCache(server)
@@ -179,7 +179,7 @@ struct RelationshipCacheTests {
         #expect(cache["missing-1"] == nil)
     }
 
-    /// 読み直しを頼んだあとに関係を変えたら、遅れて届いた読み直しの応答で古い関係に戻さない。
+    /// 再読み込みを頼んだあとに関係を変えたら、遅れて届いた再読み込みの応答で古い関係に戻さない。
     @Test func reloadDoesNotOverwriteRelationshipWrittenMeanwhile() async throws {
         let server = Server(holds: true)
         let cache = makeCache(server)
@@ -228,7 +228,7 @@ struct RelationshipCacheTests {
         #expect(cache["2"] == nil)
     }
 
-    /// 読んでいる途中に忘れたら、届いた応答は忘れる前に読んだものなので使わず、読み直した関係を返す。
+    /// 読んでいる途中に忘れたら、届いた応答は忘れる前に読んだものなので使わず、再読み込みした関係を返す。
     @Test func relationshipRereadsWhenForgottenWhileLoading() async throws {
         let server = Server(holds: true)
         let cache = makeCache(server)
@@ -246,7 +246,7 @@ struct RelationshipCacheTests {
         #expect(server.requests == [["1"], ["1"]])
     }
 
-    /// 読んでいる途中に忘れてから求められても、忘れる前の読み直しを待って「見つからない」にせず、読み直した関係を返す。
+    /// 読んでいる途中に忘れてから求められても、忘れる前の再読み込みを待って「見つからない」にせず、再読み込みした関係を返す。
     @Test func relationshipAskedAfterForgettingWhileLoadingRereads() async throws {
         let server = Server(holds: true)
         let cache = makeCache(server)
@@ -264,7 +264,7 @@ struct RelationshipCacheTests {
         #expect(server.requests == [["1"], ["1"]])
     }
 
-    /// 止めたら、走っている読み直しを取り消し、以後は読まない。ログアウトのあとに前のアカウントで通信し続けないため。
+    /// 止めたら、走っている再読み込みを取り消し、以後は読まない。ログアウトのあとに前のアカウントで通信し続けないため。
     @Test func closeCancelsReloadAndStopsLoading() async throws {
         let server = Server(holds: true)
         let cache = makeCache(server)

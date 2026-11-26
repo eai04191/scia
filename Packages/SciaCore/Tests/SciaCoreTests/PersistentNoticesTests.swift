@@ -1,7 +1,7 @@
 import Testing
 @testable import SciaCore
 
-/// 出たままの知らせが重なったときに、チップに出す1件。決まりはdocs/notices.mdの「チップ」にある。
+/// 出たままのチップの中身が重なったときに、チップに出す1件。決まりはdocs/notices.mdの「チップ」にある。
 @MainActor
 struct PersistentNoticesTests {
     private let download = Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "42%", action: .disclosure(hint: "ダウンロードを中止するか選べます。") {})

@@ -154,7 +154,7 @@ struct EmojiReactionTests {
         #expect(removed.emojiReactions.map(\.me) == [false])
     }
 
-    /// 応答からは、送った絵文字の分だけを取り込む。待っている間に押したほかの絵文字の見込みを戻さないため。
+    /// 応答からは、送った絵文字の分だけを取り込む。待っている間に選択したほかの絵文字の見込みを戻さないため。
     @Test func adoptingTakesOnlyThatEmoji() {
         let shown = status([EmojiReaction(emoji: thumbsUp, count: 1, me: true), EmojiReaction(emoji: localBlobcat, count: 1, me: true)])
         let response = status([EmojiReaction(emoji: thumbsUp, count: 4, me: true)])
@@ -181,7 +181,7 @@ struct EmojiReactionTests {
         #expect(appended.emojiReactions.map(\.emoji) == [thumbsUp, localBlobcat, remoteCat])
     }
 
-    /// 押した結果より先に押す前の数（0）が届いても、自分がしているなら残し、1と出す。
+    /// 選択した結果より先に選択する前の数（0）が届いても、自分がしているなら残し、1と出す。
     @Test func streamingZeroKeepsOwnReaction() {
         let shown = status([EmojiReaction(emoji: localBlobcat, count: 1, me: true)])
 

@@ -343,7 +343,7 @@ struct ProfileEditTests {
         #expect(!editor.hasChanges)
     }
 
-    /// 読めていない節は変えられない。
+    /// 読めていないセクションは変えられない。
     @MainActor
     @Test func sectionCannotChangeUntilLoaded() async {
         struct Failure: Error {}
@@ -355,7 +355,7 @@ struct ProfileEditTests {
         #expect(editor.draft != nil)
     }
 
-    /// 保存では、送る前に今のタグを読み直し、先に外してから足す。別の端末で足したタグは外し、同じタグは足し直さない。外すもの同士は並行に送るので、順は問わない。
+    /// 保存では、送る前に今のタグを再読み込みし、先に外してから足す。別の端末で足したタグは外し、同じタグは足し直さない。外すもの同士は並行に送るので、順は問わない。
     @MainActor
     @Test func saveRereadsTagsAndRemovesBeforeAdding() async throws {
         let server = FeaturedServer(tags: [FeaturedTag(id: "1", name: "猫", statusesCount: 3), FeaturedTag(id: "2", name: "犬", statusesCount: 1)])
@@ -376,7 +376,7 @@ struct ProfileEditTests {
         #expect(changes == 1)
     }
 
-    /// 送れないものがあれば投げ、送れた分は元の値に取り込む。送り直すときは残りだけを送る。足すのは外し終えてからで、足すもの同士は並行に送る。
+    /// 送れないものがあれば投げ、送れた分は元の値に取り込む。再送するときは残りだけを送る。足すのは外し終えてからで、足すもの同士は並行に送る。
     @MainActor
     @Test func failedTagSaveKeepsRemainderForRetry() async throws {
         let server = FeaturedServer(tags: [FeaturedTag(id: "1", name: "猫", statusesCount: 3)])
@@ -488,7 +488,7 @@ struct ProfileEditTests {
         #expect(changes == 1)
     }
 
-    /// 読めなかった節は、読み直して読めたら変えられるようになる。
+    /// 読めなかったセクションは、再読み込みして読めたら変えられるようになる。
     @MainActor
     @Test func failedSectionCanBeReloaded() async {
         struct Failure: Error {}

@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// ユーザーのメニュー。投稿のメニューのサブメニュー、アイコンや人のリストの行、本文や自己紹介のメンション、プロフィール画面の「…」で、同じ並びから組む。
-/// 決まりはdocs/menus.mdの「ユーザーのメニュー」にある。項目の名前、並び、出す条件、見出しはSciaCoreの`UserMenuTree`が決め、ここではUIKitのメニューに描いて、押した項目の動きを呼ぶ。
+/// 決まりはdocs/menus.mdの「ユーザーのメニュー」にある。項目の名前、並び、出す条件、見出しはSciaCoreの`UserMenuTree`が決め、ここではUIKitのメニューに描いて、選択した項目の動きを呼ぶ。
 /// 出す場所は、相手と、その場所でしかできないこと（共有のシートを出す起点、プロフィールを開く先、その人のアイコン）だけを渡す。
 @MainActor
 struct UserMenu {
@@ -33,7 +33,7 @@ struct UserMenu {
         return tree
     }
 
-    /// 単独で出すメニュー（アイコンや人のリストの行、本文や自己紹介のメンション）。開くたびに、その人の関係を読み直す。出す項目がなければnil。
+    /// 単独で出すメニュー（アイコンや人のリストの行、本文や自己紹介のメンション）。開くたびに、その人の関係を再読み込みする。出す項目がなければnil。
     /// - Parameters:
     ///   - avatar: 「プロフィール」に付けるその人のアイコン。
     ///   - avatarImage: アイコンの画像。nilを返したら記号を付ける。
@@ -43,7 +43,7 @@ struct UserMenu {
         return root.map { BuiltMenu(root: $0, renderer: renderer(openProfile: openProfile, avatarImage: avatarImage)) }
     }
 
-    /// プロフィール画面のナビゲーションバーの「…」に出すメニュー。開くたびに、その人の関係を読み直す。出す項目がなければnil。
+    /// プロフィール画面のナビゲーションバーの「…」に出すメニュー。開くたびに、その人の関係を再読み込みする。出す項目がなければnil。
     /// - Parameters:
     ///   - avatarImage: 「別のアカウントで」のアカウントの行のアイコンの画像。nilを返したら記号を付ける。
     ///   - didRenderDeferred: 開いてから読む中身を描き終えたあとに呼ぶ。描きながら集めた、まだ読んでいないアイコンを読み始める。
@@ -56,13 +56,13 @@ struct UserMenu {
         return root.map { renderer.menu($0.loadingSubmenusBeforeShowing()) }
     }
 
-    /// プロフィールのハンドルを押したときのメニュー。コピーの項目を決まった順に出す。出す項目がなければnil。
+    /// プロフィールのハンドルを選択したときのメニュー。コピーの項目を決まった順に出す。出す項目がなければnil。
     func handleMenu() -> UIMenu? {
         tree.handleMenu().map { renderer(openProfile: nil) { _ in nil }.menu($0) }
     }
 
-    /// 関係で中身が変わる項目を出していれば、その人の関係を読み直す。「別のアカウントで」を出していれば、ほかのアカウントでの関係も読み直す。
-    /// 組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
+    /// 関係で中身が変わる項目を出していれば、その人の関係を再読み込みする。「別のアカウントで」を出していれば、ほかのアカウントでの関係も再読み込みする。
+    /// 組んだメニューはキャッシュしていた関係のまま出し、再読み込みした関係は次に開いたときから使う。
     private func reloadRelation(groups: MenuLayout<UserMenuItem>.Groups) {
         let tree = tree
         tree.refreshOtherAccounts(groups: groups)

@@ -57,7 +57,7 @@ final class AccountNotificationsController {
             barItem(for: decision) { [weak viewController] in
                 Task(.action) { @MainActor in
                     guard await answer(decision), let viewController, let navigation = viewController.navigationController else { return }
-                    // 待つ間に、この画面の上に別の画面（スレッドなど）を開いていたら、その画面は閉じずに、この画面だけを積みから外す。
+                    // 待つ間に、この画面の上に別の画面（スレッドなど）を開いていたら、その画面は閉じずに、この画面だけをナビゲーションのスタックから外す。
                     if navigation.topViewController === viewController {
                         navigation.popViewController(animated: true)
                     } else {

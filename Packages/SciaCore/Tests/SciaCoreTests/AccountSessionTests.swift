@@ -109,8 +109,8 @@ struct AccountSessionTests {
         return Data(text.utf8)
     }
 
-    /// セッションのクライアントで受け取ったアカウントは、応答を受け取った側が続けて読むときには、もうセッションの`AccountCache`が覚えている。
-    /// 受け取ったものでプロフィールを開くとき、覚えている古いもので置き換えないため。
+    /// セッションのクライアントで受け取ったアカウントは、応答を受け取った側が続けて読むときには、もうセッションの`AccountCache`がキャッシュしている。
+    /// 受け取ったものでプロフィールを開くとき、キャッシュしている古いもので置き換えないため。
     @Test func accountsReceivedByClientAreInCacheWhenResponseReturns() async throws {
         let body = try accountBody("Fresh")
         let transport = RoutedTransport { _ in (200, body) }
@@ -125,7 +125,7 @@ struct AccountSessionTests {
         #expect(session.accounts.latest(of: loaded).displayName == "Fresh")
     }
 
-    /// プロフィールを保存している間に読み始めた読み込みが保存の前の内容を返しても、保存の応答のほうを新しいものとして覚える。
+    /// プロフィールを保存している間に読み始めた読み込みが保存の前の内容を返しても、保存の応答のほうを新しいものとしてキャッシュする。
     @Test func savedProfileWinsOverReadStartedWhileSaving() async throws {
         let oldBody = try accountBody("Old")
         let savedBody = try accountBody("Saved", withSource: true)
@@ -394,13 +394,13 @@ struct AccountSessionTests {
         #expect(model.maxMediaAttachments == 6)
         #expect(loaded?.expandsSpoilers == true)
         #expect(session.preferences == loaded)
-        // 2度目は読み直さない。
+        // 2度目は再読み込みしない。
         await applyComposeDefaults(of: session, to: model)
         #expect(transport.requests(to: "/api/v2/instance").count == 1)
         #expect(transport.requests(to: "/api/v1/preferences").count == 1)
     }
 
-    /// 起動のときに読み始めた上限と既定値がまだ届いていなければ、書き始めたときは送り直さずにそれを待つ。
+    /// 起動のときに読み始めた上限と既定値がまだ届いていなければ、書き始めたときは再送せずにそれを待つ。
     @Test func composeDefaultsWaitForLoadsAlreadyRunning() async throws {
         let instance = try Data(contentsOf: try #require(Bundle.module.url(forResource: "instance_v2", withExtension: "json", subdirectory: "Fixtures")))
         let gate = Gate()
@@ -432,7 +432,7 @@ struct AccountSessionTests {
         #expect(transport.requests(to: "/api/v1/preferences").count == 1)
     }
 
-    /// 待っていた読み込みが失敗したら、書き始めた側が自分で読み直す。起動のときの読み込みは、レート制限で止められている間は送られないため。
+    /// 待っていた読み込みが失敗したら、書き始めた側が自分で再読み込みする。起動のときの読み込みは、レート制限で止められている間は送られないため。
     @Test func composeDefaultsReloadWhenAwaitedLoadFails() async throws {
         let instance = try Data(contentsOf: try #require(Bundle.module.url(forResource: "instance_v2", withExtension: "json", subdirectory: "Fixtures")))
         let gate = Gate()
@@ -460,9 +460,9 @@ struct AccountSessionTests {
         #expect(transport.requests(to: "/api/v2/instance").count == 2)
     }
 
-    /// 読めなくても既定のまま投稿でき、次に書き始めたときに読み直す。
+    /// 読めなくても既定のまま投稿でき、次に書き始めたときに再読み込みする。
     @Test func composeDefaultsRetryAfterFailure() async throws {
-        // 送り直さない失敗にし、送り直しの待ちで止まらないようにする。
+        // 再送しない失敗にし、再送の待ちで止まらないようにする。
         let transport = RoutedTransport { _ in (403, Data()) }
         let session = makeSession(transport: transport)
         defer { session.close() }
@@ -511,7 +511,7 @@ struct AccountSessionTests {
         #expect(delivered == [.public, .private])
     }
 
-    /// 既定を保存する前に始めた設定の読み直しが、保存のあとに届いても、保存したあとの設定を古い値で上書きせず、投稿欄にも配らない。
+    /// 既定を保存する前に始めた設定の再読み込みが、保存のあとに届いても、保存したあとの設定を古い値で上書きせず、投稿欄にも配らない。
     @Test func staleReloadDoesNotUndoSavedPostingDefault() async throws {
         let staleResponse = Gate()
         let reads = Mutex(0)

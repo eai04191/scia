@@ -157,7 +157,7 @@ struct ComposeModelMediaTests {
         #expect(CGImageDestinationFinalize(destination))
     }
 
-    /// 対応形式として返しながらHEICを処理できないサーバーでは、同じ写真のJPEGで1回だけ送り直し、その形式を覚える。
+    /// 対応形式として返しながらHEICを処理できないサーバーでは、同じ写真のJPEGで1回だけ再送し、その形式を覚える。
     @Test func resendsUnprocessableHEICAsJPEGOnce() async throws {
         let server = FakeServer()
         server.uploadResult = { upload in
@@ -168,7 +168,7 @@ struct ComposeModelMediaTests {
         }
         let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        // ピッカーから読み込むたびに別のディレクトリへコピーするのと同じく、HEICとJPEGを別のディレクトリに置く。送り直すときはHEICをディレクトリごと消すため。
+        // ピッカーから読み込むたびに別のディレクトリへコピーするのと同じく、HEICとJPEGを別のディレクトリに置く。再送するときはHEICをディレクトリごと消すため。
         let jpegFolder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: jpegFolder, withIntermediateDirectories: true)
         let heic = folder.appending(path: "a.heic")
@@ -282,7 +282,7 @@ struct ComposeModelMediaTests {
         #expect(model.localMedia[id]?.reduction?.fromSize == PixelSize(width: 800, height: 600))
     }
 
-    /// 切り抜くと、送り終えた添付も、切り抜いた画像で代替テキストと一緒に送り直し、投稿には新しいメディアを付ける。元のファイルは残す。
+    /// 切り抜くと、送り終えた添付も、切り抜いた画像で代替テキストと一緒に再送し、投稿には新しいメディアを付ける。元のファイルは残す。
     @Test func croppingResendsCroppedImageWithDescription() async throws {
         let server = FakeServer()
         var uploadCount = 0
@@ -321,7 +321,7 @@ struct ComposeModelMediaTests {
         #expect(sent.first?.mediaIDs == ["m2"])
     }
 
-    /// 同じ範囲を選び直しても送り直さない。範囲を外すと、元のまま送り直す。
+    /// 同じ範囲を選び直しても再送しない。範囲を外すと、元のまま再送する。
     @Test func clearingCropResendsOriginal() async throws {
         let server = FakeServer()
         let folder = TestScratch.url("ComposeModelMediaTests")
@@ -347,8 +347,8 @@ struct ComposeModelMediaTests {
         #expect(sizes == [40, 20, 40])
     }
 
-    /// 送っている間に切り抜くと、止めた前のアップロードに処理できない形式のエラーが届いても、JPEGで送り直さず、元のファイルを消さない。
-    /// 送り直す経路は、ピッカーから受け取り直す前に元のファイルを消すため、止めたことを確かめずに進むと、切り抜き直せなくなる。
+    /// 送っている間に切り抜くと、止めた前のアップロードに処理できない形式のエラーが届いても、JPEGで再送せず、元のファイルを消さない。
+    /// 再送する経路は、ピッカーから受け取り直す前に元のファイルを消すため、止めたことを確かめずに進むと、切り抜き直せなくなる。
     @Test func cancelledUploadDoesNotDeleteOriginalWhenCropping() async throws {
         let server = FakeServer()
         server.completesImmediately = false
@@ -374,7 +374,7 @@ struct ComposeModelMediaTests {
         #expect(model.canCrop(id))
     }
 
-    /// 開き直して動かさずに完了したときのように、割合が丸めの誤差でずれても、同じ画素を選んでいれば送り直さない。
+    /// 開き直して動かさずに完了したときのように、割合が丸めの誤差でずれても、同じ画素を選んでいれば再送しない。
     @Test func cropSelectingSamePixelsDoesNotResend() async throws {
         let server = FakeServer()
         let folder = TestScratch.url("ComposeModelMediaTests")
@@ -528,7 +528,7 @@ struct ComposeModelMediaTests {
         #expect(background.heldCount == 0)
     }
 
-    /// 送っている途中の添付があっても投稿ボタンは押せるが、全部済むまでは待たずに送れない。
+    /// 送っている途中の添付があっても投稿ボタンは有効だが、全部済むまでは待たずに送れない。
     @Test func mediaIsNotReadyUntilEveryUploadFinishes() async throws {
         let server = FakeServer()
         server.completesImmediately = false
@@ -560,7 +560,7 @@ struct ComposeModelMediaTests {
         #expect(model.isMediaReady)
     }
 
-    /// 送っている途中に押したら、済むのを待ってから、済んだ添付で送る。
+    /// 送っている途中に選択したら、済むのを待ってから、済んだ添付で送る。
     @Test func postsAfterPendingUploadFinishes() async throws {
         let server = FakeServer()
         server.completesImmediately = false
@@ -584,7 +584,7 @@ struct ComposeModelMediaTests {
         #expect(model.attachments.isEmpty)
     }
 
-    /// 代替テキストを送っている途中に押したら、届くのを待ってから送る。
+    /// 代替テキストを送っている途中に選択したら、届くのを待ってから送る。
     @Test func postsAfterPendingDescriptionReachesServer() async throws {
         let server = FakeServer()
         var sent: [StatusDraft] = []
@@ -676,7 +676,7 @@ struct ComposeModelMediaTests {
         #expect(model.isMediaReady)
     }
 
-    /// 待っている間は、送る中身を押した時点のものに決め、添付を外す、並べ替える、代替テキストを書き換えるのを受け付けない。
+    /// 待っている間は、送る中身を選択した時点のものに決め、添付を外す、並べ替える、代替テキストを書き換えるのを受け付けない。
     @Test func attachmentsAreFixedWhileWaiting() async throws {
         let server = FakeServer()
         server.completesImmediately = false
@@ -702,7 +702,7 @@ struct ComposeModelMediaTests {
         #expect(server.descriptionUpdates.isEmpty)
     }
 
-    /// 待っている間にピッカーで選び直したら、待つのをやめて書ける状態に戻る。押した時点の添付と違うものを送らないため。
+    /// 待っている間にピッカーで選び直したら、待つのをやめて書ける状態に戻る。選択した時点の添付と違うものを送らないため。
     @Test func pickerChangeWhileWaitingStopsWaiting() async throws {
         let server = FakeServer()
         server.completesImmediately = false
@@ -723,7 +723,7 @@ struct ComposeModelMediaTests {
         #expect(model.attachments.isEmpty)
     }
 
-    /// 代替テキストを書き戻して送り直す途中に押したら、送り直しが済むまで待つ。
+    /// 代替テキストを書き戻して再送する途中に選択したら、再送が済むまで待つ。
     /// 前の送信の応答を受け取った時点では、まだ書き戻した値を送っていないため。
     @Test func waitsForResentDescriptionAfterRevert() async throws {
         let server = FakeServer()
@@ -828,8 +828,8 @@ struct ComposeModelMediaTests {
         return try #require(await VideoReencoder.info(of: url)).hasAudio
     }
 
-    /// 音声のある動画をGIFとして送るよう切り替えると、送り終えたあとでも、音声を除いて送り直し、送り直した添付を投稿に付ける。
-    /// 戻すと、また音声付きで送り直す。
+    /// 音声のある動画をGIFとして送るよう切り替えると、送り終えたあとでも、音声を除いて再送し、再送した添付を投稿に付ける。
+    /// 戻すと、また音声付きで再送する。
     @Test func switchingVideoToGIFResendsWithoutAudio() async throws {
         let server = FakeServer()
         var sent: [StatusDraft] = []
@@ -879,7 +879,7 @@ struct ComposeModelMediaTests {
         #expect(try await !hasAudio(upload))
     }
 
-    /// 音声のない動画は、もとからGIFとして扱われるので、切り替えても送り直さない。
+    /// 音声のない動画は、もとからGIFとして扱われるので、切り替えても再送しない。
     @Test func videoWithoutAudioIsNotResent() async throws {
         let server = FakeServer()
         let model = makeModel(server)
@@ -910,7 +910,7 @@ struct ComposeModelMediaTests {
         #expect(!FileManager.default.fileExists(atPath: file.url.path()))
     }
 
-    /// 投稿欄で外したものは、ピッカーが選んだままの選択を送り直してきても足し直さない。
+    /// 投稿欄で外したものは、ピッカーが選んだままの選択を再送してきても足し直さない。
     @Test func removedAttachmentIsNotReAddedByOpenPicker() async throws {
         let server = FakeServer()
         let model = makeModel(server)
@@ -1040,7 +1040,7 @@ struct ComposeModelMediaTests {
         #expect(model.canPasteMedia)
     }
 
-    /// ペーストしたHEICを処理できないと500が返ったら、クリップボードから読み直さず、コピーしたファイルからJPEGを作って送り直す。
+    /// ペーストしたHEICを処理できないと500が返ったら、クリップボードから再度読み込まず、コピーしたファイルからJPEGを作って再送する。
     @Test func resendsPastedHEICAsJPEGWithoutReloading() async throws {
         let server = FakeServer()
         server.uploadResult = { upload in
@@ -1097,7 +1097,7 @@ struct ComposeModelMediaTests {
         #expect(model.canPost)
     }
 
-    /// サーバーが変換に失敗したら、同じ添付ファイルを待ち直しても終わらないので、再試行では送り直す。
+    /// サーバーが変換に失敗したら、同じ添付ファイルを待ち直しても終わらないので、再試行では再送する。
     @Test func retryAfterProcessingFailureUploadsAgain() async throws {
         let server = FakeServer()
         server.uploadResult = { _ in Self.attachment(id: "v1", processed: false) }
@@ -1116,7 +1116,7 @@ struct ComposeModelMediaTests {
         #expect(server.waits == ["v1"])
     }
 
-    /// 変換を待つ間の問い合わせが失敗しても、ファイルはサーバーに届いているので、再試行では送り直さずに同じ添付ファイルの変換を待ち直す。
+    /// 変換を待つ間の問い合わせが失敗しても、ファイルはサーバーに届いているので、再試行では再送せずに同じ添付ファイルの変換を待ち直す。
     @Test func retryAfterFailedProcessingCheckWaitsForSameMediaWithoutUploadingAgain() async throws {
         let server = FakeServer()
         server.uploadResult = { _ in Self.attachment(id: "v1", processed: false) }
@@ -1138,7 +1138,7 @@ struct ComposeModelMediaTests {
         #expect(model.localMedia[id]?.failure == nil)
     }
 
-    /// 待ち直そうとした添付ファイルがサーバーにもうなければ、ファイルを送り直す。
+    /// 待ち直そうとした添付ファイルがサーバーにもうなければ、ファイルを再送する。
     @Test func retryUploadsAgainWhenServerNoLongerHasTheMedia() async throws {
         let server = FakeServer()
         server.uploadResult = { _ in Self.attachment(id: "v1", processed: false) }
@@ -1181,7 +1181,7 @@ struct ComposeModelMediaTests {
         #expect(model.attachedAssetIdentifiers == ["b"])
     }
 
-    /// 投稿に失敗しても添付は残し、同じ添付のまま送り直すと同じIdempotency-Keyを使う。
+    /// 投稿に失敗しても添付は残し、同じ添付のまま再送すると同じIdempotency-Keyを使う。
     @Test func failedPostKeepsAttachmentsAndKey() async throws {
         let server = FakeServer()
         var sent: [StatusDraft] = []
@@ -1257,7 +1257,7 @@ struct ComposeModelMediaTests {
         #expect(model.isMediaReady)
     }
 
-    /// 代替テキストを送れなかったら理由を残し、再試行で送り直す。ファイルは送り直さない。
+    /// 代替テキストを送れなかったら理由を残し、再試行で再送する。ファイルは再送しない。
     @Test func failedDescriptionUpdateCanBeRetried() async throws {
         let server = FakeServer()
         server.descriptionResult = { _, _ in throw MastodonAPIError(statusCode: 500, message: "") }
@@ -1296,7 +1296,7 @@ struct ComposeModelMediaTests {
         #expect(model.attachments.first?.description == "黒猫")
     }
 
-    /// 送っている間に元の値へ書き戻しても、送り終えるまでは待たずに送れない。送り終えたら、書き戻した値を送り直す。
+    /// 送っている間に元の値へ書き戻しても、送り終えるまでは待たずに送れない。送り終えたら、書き戻した値を再送する。
     @Test func descriptionRevertedWhileSendingKeepsMediaPendingUntilResent() async throws {
         let server = FakeServer()
         server.uploadResult = { _ in Self.attachment(id: "1", processed: true, description: "猫") }

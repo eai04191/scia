@@ -76,7 +76,7 @@ enum DebugFaults {
 
     /// - Parameter statusCode: nilなら戻す。
     /// - Parameter retryAfter: `Retry-After`ヘッダーで返す秒数。
-    /// - Parameter target: 障害を起こす経路。ストリーミングを含めたら、開いている接続を切り、つなぎ直しで断られるようにする。
+    /// - Parameter target: 障害を起こす経路。ストリーミングを含めたら、開いている接続を切り、再接続で断られるようにする。
     static func fail(withStatus statusCode: Int?, retryAfter: Int? = nil, target: Target = .api) {
         failingStatusCode.withLock { $0 = statusCode.map { ($0, retryAfter, target) } }
         if statusCode != nil, target.covers(.streaming) {
@@ -137,7 +137,7 @@ enum DebugFaults {
         corruptsListElements.withLock { $0 = true }
     }
 
-    /// 決めると、以後の共有や保存のためのダウンロードを、進み具合を少しずつ進めながらその時間だけ遅らせる。ダウンロード中の知らせを、大きなファイルを用意せずに確かめる。
+    /// 決めると、以後の共有や保存のためのダウンロードを、進み具合を少しずつ進めながらその時間だけ遅らせる。ダウンロード中のチップを、大きなファイルを用意せずに確かめる。
     private static let downloadDelay = Mutex<Duration?>(nil)
 
     static var slowDownloadDelay: Duration? { downloadDelay.withLock { $0 } }
@@ -159,7 +159,7 @@ enum DebugFaults {
     }
 
     /// 決めると、以後のプロフィールを開く操作と、ユーザーのメニューのメンションとハンドルのコピーで、相手を探すのをその時間だけ遅らせる。
-    /// 待っている途中に押し直す、タブを移る、「取得中」のチップが出るところを、遅いサーバーを用意せずに確かめるのに使う。
+    /// 待っている途中に選択し直す、タブを移る、「取得中」のチップが出るところを、遅いサーバーを用意せずに確かめるのに使う。
     private static let lookupDelay = Mutex<Duration?>(nil)
 
     static var slowLookupDelay: Duration? { lookupDelay.withLock { $0 } }
@@ -170,7 +170,7 @@ enum DebugFaults {
     }
 
     /// 決めると、以後の投稿欄のメディアのアップロードを、送る前にその時間だけ遅らせる。
-    /// 投稿ボタンを押してから準備が済むまでの、待つのをやめる、待つ間に畳む、といった操作を、大きなメディアなしで確かめるため。
+    /// 投稿ボタンを選択してから準備が済むまでの、待つのをやめる、待つ間に折りたたむ、といった操作を、大きなメディアなしで確かめるため。
     private static let uploadDelay = Mutex<Duration?>(nil)
 
     static var slowUploadDelay: Duration? { uploadDelay.withLock { $0 } }
@@ -247,7 +247,7 @@ enum DebugFaults {
     }
 
     /// 配列の3件に1件の`created_at`を、日時として読めない値に変える。IDとURLは残すので、読めなかった行として並ぶ。
-    /// 通知のまとまりの応答では、まとまりの3件に1件の`latest_page_notification_at`を変える。
+    /// 通知のグループの応答では、グループの3件に1件の`latest_page_notification_at`を変える。
     static func corrupt(_ data: Data) -> Data {
         let object = try? JSONSerialization.jsonObject(with: data)
         if var results = object as? [String: Any], var groups = results["notification_groups"] as? [[String: Any]] {

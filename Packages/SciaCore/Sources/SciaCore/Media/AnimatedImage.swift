@@ -4,7 +4,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 /// コマに分けた動く画像。アニメーションするカスタム絵文字（GIF、APNG）を描くのに使う。
-/// コマは1枚の画像（`sheet`）に、左上から行ごとに格子状に並べて持つ。描く側は、画像を1度渡すだけで、表示する範囲を切り替えてコマを送れる。
+/// コマは1枚の画像（`sheet`）に、左上から行ごとにグリッド状に並べて持つ。描く側は、画像を1度渡すだけで、表示する範囲を切り替えてコマを送れる。
 /// コマごとに別の画像を持って差し替えるより、実機（iPhone 16 Pro）でスクロール中のhitchが半分ほどに減り、アプリのメモリも減った。
 /// 描画のプロセスのCPUは変わらず、動く絵文字1個あたり約0.4%（iPhone SE 3で測った値）かかる。
 public struct AnimatedImage: Sendable {
@@ -39,7 +39,7 @@ public struct AnimatedImage: Sendable {
         return sheet.cropping(to: CGRect(x: x, y: y, width: frameWidth, height: frameHeight))
     }
 
-    /// コマとコマのあいだに空ける、透明なすき間のピクセル数。
+    /// コマとコマのあいだに空ける、透明なgapのピクセル数。
     /// 縮めて描くときは、表示する範囲のすぐ外の画素まで混ぜるため、隣のコマに接していると、その端が線や欠片になって見えた。
     public static let gutter = 2
 
@@ -176,7 +176,7 @@ public struct AnimatedImage: Sendable {
         return low
     }
 
-    /// コマを、なるべく正方形に近い格子に、すき間を空けて並べた画像にする。コマの大きさは最初のコマに揃える。
+    /// コマを、なるべく正方形に近いグリッドに、gapを空けて並べた画像にする。コマの大きさは最初のコマに揃える。
     /// GIFとAPNGのコマは、ImageIOが前のコマと重ねてキャンバス全体の大きさで返すので、ふつうは揃っている。
     private static func sheet(of frames: [(image: CGImage, duration: TimeInterval)], maxByteCount: Int) -> AnimatedImage? {
         guard let first = frames.first?.image else { return nil }
@@ -188,7 +188,7 @@ public struct AnimatedImage: Sendable {
         let cellHeight = height + gutter
         let sheetWidth = cellWidth * columns - gutter
         let sheetHeight = cellHeight * rows - gutter
-        // すき間と、最後の行の空いたコマの分だけ、コマの合計より大きくなるので、並べた画像でも上限を確かめる。
+        // gapと、最後の行の空いたコマの分だけ、コマの合計より大きくなるので、並べた画像でも上限を確かめる。
         guard sheetWidth * sheetHeight * 4 <= maxByteCount, let space = CGColorSpace(name: CGColorSpace.sRGB),
               let context = CGContext(data: nil, width: sheetWidth, height: sheetHeight, bitsPerComponent: 8, bytesPerRow: 0, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
         else { return nil }

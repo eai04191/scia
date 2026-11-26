@@ -29,9 +29,9 @@ final class ProfileTabIcons {
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private var avatars: [String: UIImage] = [:]
     @ObservationIgnored private var sources: [String: URL] = [:]
-    /// アイコンが変わるたびに増える。設定の並びは、これが変わったら行を描き直す。
+    /// アイコンが変わるたびに増える。設定の並びは、これが変わったら行を再描画する。
     private(set) var revision = 0
-    /// アイコンが変わったとき。届いたときと、アイコンの形の設定を変えたとき。アクセントカラーで変わる縁は、タブバーが選び直しを見張って描き直させる。
+    /// アイコンが変わったとき。届いたときと、アイコンの形の設定を変えたとき。アクセントカラーで変わる縁は、タブバーが選び直しを見張って再描画させる。
     @ObservationIgnored var onChange: (() -> Void)?
 
     init(settings: AppSettings) {

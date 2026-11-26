@@ -28,9 +28,9 @@ public struct APIResponseText: Equatable, Sendable {
     public let text: String
     public let tokens: [Token]
 
-    /// 応答の文字を字句に分けて、字下げし直す。サーバーが付けた値をそのまま確かめられるよう、キーの並び、数、true、false、nullは応答の文字のまま出す。
+    /// 応答の文字を字句に分けて、インデントし直す。サーバーが付けた値をそのまま確かめられるよう、キーの並び、数、true、false、nullは応答の文字のまま出す。
     /// 文字列だけは、中のエスケープ（Railsが`<`を`<`と書くものなど）を読める文字に戻す。投稿の本文のHTMLが読めなくなるため。
-    /// 値に読み直してから書くと、並びが失われ、数の書き方（`1.0`や`-0`）も変わるため、`JSONSerialization`は形を確かめるためだけに使う。
+    /// 値として読み込んでから書き出すと、並びが失われ、数の書き方（`1.0`や`-0`）も変わるため、`JSONSerialization`は形を確かめるためだけに使う。
     /// JSONとして読めなければ投げる。
     public static func formatted(_ data: Data) throws -> APIResponseText {
         _ = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])

@@ -2,10 +2,10 @@ import SciaCore
 import UIKit
 
 /// プロフィールの自己紹介の下に出す、自分にしか見えないメモの欄。決まりはdocs/profile.mdの「メモ」にある。
-/// 文字の大きさと余白は補足情報のカードに揃え、見分けるために、カードの色を付けず、見出しに錠のアイコンを付ける。押すと、メモのシートを開く。
+/// 文字の大きさと余白は補足情報のカードに揃え、見分けるために、カードの色を付けず、見出しに錠のアイコンを付ける。選択すると、メモのシートを開く。
 final class ProfilePrivateNoteView: UIView {
     var onTap: (() -> Void)?
-    /// 欄の角の丸み。長押しで持ち上げるときも、この形で持ち上げる。
+    /// 欄のradius。長押しで持ち上げるときも、この形で持ち上げる。
     static let cornerRadius: CGFloat = 16
 
     private let iconView = UIImageView(image: UIImage(systemName: "lock.fill"))

@@ -50,10 +50,10 @@ public final class StreamingHub {
     public private(set) var isConnected = false
     /// `state`か`subscriptions`が変わったときに呼ぶ。
     public var onChange: (() -> Void)?
-    /// 接続が401で断られたときに呼ぶ。ストリーミングは有効なトークンでも401を返すことがあるので、トークンが無効かは呼び出し側が確かめる。断られても、つなぎ直しは続ける。
+    /// 接続が401で断られたときに呼ぶ。ストリーミングは有効なトークンでも401を返すことがあるので、トークンが無効かは呼び出し側が確かめる。断られても、再接続は続ける。
     public var onUnauthorized: (() -> Void)?
     /// 申し込んだどれかのストリームのイベントが届いたときに、ストリームによらず呼ぶ。同じ投稿の編集や削除は、ストリームごとに何度か届く。
-    /// 引用の囲みのように、どのタイムラインにも並ぶとは限らない投稿の変化を、セッションで受け取るために使う。
+    /// 引用のカードのように、どのタイムラインにも並ぶとは限らない投稿の変化を、セッションで受け取るために使う。
     public var onEvent: ((StreamingEvent) -> Void)?
 
     private let open: @Sendable () async throws -> StreamingConnection
@@ -64,11 +64,11 @@ public final class StreamingHub {
     private var consumers: [Consumer] = []
     private var nextConsumerID = 0
     private var runTask: Task<Void, Never>?
-    /// つなぎ始めるたびに増やす。止めた接続から遅れて届いた知らせを捨てる。
+    /// つなぎ始めるたびに増やす。止めた接続から遅れて届いたイベントを捨てる。
     private var generation = 0
     /// 今の接続。購読の変更を送る。切れたらnilにし、次の接続でまとめて購読し直す。
     private var connection: StreamingConnection?
-    /// 接続を受け取るたびに増やす。同じ`generation`の中のつなぎ直しも見分け、前の接続で予約した知らせを捨てる。
+    /// 接続を受け取るたびに増やす。同じ`generation`の中の再接続も見分け、前の接続で予約した`connected`の配信を捨てる。
     private var connectionNumber = 0
     /// 受け取った`connected`の数。ストリームの流れでは、どの接続でも`connected`がその接続のイベントより先に来るため、
     /// 届いたイベントがどの`connected`の後のものかを、これで見分ける。`connectionNumber`は次の接続を受け取った時点で進み、
@@ -78,7 +78,7 @@ public final class StreamingHub {
     private var reportedConnections: [Int: Int] = [:]
     /// `connected`を届ける前に届いたイベント。相手ごとに届いた順に溜め、`connected`の直後に渡す。
     /// 受け取った側は`connected`で補完を始めるので、先に新着をタイムラインに入れると補完の基準が進み、その手前を読み飛ばすため。
-    /// 待っている間に切れても捨てず、つなぎ直した`connected`の後に渡す。削除や編集は、補完では読み直せないため。
+    /// 待っている間に切れても捨てず、再接続した`connected`の後に渡す。削除や編集は、補完では再読み込みできないため。
     private var heldEvents: [Int: [StreamingEvent]] = [:]
     /// 購読と解除を、申し込みの順に1つずつ送る。テストで、積んだ送信が終わるまで待つ。
     private(set) var sending: Task<Void, Never>?
@@ -95,7 +95,7 @@ public final class StreamingHub {
 
     /// - Parameters:
     ///   - livePolicy: つなぎ始めるたびに読む。チューニングの値を、次の接続から効かせる。
-    ///   - clock: つなぎ直し、ping、ポーリング、知らせまでの時間を数える。テストでは手で進める時計を渡す。
+    ///   - clock: 再接続し、ping、ポーリング、切断の通知までの時間を数える。テストでは手で進める時計を渡す。
     ///   - open: 購読を指定せずに接続を開く。
     public init(
         reconnectPolicy: ReconnectingStream.Policy = .standard,
@@ -147,13 +147,13 @@ public final class StreamingHub {
         notifyChange()
     }
 
-    /// 電波が戻ったときなどに呼ぶ。つながっていなければ、つなぎ直しの待ち時間を飛ばして、すぐつなぎ直す。
+    /// 電波が戻ったときなどに呼ぶ。つながっていなければ、再接続の待ち時間を飛ばして、すぐ再接続する。
     public func recover() {
         guard runTask != nil, !isConnected else { return }
         logger.info("streaming restart to recover")
         let wasNoticed = isOutageNoticed
         stop()
-        // 切れている時間を数え直すので、知らせはいったん消す。
+        // 切れている時間を数え直すので、切断の通知はいったん消す。
         if wasNoticed {
             broadcast(.outage(isOngoing: false))
         }
@@ -191,8 +191,8 @@ public final class StreamingHub {
         let stream = ReconnectingStream(policy: reconnectPolicy, clock: clock) { [weak self] in
             let connection = try await open()
             // 購読を送り終えてから返す。返した後のpingの応答で成立とみなし、補完を始めるため、
-            // 先に返すと、補完の後から購読が効くまでの新着を取りこぼす。送れなければ、つながらなかったものとしてつなぎ直す。
-            // 返す前に止めたら、送るのをやめて接続を閉じる。返していない接続は、つなぎ直しの側では閉じないため。
+            // 先に返すと、補完の後から購読が効くまでの新着を取りこぼす。送れなければ、つながらなかったものとして再接続する。
+            // 返す前に止めたら、送るのをやめて接続を閉じる。返していない接続は、再接続の側では閉じないため。
             do {
                 guard let initial = await self?.attach(connection, generation: generation) else { throw CancellationError() }
                 try await withTaskCancellationHandler {
@@ -277,14 +277,14 @@ public final class StreamingHub {
             do {
                 try await operation(connection)
             } catch {
-                // 送れないのは切れたときで、つなぎ直したときに購読し直す。
+                // 送れないのは切れたときで、再接続したときに購読し直す。
                 logger.info("streaming send failed error=\(SciaLog.describe(error), privacy: .public)")
             }
         }
     }
 
     /// 今までに積んだ送信が終わってから、まだ同じ接続で申し込んでいる相手に`connected`を届ける。
-    /// その前に切れたら届けない。つなぎ直したときに、全員へ届くため。
+    /// その前に切れたら届けない。再接続したときに、全員へ届くため。
     private func reportConnectedAfterSending(to id: Int) {
         let sent = sending
         let connectionNumber = connectionNumber
@@ -368,7 +368,7 @@ public final class StreamingHub {
             if isLoginRequired { .loginRequired }
             else if runTask == nil { .stopped }
             else if isConnected { .connected }
-            // 切れていると知らせた後は、つなぎ直しに失敗するたびに戻さず、切断中のままにする。
+            // 切れていると知らせた後は、再接続に失敗するたびに戻さず、切断中のままにする。
             else if isOutageNoticed { .polling }
             else { .connecting }
         guard newState != state || subscriptions != reportedSubscriptions else { return }

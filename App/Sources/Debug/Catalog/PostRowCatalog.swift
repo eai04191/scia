@@ -69,7 +69,7 @@ enum PostRowCatalog {
                 (1...count).map { "<p>\($0)行目\($0 == count ? last : "")</p>" }.joined()
             }
             let wrappedLong = "<p>" + String(repeating: "長い本文を、段落を分けずに書いたときの切れ方を確かめるための文。", count: 40) + "</p>"
-            // 行より広いカスタム絵文字。縦横比を保って行の幅まで縮め、行の高さと本文の上下のすき間も縮めた大きさで決める。
+            // 行より広いカスタム絵文字。縦横比を保って行の幅まで縮め、行の高さと本文の上下のgapも縮めた大きさで決める。
             // 置く幅は文字の高さ×縦横比なので、iPadの広い行でも文字の大きさのまま行より広くなるよう、縦横比を80にする。
             let wideEmoji = Fixtures.imageURL(width: 4_000, height: 50, color: .systemPink, label: "横長の絵文字").map { [CustomEmoji(shortcode: "wide", url: $0, staticUrl: $0)] } ?? []
             return [
@@ -392,7 +392,7 @@ enum PostRowCatalog {
         // メンションなどの投稿は通知を送った人が書き、お気に入りなどで再掲する投稿は自分が書いたもの。
         let mentioned = status(content: "<p>@me 通知の元になった投稿。</p>", account: booster)
         let mine = status(content: "<p>お気に入りやブーストをされた自分の投稿。</p>")
-        /// - Parameter group: まとめた通知にするなら、並べる人（先頭がいちばん新しい人）と、まとまりの人数。
+        /// - Parameter group: まとめた通知にするなら、並べる人（先頭がいちばん新しい人）と、グループの人数。
         func row(_ title: String, _ type: MastodonNotification.Kind, status: Status? = mentioned, account: Account = booster, group: (accounts: [Account], count: Int)? = nil, expandsSpoiler: Bool = false) -> CatalogState {
             CatalogState(title: title) {
                 let id = UUID().uuidString
@@ -484,7 +484,7 @@ enum PostRowCatalog {
         ]
     }
 
-    /// 投稿の中の引用。引用元を出せないときの`state`ごとの文言と、囲みの中の注意書き、フィルター、入れ子、長さの違いを並べる。決まりは`docs/quote.md`。
+    /// 投稿の中の引用。引用元を出せないときの`state`ごとの文言と、カードの中の注意書き、フィルター、入れ子、長さの違いを並べる。決まりは`docs/quote.md`。
     @MainActor
     static func quoteStates() -> [CatalogState] {
         let home = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})

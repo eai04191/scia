@@ -20,7 +20,7 @@ enum StatusBarCutout: Equatable {
 
     /// 今の画面の形。ステータスバーが出ない向き（iPhoneの横向き）と、`isAvailable`でない機種ではnil。
     /// アイランドとノッチの位置と画面の角の形を返すAPIはないため、機種の識別子で`IslandModel`と`NotchModel`の表を引く。
-    /// 画面の大きさと安全領域では見分けない。iPhone 18 Proは、17 Proと画面の大きさも安全領域も同じで、アイランドの幅だけが違うため。
+    /// 画面の大きさとセーフエリアでは見分けない。iPhone 18 Proは、17 Proと画面の大きさもセーフエリアも同じで、アイランドの幅だけが違うため。
     @MainActor
     static func current(in window: UIWindow) -> StatusBarCutout? {
         let width = window.bounds.width
@@ -45,10 +45,10 @@ enum StatusBarCutout: Equatable {
     }
 
     /// iPadとMacの、ウィンドウの上端のステータスバーの帯。ステータスバーがウィンドウの上に重なっていなければnil。
-    /// 全画面のiPadでは、ステータスバーの高さ（iPad miniで32pt）と安全領域の上端が同じ。Macでは、ステータスバーを描かないが、
-    /// ナビゲーションバーの上に同じ高さ（20pt）の安全領域を空けているので、そこに流す。
+    /// 全画面のiPadでは、ステータスバーの高さ（iPad miniで32pt）とセーフエリアの上端が同じ。Macでは、ステータスバーを描かないが、
+    /// ナビゲーションバーの上に同じ高さ（20pt）のセーフエリアを空けているので、そこに流す。
     /// ウィンドウ表示のiPadでは、ステータスバーは画面の上端にあってウィンドウの上にはなく、`statusBarFrame`は32ptを返すのに、
-    /// 安全領域の上端は10ptしかない。流すと、ウィンドウの操作ボタンに重なり、ステータスバーを隠した分の補いで画面が下へずれる。
+    /// セーフエリアの上端は10ptしかない。流すと、ウィンドウの操作ボタンに重なり、ステータスバーを隠した分の補いで画面が下へずれる。
     @MainActor
     private static func flatBand(in window: UIWindow) -> StatusBarCutout? {
         let height = window.windowScene?.statusBarManager?.statusBarFrame.height ?? 0
@@ -204,7 +204,7 @@ enum DeviceModel {
 final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate {
     /// 画面の描き換えと同じ時間。テストでは差し替える。
     var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
-    /// 押されたとき。
+    /// 選択されたとき。
     var onTap: (() -> Void)?
     /// 出入りの時間。
     var animationDuration: TimeInterval = 0.35
@@ -212,7 +212,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     private(set) var cutout: StatusBarCutout
     private let capsule = UIView()
     private var content: ContentViews?
-    /// 背景を広げたり縮めたりしている動き。背景の枠と丸み、中身の位置と濃さを、UIKitと同じスプリングの進み具合から前もって計算し、
+    /// 背景を広げたり縮めたりしている動き。背景の枠と丸み、中身の位置と不透明度を、UIKitと同じスプリングの進み具合から前もって計算し、
     /// 同じ時刻表のキーフレームのアニメーションにして描画に任せる。
     /// 中身は背景の子なので、背景をUIKitのアニメーションで動かして毎コマ中身を合わせると、置いた位置が画面に出るときには背景がもう1コマ動いていて、
     /// その分だけ中身が横にも縦にもずれる。毎コマ自分で動かすと、メインスレッドが重いときにコマが落ち、UIKitのスプリングとも曲線が変わる。
@@ -221,7 +221,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     private var trackedContents: [ContentViews] = []
     /// 入れ替えで薄くなって出ていく途中の中身。入れ替わりの途中に消すときも、背景の端に合わせて置くために持つ。
     private var leavingContents: [ContentViews] = []
-    /// 背景と一緒に出入りする中身。濃さも進み具合で決める。広げている途中に入れ替わったらnilにし、入れ替えの薄くする動きに任せる。
+    /// 背景と一緒に出入りする中身。不透明度も進み具合で決める。広げている途中に入れ替わったらnilにし、入れ替えの薄くする動きに任せる。
     private var fadingContent: ContentViews?
     private(set) var item: StatusBarTickerItem?
     private(set) var isExpanded = false
@@ -230,7 +230,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     /// 出している通知を読み上げる文。
     var accessibilityText: String? { capsule.accessibilityLabel }
 
-    /// 流すアカウントの設定。中身は窓に載せた直後に組むので、窓からではなくここから読む。
+    /// 流すアカウントの設定。中身はウィンドウに載せた直後に組むので、ウィンドウからではなくここから読む。
     private let settings: AppSettings
 
     init(cutout: StatusBarCutout, settings: AppSettings) {
@@ -245,8 +245,8 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         capsule.accessibilityTraits = .button
         capsule.accessibilityHint = StatusBarTickerTexts.openHint
         capsule.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
-        // 文字はステータスバーの高さに収めるため、端末の文字の大きさに合わせて大きくできない。タブバーと同じく、
-        // 文字を大きくする設定では、長押しで拡大表示（Large Content Viewer）に出し、指を離すと押したことにする。
+        // 文字はステータスバーの高さに収めるため、Dynamic Typeに合わせて大きくできない。タブバーと同じく、
+        // 文字を大きくする設定では、長押しで拡大表示（Large Content Viewer）に出し、指を離すと選択したことにする。
         capsule.showsLargeContentViewer = true
         capsule.scalesLargeContentImage = true
         addInteraction(UILargeContentViewerInteraction(delegate: self))
@@ -291,7 +291,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     }
 
     /// 通知を出す。出ていれば、文字を上へ送って入れ替える。
-    /// 「視差効果を減らす」がオンなら、動かさずに薄くして入れ替え、カプセルも広げずに浮かび上がらせる。
+    /// 「視差効果を減らす」がオンなら、動かさずに薄くして入れ替え、カプセルも広げずにフェードインさせる。
     func show(_ item: StatusBarTickerItem, animated: Bool) {
         self.item = item
         let incoming = ContentViews(item: item, metrics: metrics, settings: settings)
@@ -347,7 +347,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             }
             return
         }
-        // 消し終えていれば中身は残っていない。残っていれば、縮めている途中か薄くしている途中なので、出ていく途中の中身として、見えている濃さから薄くして入れ替える。
+        // 消し終えていれば中身は残っていない。残っていれば、縮めている途中か薄くしている途中なので、出ていく途中の中身として、見えている不透明度から薄くして入れ替える。
         // その場で取り除くと、中身が1コマで消える。
         let outgoingAlpha = outgoing.map { CGFloat($0.left.layer.presentation()?.opacity ?? Float($0.left.alpha)) }
         startLeaving(outgoing)
@@ -379,7 +379,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         }
     }
 
-    /// 出ていく中身を、`alpha`から入れ替えと同じ時間で薄くして取り除く。縮めるときに付けた濃さの動きは外し、この薄くする動きに替える。
+    /// 出ていく中身を、`alpha`から入れ替えと同じ時間で薄くして取り除く。縮めるときに付けた不透明度の動きは外し、この薄くする動きに替える。
     private func fadeOut(_ content: ContentViews, from alpha: CGFloat) {
         for layer in [content.left.layer, content.right.layer] {
             layer.removeAnimation(forKey: Self.animationKeyPrefix + "opacity")
@@ -420,7 +420,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             }
             return
         }
-        // 中身は背景の端と一緒に切り欠きの中へしまわれる。濃さは、ほとんど縮み終わるまで保つ。アイランドに重なった分は実機では見えないため。
+        // 中身は背景の端と一緒に切り欠きの中へしまわれる。不透明度は、ほとんど縮み終わるまで保つ。アイランドに重なった分は実機では見えないため。
         // 入れ替わりの途中なら、出ていく途中の中身も背景の端に合わせて置く。置かないと、縮む背景に置いていかれて端で切れる。
         trackedContents = (content.map { [$0] } ?? []) + leavingContents
         fadingContent = content
@@ -477,7 +477,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     private static let keyframeInterval: TimeInterval = 1.0 / 240
     private static let animationKeyPrefix = "statusBarTicker."
 
-    /// 背景を、今の見た目の枠から`target`へ、UIKitと同じスプリングで動かす。中身も同じ時刻表で背景の端に沿わせ、背景と一緒に出入りする中身の濃さも同じ進み具合で決める。
+    /// 背景を、今の見た目の枠から`target`へ、UIKitと同じスプリングで動かす。中身も同じ時刻表で背景の端に沿わせ、背景と一緒に出入りする中身の不透明度も同じ進み具合で決める。
     private func animateCapsule(to target: CGRect, dampingRatio: CGFloat, contentAlpha: @escaping (CGFloat) -> CGFloat, completion: @escaping () -> Void) {
         // 動いている途中なら、今の見た目で止めてから動かし直す。
         let presentation = capsule.layer.presentation()
@@ -516,8 +516,8 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             }
         }
         if let fadingContent {
-            // 濃さは、濃くした状態からの差として重ねる。入れ替えで薄い状態から出てくる途中なら、その動きを残したまま、背景と一緒に出入りする分だけ薄くする。
-            // 置き換えると、出てくる途中の濃さが1コマで濃くなる。
+            // 不透明度は、濃くした状態からの差として重ねる。入れ替えで薄い状態から出てくる途中なら、その動きを残したまま、背景と一緒に出入りする分だけ薄くする。
+            // 置き換えると、出てくる途中の不透明度が1コマで濃くなる。
             fadingContent.setAlpha(1)
             for layer in [fadingContent.left.layer, fadingContent.right.layer] {
                 addKeyframes(to: layer, keyPath: "opacity", values: progresses.map { Float(contentAlpha($0) - 1) }, times: times, beginTime: nil, additive: true)
@@ -556,7 +556,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     }
 
     /// 背景の動きを描き始めた時刻。まだ描いていなければnil。
-    /// 動きを足したあと、描く前にメインスレッドが止まる（押して通知タブへ移るときなど）と、足した時刻から数えた動きは止まっていた分だけ進んだところから描かれ、1コマで飛ぶ。
+    /// 動きを足したあと、描く前にメインスレッドが止まる（選択して通知タブへ移るときなど）と、足した時刻から数えた動きは止まっていた分だけ進んだところから描かれ、1コマで飛ぶ。
     /// そのため背景の動きは描き始めた時刻から始め、あとから加わる中身の動きはこの時刻に合わせる。
     private var motionStartTime: CFTimeInterval? {
         guard let animation = capsule.layer.animation(forKey: Self.animationKeyPrefix + "position"), animation.beginTime > 0 else { return nil }
@@ -583,7 +583,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
 
     /// 背景と中身の、背景に合わせた動きを、今の見た目の位置で止める。
     /// 中身を上へ送って入れ替えている途中のUIKitの動きは残す。中身は横の位置だけを背景に沿わせるので、送る動きとぶつからない。
-    /// 外して見えている高さから動かし直すと、描くまでにメインスレッドが止まったとき（押して通知タブへ移るときなど）、止まっている間に進んだ分だけ、1コマで高さが戻る。
+    /// 外して見えている高さから動かし直すと、描くまでにメインスレッドが止まったとき（選択して通知タブへ移るときなど）、止まっている間に進んだ分だけ、1コマで高さが戻る。
     private func removeMotionAnimations() {
         motion = nil
         for layer in [capsule.layer] + (trackedContents + leavingContents).flatMap({ [$0.left.layer, $0.right.layer] }) {
@@ -708,7 +708,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
 
     /// 背景の左端から左の中身までの余白と、右の中身から背景の右端までの余白。
     /// アイランドの機種では、左は、記号ごとに変えず、通知の記号の幅（13ptの太字で14〜20pt）の真ん中の記号が端の半円と同心になる長さにする。
-    /// 右は、行末のぼかしを端の半円の中に入れ、余白は一番狭いすき間の段だけにする。
+    /// 右は、行末のぼかしを端の半円の中に入れ、余白は一番狭いgapの段だけにする。
     private var edgePaddings: (leading: CGFloat, trailing: CGFloat) {
         switch cutout {
         case .island(let rect, _):
@@ -733,7 +733,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
 
     #if DEBUG
     /// `defaults write net.mizle.scia debug.statusBarTickerTrace -bool true`で、背景を広げたり縮めたりしている間の毎コマ、
-    /// 描いている途中の背景の枠と、左右の中身の位置と濃さを、debugレベルのログに書く。見た目ではなく数値で動きを確かめるため。
+    /// 描いている途中の背景の枠と、左右の中身の位置と不透明度を、debugレベルのログに書く。見た目ではなく数値で動きを確かめるため。
     /// 値は描画が使う見た目の値（presentation layer）から読む。中身の位置は、このビューの座標で、左は左端、右は右端、縦は真ん中。targetは広がり終わったときの位置。
     private func startTrace() {
         guard UserDefaults.standard.bool(forKey: "debug.statusBarTickerTrace"), traceLink == nil else { return }
@@ -797,7 +797,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             left = CGRect(x: leading - frame.minX, y: y, width: rect.minX - gap - leading, height: rect.height)
             right = CGRect(x: rect.maxX + gap - frame.minX, y: y, width: bounds.width - trailing - rect.maxX - gap, height: rect.height)
         case .notch(let rect):
-            // ノッチの機種は、上の端では画面の角の丸みに文字がかかるため、少し多めに空ける。
+            // ノッチの機種は、上の端では画面の角のradiusに文字がかかるため、少し多めに空ける。
             let inset: CGFloat = 14
             left = CGRect(x: inset, y: 0, width: rect.minX - frame.minX - gap - inset, height: frame.height)
             right = CGRect(x: rect.maxX - frame.minX + gap, y: 0, width: frame.maxX - rect.maxX - gap - inset, height: frame.height)
@@ -929,7 +929,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             render()
         }
 
-        /// 名前と文頭を描く。カスタム絵文字が届いたら、描き直す。
+        /// 名前と文頭を描く。カスタム絵文字が届いたら、再描画する。
         func render() {
             let fadeWidth = AppDependencies.tuning.value(of: TuningCatalog.statusBarTickerFadeWidth)
             nameLabel.fadeWidth = fadeWidth

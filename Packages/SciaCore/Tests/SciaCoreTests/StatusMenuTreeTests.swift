@@ -44,7 +44,7 @@ struct StatusMenuTreeTests {
         })
     }
 
-    /// 既定の並びは、何のための操作かでまとまりを分ける。横並びの区切り線の下の返信・ブースト・お気に入りは横に並べる。
+    /// 既定の並びは、何のための操作かでグループを分ける。横並びの区切り線の下の返信・ブースト・お気に入りは横に並べる。
     /// 自分のアカウントが分からないタイムラインでは、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuGroupsItemsByPurpose() {
         #expect(outline(tree(status(url: URL(string: "https://example.social/@alice/100")))) == "=返信,ブースト(押せない),お気に入り|ブックマーク|共有,リンクをコピー,テキストをコピー,ブラウザで開く|翻訳|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ]")
@@ -64,7 +64,7 @@ struct StatusMenuTreeTests {
         #expect(!titles(withoutStatus).contains("選択"))
     }
 
-    /// 「リアクション」は、絵文字のリアクションに対応したサーバーでだけ出し、ブックマークと引用と同じまとまりに置く。
+    /// 「リアクション」は、絵文字のリアクションに対応したサーバーでだけ出し、ブックマークと引用と同じグループに置く。
     @Test func emojiReactionAppearsOnlyOnSupportingServer() {
         var supporting = tree(status())
         supporting.capabilities.supportsEmojiReactions = true
@@ -89,7 +89,7 @@ struct StatusMenuTreeTests {
             == "見て https://example.com/users/someone/status/2109995948407476369?s=46 と https://example.com/")
     }
 
-    /// ブーストは元の投稿のページを指す。ブーストの側のurlがなくても、元の投稿にあれば押せる。urlがなければ押せないまま並べ、uriで代わりにしない。
+    /// ブーストは元の投稿のページを指す。ブーストの側のurlがなくても、元の投稿にあれば有効になる。urlがなければ無効のまま並べ、uriで代わりにしない。
     /// ユーザーは元の投稿を書いた人、ブーストした人の順に並ぶ。
     @Test func reblogUsesOriginalStatusURLAndListsBothUsers() throws {
         let original = status(url: URL(string: "https://remote.example/@bob/1"), account: account("2", "bob@remote.example"))
@@ -139,7 +139,7 @@ struct StatusMenuTreeTests {
         #expect(MenuNodeTests.describe(StatusMenuTree.notificationRequestMenu(user: nil).children) == "受け入れる,無視!")
     }
 
-    /// 「その他」より下の項目はサブメニューに入る。非表示の項目は出さず、区切り線で分けたまとまりに従う。
+    /// 「その他」より下の項目はサブメニューに入る。非表示の項目は出さず、区切り線で分けたグループに従う。
     @Test func itemsBelowMoreGoIntoSubmenu() {
         let layout = MenuLayout<StatusMenuItem>(elements: [
             .item(.reply, isVisible: true),
@@ -254,7 +254,7 @@ struct StatusMenuTreeTests {
     }
 
     /// 引用できる人は、自分の投稿でだけ、今の値をサブタイトルとチェックマークで示すサブメニューにする。
-    /// フォロワーのみの投稿は、サーバーがいつも「自分のみ」にするので、押せない形で理由を添える。引用に対応していないサーバーの投稿では出さない。
+    /// フォロワーのみの投稿は、サーバーがいつも「自分のみ」にするので、無効にして理由を添える。引用に対応していないサーバーの投稿では出さない。
     @Test func quotePolicyIsSubmenuOnOwnPosts() throws {
         let me = account("9", "me")
         let title = "引用できる人"
@@ -297,8 +297,8 @@ struct StatusMenuTreeTests {
         #expect(node(titled: title, in: tree(quoting(mine, state: "accepted"))) == nil)
     }
 
-    /// Fedibirdの形のサーバーでは、`quote_approval`がなくても、公開か未収載の投稿に「引用」を押せる形で出す。
-    /// ほかの公開範囲では、押せない形で理由を添える。
+    /// Fedibirdの形のサーバーでは、`quote_approval`がなくても、公開か未収載の投稿に「引用」を有効にして出す。
+    /// ほかの公開範囲では、無効にして理由を添える。
     @Test func quoteFollowsVisibilityOnFedibird() throws {
         let title = "引用"
         func fedibird(_ status: Status) -> StatusMenuTree {
@@ -337,14 +337,14 @@ struct StatusMenuTreeTests {
         #expect(!outline(tree(status().settingReblogged(true), myAccountID: "9"), layout: showing(.reblogWithVisibility)).contains(submenu))
     }
 
-    /// 状態で名前とアイコンを切り替える。お気に入りしていれば取り消し、押せないときは理由を添える。
+    /// 状態で名前とアイコンを切り替える。お気に入りしていれば取り消し、無効のときは理由を添える。
     @Test func itemsFollowStatusState() throws {
         let built = tree(status().settingFavourited(true), myAccountID: "9").menu(groups: .single(.favourite), includesFollowRequest: false)
         let favourite = try #require(built.root?.flattenedChildren.first)
         #expect(favourite.title == "お気に入りを取り消す")
         #expect(favourite.icon?.symbolName == "star.slash")
 
-        // 自分のアカウントが分からないタイムラインでは、ブーストできるかを決められないので押せない。
+        // 自分のアカウントが分からないタイムラインでは、ブーストできるかを決められないので無効にする。
         guard case .unavailable(let reason) = MenuItemOutcome(singleItemMenu: tree(status()).menu(groups: .single(.reblog), includesFollowRequest: false).root) else {
             Issue.record("ブーストできない投稿で押せてしまいます")
             return

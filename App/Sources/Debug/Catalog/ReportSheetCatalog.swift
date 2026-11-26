@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 通報のシート。サーバーに通報を送らずに、ルールの読み込み中や失敗、長いルール、長いコメント、送れなかったとき、通報するアカウントがログアウトされているとき、サーバーが断ったときを並べる。送信を押しても何も送らない。
+/// 通報のシート。サーバーに通報を送らずに、ルールの読み込み中や失敗、長いルール、長いコメント、送れなかったとき、通報するアカウントがログアウトされているとき、サーバーが断ったときを並べる。送信を選択しても何も送らない。
 enum ReportSheetCatalog {
     private struct Failure: LocalizedError {
         var errorDescription: String? { "サーバーに接続できませんでした。" }

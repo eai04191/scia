@@ -22,7 +22,7 @@ enum MediaWindow {
         /// アプリ全体のアプリ内通知。ビューアのウィンドウにもチップの列を重ね、全部のウィンドウに出す。
         let notices: NoticeCenter?
         let subject: OperationStatus.Subject?
-        /// 開いた窓のアカウントの設定。ビューアの窓も、同じ設定で描く。
+        /// 開いたウィンドウのアカウントの設定。ビューアのウィンドウも、同じ設定で描く。
         let settings: AppSettings
     }
 

@@ -28,7 +28,7 @@ struct ReconnectingStreamTests {
         let stream = makeStream(connector, policy: Self.fastPolicy, clock: clock)
 
         let task = Task { try await stream.run { await log.append($0) } }
-        // 切れたと知らせてから、つなぎ直すまで時計で待ち始めたのを確かめて、その分だけ進める。
+        // 切れたと知らせてから、再接続するまで時計で待ち始めたのを確かめて、その分だけ進める。
         try await waitUntil { await log.count >= 3 && clock.sleeperCount(remaining: .milliseconds(10)) >= 1 }
         #expect(await log.count == 3)
         clock.advance(by: .milliseconds(10))
@@ -50,7 +50,7 @@ struct ReconnectingStreamTests {
         #expect(connector.closedCount == 3, "切れた接続か取り消した接続が閉じられていません")
     }
 
-    /// つながってすぐ切れる状態が続くサーバーへ、短い間隔でつなぎ直し続けない。つながるたびに補完のRESTも送られるため。
+    /// つながってすぐ切れる状態が続くサーバーへ、短い間隔で再接続し続けない。つながるたびに補完のRESTも送られるため。
     @Test func delayKeepsGrowingWhileConnectionsDropRightAway() async throws {
         let dropGate = Gate()
         let connector = ScriptedConnector([
@@ -67,7 +67,7 @@ struct ReconnectingStreamTests {
         try await clock.advance(afterSleeping: .milliseconds(10))
         try await clock.advance(afterSleeping: .milliseconds(20))
         try await clock.advance(afterSleeping: .milliseconds(40))
-        // 4つ目の接続を、つなぎ直しの間隔の上限と同じ長さだけ続けてから切る。
+        // 4つ目の接続を、再接続の間隔の上限と同じ長さだけ続けてから切る。
         try await log.waitUntil(count: 11)
         clock.advance(by: Self.fastPolicy.maxRetryDelay)
         dropGate.open()
@@ -90,7 +90,7 @@ struct ReconnectingStreamTests {
         ])
     }
 
-    /// ストリーミングだけが401を返すサーバーもあるため、トークンが無効かどうかは呼び出し側が確かめる。ここでは知らせてつなぎ直しを続ける。
+    /// ストリーミングだけが401を返すサーバーもあるため、トークンが無効かどうかは呼び出し側が確かめる。ここでは知らせて再接続を続ける。
     @Test func unauthorizedHandshakeIsReportedAndRetried() async throws {
         let connector = ScriptedConnector([
             .init(handshake: .fail(MastodonAPIError(statusCode: 401, message: "Unauthorized"))),
@@ -111,7 +111,7 @@ struct ReconnectingStreamTests {
         #expect(await log.labels == ["unauthorized", "disconnected after 10ms", "connected", "event delete 1"])
     }
 
-    /// つなぐときの応答が429や503で再開の時刻を示したら、自分の間隔より遅くても、その時刻まではつなぎ直さない。
+    /// つなぐときの応答が429や503で再開の時刻を示したら、自分の間隔より遅くても、その時刻までは再接続しない。
     @Test(arguments: [
         MastodonAPIError(statusCode: 429, message: "Too Many Requests", retryAfter: .milliseconds(300)) as any Error & Sendable,
         AutomaticRequestsPaused(until: Date(timeIntervalSince1970: 1_800_000_000), retryAfter: .milliseconds(300)),
@@ -194,7 +194,7 @@ struct ReconnectingStreamTests {
         #expect(connector.closedCount == 1)
     }
 
-    /// 待つ時間はすべて`clock`で数える。進めなければ、つなぎ直しもpingの時間切れも起きない。
+    /// 待つ時間はすべて`clock`で数える。進めなければ、再接続もpingの時間切れも起きない。
     private func makeStream(
         _ connector: ScriptedConnector,
         policy: ReconnectingStream.Policy,

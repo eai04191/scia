@@ -24,8 +24,8 @@ final class SignedInAccounts {
     }
 
     /// `credential`の部品。なければ作る。ログインし直してトークンが変わっていれば、前の部品を閉じて作り直す。
-    /// ログアウトしたか、ログインし直す前の`credential`（開いたままのメニューが持っていたものなど）には、覚えずに使い捨ての部品を返す。
-    /// 覚えると、ログインしているアカウントの部品を古いトークンのもので置き換えてしまうため。
+    /// ログアウトしたか、ログインし直す前の`credential`（開いたままのメニューが持っていたものなど）には、キャッシュせずに使い捨ての部品を返す。
+    /// キャッシュすると、ログインしているアカウントの部品を古いトークンのもので置き換えてしまうため。
     func account(_ credential: Credential) -> SignedInAccount {
         observeRegistry()
         if let account = accounts[credential.id], account.credential == credential { return account }
@@ -77,7 +77,7 @@ final class SignedInAccount {
     private let accounts: AccountCache
     private var configuration: InstanceConfiguration?
     private var preferences: ServerPreferences?
-    /// 走っている上限と設定の読み込み。書き始めたときと投稿するアカウントを替えたときに重ねて呼ばれても、送り直さずに待つ。
+    /// 走っている上限と設定の読み込み。書き始めたときと投稿するアカウントを替えたときに重ねて呼ばれても、再送せずに待つ。
     private var composeDefaultsLoad: Task<Void, Never>?
 
     init(credential: Credential, settings: AppSettings, tasks: TaskScope, makeClient: (Credential, ReceivedAccounts) -> MastodonClient) {
@@ -96,7 +96,7 @@ final class SignedInAccount {
         hashtags = OtherAccountHashtags(client: client, tasks: tasks.child())
     }
 
-    /// 投稿欄で使うサーバーの上限とアカウントの設定。読めたものを覚え、読めなかったものは次に呼ばれたときに読み直す。
+    /// 投稿欄で使うサーバーの上限とアカウントの設定。読めたものをキャッシュし、読めなかったものは次に呼ばれたときに再読み込みする。
     func composeDefaults() async -> (configuration: InstanceConfiguration?, preferences: ServerPreferences?) {
         if configuration == nil || preferences == nil {
             let load = composeDefaultsLoad ?? startLoadingComposeDefaults()

@@ -184,13 +184,13 @@ struct AppSettingsTests {
         #expect(AppSettings(defaults: defaults).hidesEmptyComposeBar)
     }
 
-    /// 畳んでもタイムラインを広く使えるので、既定では畳む。
+    /// 折りたたんでもタイムラインを広く使えるので、既定では折りたたむ。
     @Test func foldsComposeBarByDefault() throws {
         let settings = AppSettings(defaults: try makeDefaults())
         #expect(!settings.keepsComposeBarOpen)
     }
 
-    /// Macのように既定で畳まない端末でも、使う人がオフにしたらオフのままにする。
+    /// Macのように既定で折りたたまない端末でも、使う人がオフにしたらオフのままにする。
     @Test func keepsComposeBarOpenFollowsDeviceDefaultUntilChosen() throws {
         let defaults = try makeDefaults()
         #expect(AppSettings(defaults: defaults, keepsComposeBarOpenByDefault: true).keepsComposeBarOpen)
@@ -256,7 +256,7 @@ struct AppSettingsTests {
         #expect(settings.animatesCustomEmojis)
     }
 
-    /// サーバーの値はアカウントごとに覚え、次に表示を始めたときは読み直す前から覚えた値で描く。
+    /// サーバーの値はアカウントごとにキャッシュし、次に表示を始めたときは再読み込みする前からキャッシュした値で描く。
     /// 表示していないアカウントの値を読んでも、表示しているアカウントの値は変えない。
     @Test func remembersServerAnimationsPerAccount() throws {
         let defaults = try makeDefaults()
@@ -277,7 +277,7 @@ struct AppSettingsTests {
         #expect(!relaunched.animatesCustomEmojis)
     }
 
-    /// メディアの表示は、選ぶまでは表示しているアカウントのサーバーの値に従い、選んだらその値を使う。サーバーの値はアカウントごとに覚える。
+    /// メディアの表示は、選ぶまでは表示しているアカウントのサーバーの値に従い、選んだらその値を使う。サーバーの値はアカウントごとにキャッシュする。
     @Test func mediaDisplayFollowsServerUntilChosen() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)
@@ -304,7 +304,7 @@ struct AppSettingsTests {
     }
 
     /// アカウントの設定から作ったプリセットの編集用の設定は、最後に表示を始めたアカウントではなく、そのアカウントのサーバーの値を読む。
-    /// 別々のアカウントを窓に分けて開いているとき、プリセットの編集の「アカウント設定に従う」に、ほかのアカウントの値を添えないため。
+    /// 別々のアカウントをウィンドウに分けて開いているとき、プリセットの編集の「アカウント設定に従う」に、ほかのアカウントの値を添えないため。
     @Test func presetEditingReadsServerValueOfItsAccount() throws {
         let settings = AppSettings(defaults: try makeDefaults())
         settings.rememberServerMediaDisplay(.showsAll, of: "alice@example.social")
@@ -476,7 +476,7 @@ struct AppSettingsTests {
         #expect(Set(ids).count == ids.count)
     }
 
-    /// 「通知の見た目」の数値も保存して読み直せ、まとめて既定に戻すと「投稿の見た目」の数値は残る。
+    /// 「通知の見た目」の数値も保存して再読み込みでき、まとめて既定に戻すと「投稿の見た目」の数値は残る。
     @Test func notificationAppearancePersistsAndResetsAlone() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)

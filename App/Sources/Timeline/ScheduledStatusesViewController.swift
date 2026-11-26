@@ -9,7 +9,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
 
     var onAppearing: () -> Void = {}
     var onDisappearing: () -> Void = {}
-    /// 引っぱって読み直したとき。読み終えるまで更新コントロールを回す。
+    /// pull to refreshしたとき。読み終えるまで更新コントロールを回す。
     var onRefresh: () async -> Void = {}
     var onRetry: () -> Void = {}
     var onReschedule: (ScheduledStatus) -> Void = { _ in }
@@ -28,7 +28,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
     /// 添付のぼかし。タイムラインと同じく、閲覧注意と注意書きのある予約は最初からぼかし、タップで外す。
     private var mediaCovers = MediaCovers()
     private let tuning = AppDependencies.tuning
-    /// 区切り線の引き方と、描き直しの要る設定の変化。タイムラインと同じ決まりを使う。テストでは、画面を出す前に差し替える。
+    /// 区切り線の引き方と、再描画の要る設定の変化。タイムラインと同じ決まりを使う。テストでは、画面を出す前に差し替える。
     var listStyle = PostListStyle(settings: AppDependencies.settings, tuning: AppDependencies.tuning, network: AppDependencies.network)
     private var settings: AppSettings { listStyle.settings }
     private var contentState = ContentState.loading
@@ -123,7 +123,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
     }
 
     /// 予約を並べ直す。サーバーが返す順によらず、予約の日時が近い順にする。
-    /// - Parameter animatingChanges: 使う人の操作の結果（取り消し、日時の変更）なら、標準の動きで行を閉じたり動かしたりする。読み直しでは動かさない。
+    /// - Parameter animatingChanges: 使う人の操作の結果（取り消し、日時の変更）なら、標準の動きで行を閉じたり動かしたりする。再読み込みでは動かさない。
     func setStatuses(_ statuses: [ScheduledStatus], animatingChanges: Bool) {
         self.statuses = statuses.sorted { ($0.scheduledAt, $0.id) < ($1.scheduledAt, $1.id) }
         applySnapshot(animatingChanges: animatingChanges && !UIAccessibility.isReduceMotionEnabled)
@@ -150,7 +150,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         var snapshot = NSDiffableDataSourceSnapshot<Int, ScheduledStatus.ID>()
         snapshot.appendSections([0])
         snapshot.appendItems(statuses.map(\.id))
-        // 日時を変えた行は、IDが同じでも中身が変わるので描き直す。
+        // 日時を変えた行は、IDが同じでも中身が変わるので再描画する。
         snapshot.reconfigureItems(statuses.map(\.id).filter { dataSource.snapshot().itemIdentifiers.contains($0) })
         dataSource.apply(snapshot, animatingDifferences: animatingChanges)
     }
@@ -238,7 +238,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
     // MARK: - 行の中身
 
     /// タイムラインの投稿の行と同じ部品で、投稿されたときの見た目に組み立てる。時刻の場所には、予約の日時を「日時」の書き方で出す。
-    /// アイコンと名前は押せないようにする。予約投稿のタイムラインから自分のプロフィールを開く理由がないため。
+    /// アイコンと名前は無効にする。予約投稿のタイムラインから自分のプロフィールを開く理由がないため。
     private func contentConfiguration(for scheduled: ScheduledStatus, account: Account, base: UIListContentConfiguration) -> PostContentConfiguration {
         let params = scheduled.params
         let preview = Status(

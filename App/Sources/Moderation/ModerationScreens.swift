@@ -15,7 +15,7 @@ final class ModerationScreens {
     struct OpenProfiles {
         /// 開いているプロフィールのうち、そのドメインの人のアカウントのID。
         let accountIDs: @MainActor (String) -> [String]
-        /// 読み直した関係を入れ、フォロワー数のためにアカウントも読み直す。
+        /// 再読み込みした関係を入れ、フォロワー数のためにアカウントも再読み込みする。
         let apply: @MainActor (Relationship) -> Void
     }
 
@@ -47,14 +47,14 @@ final class ModerationScreens {
         }
     }
 
-    /// ユーザーのメニューからドメインのブロックを変えたら、そのドメインの人の関係を忘れ、読んであるドメインのリストを読み直す。まだ読んでいなければ、開いたときに読む。
-    /// 変えた相手の関係は忘れるので、読み直した関係はこのあとに入れる。
+    /// ユーザーのメニューからドメインのブロックを変えたら、そのドメインの人の関係を忘れ、読んであるドメインのリストを再読み込みする。まだ読んでいなければ、開いたときに読む。
+    /// 変えた相手の関係は忘れるので、再読み込みした関係はこのあとに入れる。
     func domainBlocksDidChange(_ domain: String) {
         forgetRelations(onDomain: domain)
         domainBlocks.didChangeOutside()
     }
 
-    /// 覚えている関係のうち、そのドメインの人と見分けられない人の分を忘れる。開いているそのドメインの人のプロフィールには、読み直した関係を入れる。
+    /// キャッシュした関係のうち、そのドメインの人と見分けられない人の分を忘れる。開いているそのドメインの人のプロフィールには、再読み込みした関係を入れる。
     /// Mastodonはドメインのブロックでお互いのフォローを外すので、開いたままのプロフィールのフォローのボタンが前のままにならないようにする。
     private func forgetRelations(onDomain domain: String) {
         relationships.forgetRelations(onDomain: domain) { [accounts] id in accounts.account(id)?.acct }
@@ -73,7 +73,7 @@ final class ModerationScreens {
         }
     }
 
-    /// ドメインを入れてブロックするアラートを出す。押し間違えで、そのドメインのフォロワーを外さないよう、ユーザーのメニューと同じ説明を添え、赤いボタンで送る。
+    /// ドメインを入れてブロックするアラートを出す。誤って選択して、そのドメインのフォロワーを外さないよう、ユーザーのメニューと同じ説明を添え、赤いボタンで送る。
     /// ブロックできなければ、理由を出してから、入れたドメインを残したまま入力に戻す。
     /// - Parameter text: アラートを出し直すときに残す、前に入れた文字。
     func presentBlockDomain(on presenter: UIViewController, text: String = "") {

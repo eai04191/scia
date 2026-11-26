@@ -136,7 +136,7 @@ struct LatestLookupTests {
         #expect(changes == [true, false])
     }
 
-    /// 「操作の状況」から止めたときなど。結果を渡さず、遅いという知らせも引っ込める。
+    /// 「操作の状況」から止めたときなど。結果を渡さず、遅いというチップも引っ込める。
     @Test func cancelDropsResultAndEndsSlow() async throws {
         let clock = TestClock()
         let lookup = LatestLookup(clock: clock, slowAfter: { .seconds(1) })

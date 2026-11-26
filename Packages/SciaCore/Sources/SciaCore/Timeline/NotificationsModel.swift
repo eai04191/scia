@@ -15,7 +15,7 @@ public final class NotificationsModel {
     public var onUnreadCountChange: ((Int, Bool) -> Void)?
     /// ストリーミングで新しい通知が届いたときに呼ぶ。ステータスバーに流す。2つめの値は、通知の投稿に当てたサーバーのフィルターの判定。
     public var onArrival: ((MastodonNotification, FilterVerdict) -> Void)?
-    /// タイムラインを最初から読み込んだとき、引っぱって読み直したときに呼ぶ。保留中の通知の人数を読み直すのに使う。
+    /// タイムラインを最初から読み込んだとき、pull to refreshしたときに呼ぶ。保留中の通知の人数を再読み込みするのに使う。
     public var onReload: () -> Void = {}
     /// 通知の投稿に当てるサーバーのフィルター。ステータスバーに流す通知にも、タイムラインと同じく当てる。
     public let filtering: StatusFiltering
@@ -30,11 +30,11 @@ public final class NotificationsModel {
     private var isStopped: Bool { tasks.isClosed }
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     public var runningTaskCount: Int { tasks.runningCount }
-    /// タイムライン全体の状態。失敗したままなら、電波の回復や引っぱった読み直しでやり直す。
+    /// タイムライン全体の状態。失敗したままなら、電波の回復やpull to refreshでやり直す。
     public private(set) var contentState = TimelineContentState.loaded
     /// 末尾の読み込みの状態。失敗したままなら、電波の回復でやり直す。
     public private(set) var footerState = TimelineFooterState.idle
-    /// 設定で無効にしている。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
+    /// 設定で無効にしている。購読せず、有効に戻したら再接続して、無効だった間を補う。
     private var isDisabled = false
     /// `user`ストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
@@ -54,20 +54,20 @@ public final class NotificationsModel {
     #endif
     /// 保留中の通知を受け入れ、サーバーが取り込み終えたのをまだ見ていない。
     private var awaitsMerge = false
-    /// 取り込みが済んだが、ほかの読み込みの途中だったので、読み直すのを待っている。読み込みが終わったら読み直す。
+    /// 取り込みが済んだが、ほかの読み込みの途中だったので、再読み込みするのを待っている。読み込みが終わったら再読み込みする。
     private var needsMergeReload = false
     /// 受け入れた保留中の通知が取り込まれるのを、問い合わせて待っている。ストリーミングにつながっていないときだけ待つ。
     private var mergeWait: Task<Void, Never>?
     /// 取り込みを問い合わせる間隔。だんだん延ばし、尽きたら待つのをやめる。
     private static let mergeCheckDelays: [Duration] = [.seconds(2), .seconds(4), .seconds(8), .seconds(16), .seconds(32)]
-    /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
+    /// 走っている補完の数と、すべて終わるのを待っているpull to refresh。
     private var activeFills = 0
     /// バックグラウンドから戻ってから、切れていた間の補完を終えるまで。最上部にいても追従せず、一番上に見えていた行の位置を保つ。
     /// 戻ってから始めた補完があり、走っている補完がすべて終わり、その間に届いた新着も挿入し終えたら解く。決まりはdocs/vision.mdの「タイムラインの動き」にある。
     private var keepsPositionAfterResume = false
     private var hasStartedFillAfterResume = false
     private var fillWaiters: [CheckedContinuation<Void, Never>] = []
-    /// 走っている補完が終わるのを待っている、引っぱった読み直しの数。テストで、待ち始めたことを時間を待たずに確かめる。
+    /// 走っている補完が終わるのを待っている、pull to refreshの数。テストで、待ち始めたことを時間を待たずに確かめる。
     public var fillWaiterCount: Int { fillWaiters.count }
 
     /// 新着をまとめて挿入する間隔を待つ時計。テストでは手で進める時計に替える。
@@ -113,7 +113,7 @@ public final class NotificationsModel {
         tasks.onClose { [weak self] in self?.stopStreaming() }
     }
 
-    /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    /// - Parameter purpose: 使う人が開いたり再試行を選択したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
     public func start(purpose: RequestPurpose) {
         guard !isStopped else { return }
         hasStarted = true
@@ -129,7 +129,7 @@ public final class NotificationsModel {
         start(purpose: .action)
     }
 
-    /// 設定で有効か無効かを切り替える。無効にしたら購読をやめ、有効に戻したら、読み込み済みならつなぎ直す。
+    /// 設定で有効か無効かを切り替える。無効にしたら購読をやめ、有効に戻したら、読み込み済みなら再接続する。
     public func setEnabled(_ isEnabled: Bool) {
         guard isDisabled == isEnabled else { return }
         isDisabled = !isEnabled
@@ -158,11 +158,11 @@ public final class NotificationsModel {
         readPosition?.saveNow(inBackground: true)
     }
 
-    /// バックグラウンドから戻ったときに呼ぶ。つなぎ直して切れていた間の通知を補い、他の端末で読み進めた位置を取り込む。
+    /// バックグラウンドから戻ったときに呼ぶ。再接続して切れていた間の通知を補い、他の端末で読み進めた位置を取り込む。
     public func enterForeground() {
         isInForeground = true
         guard !isStopped else { return }
-        // バックグラウンドにいる間に電波が戻ったり、レート制限が明けたりしても、その知らせでは読み込まない。戻ったここでやり直す。
+        // バックグラウンドにいる間に電波が戻ったり、レート制限が明けたりしても、その通知では読み込まない。戻ったここでやり直す。
         retryFailedLoads()
         guard hasLoadedInitial else { return }
         keepsPositionAfterResume = true
@@ -177,7 +177,7 @@ public final class NotificationsModel {
         tasks.run(purpose) { [weak self] in
             guard let self else { return }
             await operation(self)
-            // 取り込みの知らせが読み込みの途中に届いていたら、終わったここで読み直す。
+            // 取り込みの通知が読み込みの途中に届いていたら、終わったここで再読み込みする。
             if needsMergeReload, !store.isLoading {
                 reloadAfterMerge()
             }
@@ -194,7 +194,7 @@ public final class NotificationsModel {
         display?.setFooterState(state)
     }
 
-    /// タイムラインを引っぱって離したときに、最新の通知を読んで上に足す。足すのは一番新しい通知より新しいものだけで、読んでいる位置は動かさない。
+    /// pull to refreshしたときに、最新の通知を読んで上に足す。足すのは一番新しい通知より新しいものだけで、読んでいる位置は動かさない。
     /// 最初の読み込みに失敗したままなら、それをやり直す。溜めている新着は、間隔を待たずに入れる。
     public func refresh() async {
         guard !isStopped, hasStarted, !isDisabled else { return }
@@ -237,7 +237,7 @@ public final class NotificationsModel {
         waiters.forEach { $0.resume() }
     }
 
-    /// 失敗の表示の再試行が押されたときに呼ぶ。
+    /// 失敗の表示の再試行が選択されたときに呼ぶ。
     public func retry() {
         if store.isEmpty {
             start(purpose: .action)
@@ -291,7 +291,7 @@ public final class NotificationsModel {
         }
     }
 
-    /// 押したギャップを1ページ分読む。読んでいる側に続く行を基準にして、その位置を保つ。
+    /// 選択したギャップを1ページ分読む。読んでいる側に続く行を基準にして、その位置を保つ。
     public func selectGap(_ id: String, from direction: TimelineStore.GapDirection) {
         guard !isStopped, !store.loadingGapIDs.contains(id) else { return }
         let entries = store.entries
@@ -331,7 +331,7 @@ public final class NotificationsModel {
     /// 電波が戻ったときや、レート制限が明けたときに呼ぶ。失敗したままの読み込みと、切れているストリーミングをすぐやり直す。
     public func recover() {
         guard !isStopped, isInForeground else { return }
-        // 切れていれば、セッションがつなぎ直させ、つながったところで切れていた間を補う。
+        // 切れていれば、セッションが再接続させ、つながったところで切れていた間を補う。
         if hasLoadedInitial, !isDisabled, streamingHub.isConnected {
             // つながったときの補完が、止められている間や電波のない間に失敗していることがある。
             fillFromLatest(purpose: .display)
@@ -352,8 +352,8 @@ public final class NotificationsModel {
 
     // MARK: - 受け入れた保留中の通知の取り込み
 
-    /// 保留中の通知を受け入れた。サーバーが取り込み終えたらタイムラインを読み直す。決まりはdocs/notification-filter.mdの「受け入れた通知の取り込み」にある。
-    /// つながっていれば`notifications_merged`を待ち、つながっていなければ間をあけて問い合わせる。待つ間に切れてつなぎ直したときも、知らせを逃したかもしれないので問い合わせる。
+    /// 保留中の通知を受け入れた。サーバーが取り込み終えたらタイムラインを再読み込みする。決まりはdocs/notification-filter.mdの「受け入れた通知の取り込み」にある。
+    /// つながっていれば`notifications_merged`を待ち、つながっていなければ間をあけて問い合わせる。待つ間に切れて再接続したときも、イベントを逃したかもしれないので問い合わせる。
     public func didAcceptRequest() {
         guard !isStopped, hasLoadedInitial else { return }
         awaitsMerge = true
@@ -375,7 +375,7 @@ public final class NotificationsModel {
         }
     }
 
-    /// 取り込みが済んだかを1回問い合わせ、済んでいれば読み直す。済んだらtrue。
+    /// 取り込みが済んだかを1回問い合わせ、済んでいれば再読み込みする。済んだらtrue。
     private func checkMerged() async -> Bool {
         do {
             guard try await client.notificationRequestsMerged(), !isStopped, awaitsMerge else { return false }
@@ -388,7 +388,7 @@ public final class NotificationsModel {
         return true
     }
 
-    /// つながったとき。待っている間に知らせを逃したかもしれないので、1回問い合わせる。
+    /// つながったとき。待っている間にイベントを逃したかもしれないので、1回問い合わせる。
     private func checkMergedAfterConnecting() {
         guard awaitsMerge else { return }
         mergeWait?.cancel()
@@ -403,8 +403,8 @@ public final class NotificationsModel {
         reloadAfterMerge()
     }
 
-    /// 取り込まれた通知は古い日時のものもあり、タイムラインの途中に入るため、一番上から読み直して置き換え、一番上に置く。読んでいた位置は保たない。
-    /// ほかの読み込みの途中なら、それが終わってから読み直す。
+    /// 取り込まれた通知は古い日時のものもあり、タイムラインの途中に入るため、一番上から再読み込みして置き換え、一番上に置く。読んでいた位置は保たない。
+    /// ほかの読み込みの途中なら、それが終わってから再読み込みする。
     private func reloadAfterMerge() {
         guard !isStopped, hasLoadedInitial else { return }
         guard !store.isLoading else {
@@ -424,7 +424,7 @@ public final class NotificationsModel {
                 model.setFooterState(model.store.reachedEnd ? .reachedEnd : .idle)
                 model.onReload()
             } catch {
-                // 読めなければ今のタイムラインを残す。次に引っぱったときや起動し直したときに出る。
+                // 読めなければ今のタイムラインを残す。次にpull to refreshしたときや起動し直したときに出る。
                 model.handle(error, during: "reloadAfterMerge") { _ in }
             }
         }
@@ -454,7 +454,7 @@ public final class NotificationsModel {
         logger.info("notifications streaming unsubscribe")
         streamingSubscription.cancel()
         self.streamingSubscription = nil
-        // 購読をやめた後は知らせが届かないので、出していた表示を消す。
+        // 購読をやめた後はイベントが届かないので、出していた表示を消す。
         display?.setOutageNotice(false)
     }
 
@@ -516,7 +516,7 @@ public final class NotificationsModel {
     #endif
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の通知を読む。
-    /// - Parameter purpose: 引っぱって読み込み直したときは`.action`。つながったときやポーリングは`.display`。
+    /// - Parameter purpose: pull to refreshしたときは`.action`。つながったときやポーリングは`.display`。
     private func fillFromLatest(purpose: RequestPurpose) {
         #if DEBUG
         // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
@@ -527,7 +527,7 @@ public final class NotificationsModel {
             return
         }
         #endif
-        // 読み始める前に数える。走り始める前に引っぱった読み直しが待ち始めても、この補完を待つため。
+        // 読み始める前に数える。走り始める前にpull to refreshが待ち始めても、この補完を待つため。
         activeFills += 1
         if keepsPositionAfterResume {
             hasStartedFillAfterResume = true
@@ -549,7 +549,7 @@ public final class NotificationsModel {
                 model.logger.info("notifications fill done added=\(added.count, privacy: .public)")
                 model.showFilledEntries(since: before)
             } catch {
-                // 失敗しても、次につながったときに同じ基準から読み直す。
+                // 失敗しても、次につながったときに同じ基準から再読み込みする。
                 model.updateCatchUp { $0.fail(error) }
                 model.showPauseAfterFill()
                 model.handle(error, during: "fill") { _ in }
@@ -564,7 +564,7 @@ public final class NotificationsModel {
     /// 補完でタイムラインが変わっていれば画面に出す。
     private func showFilledEntries(since before: [TimelineEntry]) {
         // 待っている間に同じ通知がストリーミングで挿入されていても、ギャップを置いていることがある。
-        // 読めなかった通知だけが増えたときも描き直すよう、表示する並びで比べる。
+        // 読めなかった通知だけが増えたときも再描画するよう、表示する並びで比べる。
         guard store.entries != before else { return }
         showEntries()
         setFooterState(store.reachedEnd ? .reachedEnd : .idle)
@@ -612,7 +612,7 @@ public final class NotificationsModel {
         insertPending()
     }
 
-    /// 通知の対象の投稿の中身を変え、表示に関わる変化があれば描き直す。お気に入りなどの操作の結果を反映する。
+    /// 通知の対象の投稿の中身を変え、表示に関わる変化があれば再描画する。お気に入りなどの操作の結果を反映する。
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
         guard !isStopped, store.updateStatus(id, transform) else { return }
         showEntries()
@@ -647,7 +647,7 @@ public final class NotificationsModel {
         showEntries(animatesRemoval: true)
     }
 
-    /// 使う人が削除した通知を除く。まとまりなら、キーでまとまりごと除く。
+    /// 使う人が削除した通知を除く。グループなら、キーでグループごと除く。
     public func removeNotification(_ notification: MastodonNotification) {
         guard !isStopped, store.removeNotification(notification.id, groupKey: notification.groupKey) else { return }
         showEntries(animatesRemoval: true)

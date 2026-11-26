@@ -24,9 +24,9 @@ public enum TimelineScreenTexts {
         "読み込めませんでした: \(reason)"
     }
 
-    /// 読めなかった投稿や通知の行で、なぜ読めなかったかと、押すと何が起きるか。
+    /// 読めなかった投稿や通知の行で、なぜ読めなかったかと、選択すると何が起きるか。
     /// - Parameter isCrashQuarantined: 表示中にアプリが終了したため隠している。
-    /// - Parameter opensInBrowser: 押すとブラウザで開ける。
+    /// - Parameter opensInBrowser: 選択するとブラウザで開ける。
     public static func unreadableDetail(isCrashQuarantined: Bool, opensInBrowser: Bool) -> String {
         if isCrashQuarantined {
             "表示中にSciaが終了したため隠しています。タップすると詳細を表示します。"
@@ -37,7 +37,7 @@ public enum TimelineScreenTexts {
         }
     }
 
-    /// 押すと読み込み直す行で、読み込めなかったとき。読み込んでいない投稿の行と、検索の結果の行に出す。
+    /// 選択すると再読み込みする行で、読み込めなかったとき。読み込んでいない投稿の行と、検索の結果の行に出す。
     public static let loadFailureTapToRetry = "読み込めませんでした。タップして再試行"
     /// 読み込んでいない投稿の行で、読み込んでいる間。
     public static let loading = "読み込み中"

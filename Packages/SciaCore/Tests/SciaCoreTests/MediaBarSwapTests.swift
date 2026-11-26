@@ -16,7 +16,7 @@ struct MediaBarSwapTests {
         #expect(middle == MediaBarSwap(handoff: 0, overlapOpacity: 0))
     }
 
-    /// 開く途中から閉じたときは、そのときの濃さから薄くする。
+    /// 開く途中から閉じたときは、そのときの不透明度から薄くする。
     @Test func closingStartsFromGivenOverlapOpacity() {
         let start = MediaBarSwap.closing(progress: 0, handoffStart: 0.7, overlapFadeEnd: 0.3, startOverlapOpacity: 0.4)
         #expect(start.overlapOpacity == 0.4)

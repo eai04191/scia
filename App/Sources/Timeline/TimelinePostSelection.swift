@@ -115,7 +115,7 @@ extension TimelineViewController {
         }
     }
 
-    /// ツールバーで押せるかを選んだ数で切り替えるボタンの目印。
+    /// ツールバーで有効かを選んだ数で切り替えるボタンの目印。
     private static var postSelectionActionTag: Int { 0x5E1EC7 }
 
     private func makePostSelectionToolbarItems() -> [UIBarButtonItem] {

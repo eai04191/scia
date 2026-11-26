@@ -56,7 +56,7 @@ enum HDREmojiCatalog {
         let text = RichText.plain("本文の中 :hdr_circle:", emojis: [emoji])
         let label = UILabel()
         label.attributedText = renderer.render(text)
-        // 絵文字の画像は後から届くので、届いたら描き直す。
+        // 絵文字の画像は後から届くので、届いたら再描画する。
         AppDependencies.emojiImages.addListener(owner: label) { [weak label] _ in
             label?.attributedText = renderer.render(text)
         }

@@ -1,10 +1,10 @@
 import Foundation
 
-/// 設定の画面に何を、どの順で、どんな名前で並べるか。どのUIも同じ並びと名前にするため、UIは節と行を上から順に描くだけにする。
+/// 設定の画面に何を、どの順で、どんな名前で並べるか。どのUIも同じ並びと名前にするため、UIはセクションと行を上から順に描くだけにする。
 /// 行の見た目（スイッチ、選択、値の行）と、分類の行に添える記号と色は、UIが決める。
 public struct SettingsSection: Hashable, Sendable {
     public var header: String?
-    /// 節の下の説明。Markdownのリンクを含むことがある。
+    /// セクションの下の説明。Markdownのリンクを含むことがある。
     public var footer: String?
     public var rows: [SettingsRow]
 
@@ -36,7 +36,7 @@ public enum SettingsItem: String, CaseIterable, Hashable, Sendable {
     case accentColor
     /// `AppSettings.insertionMotion`。選択肢は`InsertionMotion`。
     case insertionMotion
-    /// `AppSettings.showsStatusBarTicker`。画面の上端に通知を流す場所のないUIでは、オフにして押せなくするか、行を出さない。
+    /// `AppSettings.showsStatusBarTicker`。画面の上端に通知を流す場所のないUIでは、オフにして無効にするか、行を出さない。
     case statusBarTicker
 
     // 操作
@@ -145,7 +145,7 @@ extension SettingsPage {
     /// 設定のトップの画面の題。
     public static let rootTitle = "設定"
 
-    /// 設定のトップの画面。最初の節は、選んでいるアカウントのための設定で、見出しにそのアカウントのハンドルを出す。
+    /// 設定のトップの画面。最初のセクションは、選んでいるアカウントのための設定で、見出しにそのアカウントのハンドルを出す。
     public static func rootSections(handle: String) -> [SettingsSection] {
         [
             SettingsSection(header: handle, rows: [.page(.account), .page(.tabs)]),
@@ -235,11 +235,11 @@ extension SettingsPage {
         return [.display, .interaction, .compose].contains(first)
     }
 
-    /// 画面に並べる節。並びが決まっている画面だけが返す。
+    /// 画面に並べるセクション。並びが決まっている画面だけが返す。
     /// 見た目の選択肢と数値を並べる画面（`appearance`、`notificationAppearance`）は`AppearanceGroup`と`AppearanceChoices`に、
     /// 対象の操作の画面は`ObjectActionsScreen`に、項目を並べ替える画面は`MenuLayout`に、ストレージは`StorageBreakdown`と`StorageRemoveTarget`にある。
     ///
-    /// UIが出せない行（OSの版で使えない自動翻訳など）は、UIが除く。除いて空になった節は出さない。
+    /// UIが出せない行（OSの版で使えない自動翻訳など）は、UIが除く。除いて空になったセクションは出さない。
     public var sections: [SettingsSection]? {
         switch self {
         case .display:
@@ -341,7 +341,7 @@ extension MenuLayout where Item == PostSwipeItem {
 
 /// 1つの対象の操作の画面（`statusActions`など）に並べるもの。決まりはdocs/object-actions.mdの「設定画面」にある。
 ///
-/// 上から、タップと長押しの選択の節、メニューとアクションバーの並びの画面へ入る節、左右のスワイプの節、スイッチの節を並べる。持たない節は出さない。
+/// 上から、タップと長押しの選択のセクション、メニューとアクションバーの並びの画面へ入るセクション、左右のスワイプのセクション、スイッチのセクションを並べる。持たないセクションは出さない。
 /// 選択は、先頭の欄に「メニューを開く」、その対象の主な操作（`ObjectActionItem.primaryItem`）、アクションバーを持つ対象では「アクションバーを開く」を、
 /// 次の欄に残りのメニューの項目を、既定の並び（`MenuItemKind.defaultLayout`）の順で、メニューと同じ名前とアイコンで並べる。
 public struct ObjectActionsScreen: Hashable, Sendable {
@@ -349,7 +349,7 @@ public struct ObjectActionsScreen: Hashable, Sendable {
     public static let longPressTitle = "長押し"
     public static let openMenuTitle = "メニューを開く"
     public static let openMenuSymbolName = "contextualmenu.and.cursorarrow"
-    /// スイッチの節の見出し。
+    /// スイッチのセクションの見出し。
     public static let toggleHeader = "アクションバーを表示している投稿のメニュー"
 
     /// 画面。
@@ -360,7 +360,7 @@ public struct ObjectActionsScreen: Hashable, Sendable {
     public let actionBar: SettingsPage?
     /// 左右のスワイプの並びの画面へ入る行。投稿だけが持つ。
     public let swipes: [PostSwipeSide]
-    /// スイッチの節。投稿では、アクションバーを出している投稿のメニューに何を出すかを置く。
+    /// スイッチのセクション。投稿では、アクションバーを出している投稿のメニューに何を出すかを置く。
     public let toggles: [Toggle]
 
     public enum Toggle: String, CaseIterable, Hashable, Sendable {
@@ -377,7 +377,7 @@ public struct ObjectActionsScreen: Hashable, Sendable {
         }
     }
 
-    /// タップにも長押しにもメニューを選んでいないときに、選択の節の下に出す説明。
+    /// タップにも長押しにもメニューを選んでいないときに、選択のセクションの下に出す説明。
     public func noMenuFooter() -> String {
         "タップでも長押しでもメニューを開かないため、\(page.title)のメニューにしかない操作は使えません。"
     }

@@ -53,7 +53,7 @@ public final class FiltersModel {
         self.tasks = tasks
     }
 
-    /// 読み直す。読んでいる途中なら、その読み込みに任せる。
+    /// 再読み込みする。読んでいる途中なら、その読み込みに任せる。
     @discardableResult
     public func reload(purpose: RequestPurpose) -> Task<Void, Never>? {
         if let loading { return loading }
@@ -110,7 +110,7 @@ public final class FiltersModel {
         // 保存の応答が削除のあとに届くと、消したフィルターをリストに戻してしまう。
         guard !isSaving else { return nil }
         logger.info("filters delete")
-        // 送り終える前に押し直しても、同じ要求を重ねて送らない。
+        // 送り終える前に選択し直しても、同じ要求を重ねて送らない。
         return tasks.run(key: "delete:\(id)", .skippingWhileRunning, .action) { [weak self] in
             guard let self else { return }
             do {

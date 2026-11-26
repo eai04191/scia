@@ -54,7 +54,7 @@ struct AccountNoteEditorTests {
         #expect(!editor.isSaving)
     }
 
-    /// 保存している間は保存させず、重ねて押しても1回だけ送る。
+    /// 保存している間は保存させず、重ねて選択しても1回だけ送る。
     @Test func refusesSecondSaveWhileSaving() async throws {
         let gate = Gate()
         let editor = AccountNoteEditor(accountID: "2", note: "") { id, comment in

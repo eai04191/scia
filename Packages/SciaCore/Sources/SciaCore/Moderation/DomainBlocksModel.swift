@@ -10,7 +10,7 @@ public final class DomainBlocksModel {
     public private(set) var domains: [String]?
     /// 最初の読み込みに失敗した理由。読めたらnil。
     public private(set) var loadFailure: ErrorPresentation?
-    /// 続きのページを読めなかった理由。読み直すか、続きを読めたらnil。
+    /// 続きのページを読めなかった理由。再読み込みするか、続きを読めたらnil。
     public private(set) var loadMoreFailure: ErrorPresentation?
     /// これより後ろはない。
     public private(set) var reachedEnd = false
@@ -24,7 +24,7 @@ public final class DomainBlocksModel {
     @ObservationIgnored private var changeCount = 0
     /// 読んでいる間に解除したドメイン。続きのページが前のページと重なって返ったときに、解除したドメインを戻さない。
     @ObservationIgnored private var unblockedDuringLoad: Set<String> = []
-    /// 読んでいる間にほかの入口で変わったので、読み終えたら読み直す。
+    /// 読んでいる間にほかの入口で変わったので、読み終えたら再読み込みする。
     @ObservationIgnored private var reloadsAfterLoad = false
     @ObservationIgnored private let api: API
     @ObservationIgnored private let tasks: TaskScope
@@ -64,7 +64,7 @@ public final class DomainBlocksModel {
         self.tasks = tasks
     }
 
-    /// 最初のページから読み直す。読んでいる途中なら、その読み込みに任せる。読めなければ、読めたリストを残す。
+    /// 最初のページから再読み込みする。読んでいる途中なら、その読み込みに任せる。読めなければ、読めたリストを残す。
     @discardableResult
     public func reload(purpose: RequestPurpose) -> Task<Void, Never>? {
         if let loading { return loading }
@@ -166,7 +166,7 @@ public final class DomainBlocksModel {
     }
 
     /// ほかの入口（ユーザーのメニュー）でドメインのブロックが変わった。まだ読み始めていなければ、開いたときに読むので何もしない。
-    /// 読んでいる途中なら、初めて読んでいるときも、その応答は変わる前のものなので捨て、読み終えてから読み直す。
+    /// 読んでいる途中なら、初めて読んでいるときも、その応答は変わる前のものなので捨て、読み終えてから再読み込みする。
     public func didChangeOutside() {
         guard domains != nil || loading != nil else { return }
         changeCount += 1

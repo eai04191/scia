@@ -190,7 +190,7 @@ struct StreamingClientTests {
         #expect(error?.isUnauthorized == true)
     }
 
-    /// 止められている間は、自動のつなぎ直しを送らない。使う人の操作でつなぐときは送る。
+    /// 止められている間は、自動の再接続を送らない。使う人の操作でつなぐときは送る。
     @Test func doesNotConnectAutomaticallyWhilePaused() async throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let gate = RateLimitGate(now: { now }, clock: TestClock())
@@ -224,7 +224,7 @@ struct StreamingClientTests {
         #expect(message.event == .delete(statusID: "1"))
     }
 
-    /// サーバーの一時的な失敗（5xx）で購読できなかったときは、つなぎ直して購読し直すため、切る。
+    /// サーバーの一時的な失敗（5xx）で購読できなかったときは、再接続して購読し直すため、切る。
     /// Mastodonは、断るときは400か401を、DBの障害のような予期しない失敗は500を返す（`streaming/errors.js`の`extractStatusAndMessage`）。
     @Test func temporarySubscriptionFailureEndsConnection() async throws {
         let connector = StubWebSocketConnector(messages: [

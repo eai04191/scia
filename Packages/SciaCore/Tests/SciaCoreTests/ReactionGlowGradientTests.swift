@@ -32,7 +32,7 @@ struct ReactionGlowGradientTests {
         }
     }
 
-    /// 両方光っていれば、真ん中でも濃さが落ちない。
+    /// 両方光っていれば、真ん中でも不透明度が落ちない。
     @Test(arguments: [ColorMixSpace.linear, .oklab])
     func bothLitKeepsFullAlphaAcrossTheBlend(space: ColorMixSpace) {
         let gradient = ReactionGlowGradient(boost: green, favourite: yellow, boostLevel: 1, favouriteLevel: 1, blendFraction: 0.2, space: space).stops()
@@ -69,7 +69,7 @@ struct ReactionGlowGradientTests {
         #expect(gradient.dropFirst().dropLast().allSatisfy { $0.location == 0.5 })
     }
 
-    /// 全幅に広げるときは、片方だけでも全幅をその色で、同じ濃さで光らせる。
+    /// 全幅に広げるときは、片方だけでも全幅をその色で、同じ不透明度で光らせる。
     @Test func aloneFillsTheWholeWidth() {
         let gradient = ReactionGlowGradient(boost: green, favourite: yellow, boostLevel: 0, favouriteLevel: 1, blendFraction: 0.2, space: .linear, fillsWidthWhenAlone: true)
 
@@ -88,7 +88,7 @@ struct ReactionGlowGradientTests {
         #expect(filling.stops() == halves.stops())
     }
 
-    /// 片方を点けていく途中も、濃さは1を超えず、両方の明るさから決まる。
+    /// 片方を点けていく途中も、不透明度は1を超えず、両方の明るさから決まる。
     @Test func partialLevelsNeverExceedFullAlpha() {
         let gradient = ReactionGlowGradient(boost: green, favourite: yellow, boostLevel: 1, favouriteLevel: 0.4, blendFraction: 0.2, space: .oklab, fillsWidthWhenAlone: true)
 

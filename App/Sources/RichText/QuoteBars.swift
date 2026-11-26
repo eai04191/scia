@@ -2,11 +2,11 @@ import TextKit2Label
 import UIKit
 
 /// 引用の段落の頭に引く縦線。`RichTextRenderer`が引用の段落に属性（`.quoteBars`）として付け、`EmojiLabel`が文字と一緒に描く。
-/// 線は引用の深さの数だけ、1段ごとの字下げの頭に引く。続く行と段落が同じ深さの引用なら、段落のあいだもつなげて1本にする。
+/// 線は引用の深さの数だけ、1段ごとのインデントの頭に引く。続く行と段落が同じ深さの引用なら、段落のあいだもつなげて1本にする。
 final class QuoteBars: NSObject, Sendable {
     /// 引用の深さ。
     let level: Int
-    /// 1段あたりの字下げ。線は、各段の字下げの頭に引く。
+    /// 1段あたりのインデント。線は、各段のインデントの頭に引く。
     let indentPerLevel: CGFloat
     /// 線の太さ。
     let width: CGFloat
@@ -20,7 +20,7 @@ final class QuoteBars: NSObject, Sendable {
         self.width = width
     }
 
-    // 文字列の中身を比べる`EmojiLabel.hasSameContent`は、属性を`isEqual`で比べる。描き直すたびに作り直しても、同じ線なら同じとみなす。
+    // 文字列の中身を比べる`EmojiLabel.hasSameContent`は、属性を`isEqual`で比べる。再描画するたびに作り直しても、同じ線なら同じとみなす。
     override func isEqual(_ object: Any?) -> Bool {
         guard let other = object as? QuoteBars else { return false }
         return level == other.level && indentPerLevel == other.indentPerLevel && width == other.width
@@ -48,8 +48,8 @@ final class QuoteBars: NSObject, Sendable {
 
     /// `layout`に並べた文字の、引用の縦線の枠。`bounds`より下の行には引かない。
     /// 線の上端は最初の行の上端、下端は最後の行の字面の下端（ベースラインから行の下の長さ）にする。最後の行の下の行間までは伸ばさない。
-    /// 字下げは段落の書き始めの側に空くので、線も段落の書く向きで、右から左に書く段落なら右端から測る。画面の向きでは決めない。
-    /// 段落の寄せ方は画面の向きで決めている（`TextKitLabelLayout.aligned`）ため、画面と段落の向きが違うと、字下げは寄せた側の反対に空く。
+    /// インデントは段落の書き始めの側に空くので、線も段落の書く向きで、右から左に書く段落なら右端から測る。画面の向きでは決めない。
+    /// 段落の寄せ方は画面の向きで決めている（`TextKitLabelLayout.aligned`）ため、画面と段落の向きが違うと、インデントは寄せた側の反対に空く。
     static func frames(in layout: TextLayout, bounds: CGRect) -> [CGRect] {
         var open: [Int: (bars: QuoteBars, isRightToLeft: Bool, top: CGFloat, bottom: CGFloat)] = [:]
         var frames: [CGRect] = []

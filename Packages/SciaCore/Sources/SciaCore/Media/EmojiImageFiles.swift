@@ -13,7 +13,7 @@ public actor EmojiImageFiles {
     /// Bの上限。fedibird.comの絵文字の元の画像は、150個の抜き取りで平均約20KBで、同じくらいなら約3,300個、消し始めたあとも約2,300個が残る。
     /// ふだんの使い方でどれだけ入るかは測っていないので、状態ダンプの数を見て、あふれが多ければ上げる。
     public static let othersSizeLimit = 64 * 1_024 * 1_024
-    /// 必須でない用途の空き容量を読み直すまでに、Aに置く量。値を1回読むのに、SE3で約9msかかるため、画像1枚ごとには読まない。
+    /// 必須でない用途の空き容量を取得し直すまでに、Aに置く量。値を1回読むのに、SE3で約9msかかるため、画像1枚ごとには読まない。
     static let capacityCheckInterval = 10 * 1_024 * 1_024
 
     /// どこに置いたか。
@@ -24,7 +24,7 @@ public actor EmojiImageFiles {
 
     nonisolated let listed: MediaFileCache
     /// Aに置いた画像を全部捨てて取得し直させるときに上げる。Aは置いた画像を確かめ直さず、「キャッシュを消去」でも消えないため。
-    /// 2は、先読みが別の絵文字の画像として置いたファイルを捨てるために上げた。どのファイルがそうかは、端末では見分けられない。
+    /// 2は、プリフェッチが別の絵文字の画像として置いたファイルを捨てるために上げた。どのファイルがそうかは、端末では見分けられない。
     static let listedVersion = 2
     /// 版ごとのAのフォルダーを置くフォルダー。
     private nonisolated let listedVersionsDirectory: URL
@@ -88,7 +88,7 @@ public actor EmojiImageFiles {
     }
 
     /// `url`が、端末に残したどれかのサーバーの`api/v1/custom_emojis`の応答に載っているか。応答を読むまではfalse。
-    /// 絵文字ピッカーの小さい静止画を、絵文字ピッカーに出る絵文字だけに足すのに使う。
+    /// 絵文字ピッカーのサムネイルを、絵文字ピッカーに出る絵文字だけに足すのに使う。
     public nonisolated func isListed(_ url: URL) -> Bool {
         listedSnapshot.withLock { $0?.contains(url) == true }
     }
@@ -98,7 +98,7 @@ public actor EmojiImageFiles {
         await listed.contains(url)
     }
 
-    /// 画像を置き終えた回数。端末になかった画像を、別の経路（先読みなど）で置いたかを、読み直す側が安く知るために使う。
+    /// 画像を置き終えた回数。端末になかった画像を、別の経路（プリフェッチなど）で置いたかを、再読み込みする側が安く知るために使う。
     private let writes = Mutex(0)
 
     public nonisolated var writeCount: Int {
@@ -135,12 +135,12 @@ public actor EmojiImageFiles {
         return .others
     }
 
-    /// Bに置いた数。状態ダンプの数を、置き場所を調べ直してまで、置くたびに読み直さないため。
+    /// Bに置いた数。状態ダンプの数を、置き場所を調べ直してまで、置くたびに取得し直さないため。
     private var othersStores = 0
-    /// 状態ダンプの数を読み直すまでに、Bに置く数。
+    /// 状態ダンプの数を取得し直すまでに、Bに置く数。
     static let statsRefreshInterval = 100
 
-    /// 先読みで取得した画像を、Aに置く。応答に載っていないか、必須でない用途の空きが`remaining`（これから取得する量の見積もり）に足りなければ、置かずにfalse。
+    /// プリフェッチで取得した画像を、Aに置く。応答に載っていないか、必須でない用途の空きが`remaining`（これから取得する量の見積もり）に足りなければ、置かずにfalse。
     public func storeListed(_ data: Data, named name: String, for url: URL, remaining: Int) async throws -> Bool {
         guard listedURLs?.contains(url) == true, hasRoom(for: max(remaining, data.count)) else { return false }
         _ = try await listed.store(data, named: name, for: url, generation: listed.generation)
@@ -155,8 +155,8 @@ public actor EmojiImageFiles {
         return true
     }
 
-    /// 必須でない用途の空きが、`bytes`以上あるか。読んでいないか、前に読んでから`capacityCheckInterval`以上置いていれば、読み直す。
-    /// 先読みは取得を始める前に呼び、読み直させる。
+    /// 必須でない用途の空きが、`bytes`以上あるか。読んでいないか、前に読んでから`capacityCheckInterval`以上置いていれば、取得し直す。
+    /// プリフェッチは取得を始める前に呼び、取得し直させる。
     public func hasRoom(for bytes: Int, rereading: Bool = false) -> Bool {
         if rereading || capacity.map({ $0.placedSince >= Self.capacityCheckInterval }) ?? true {
             capacity = (availableCapacity() ?? 0, 0)
@@ -233,13 +233,13 @@ public actor EmojiImageFiles {
         await others.remove(url)
     }
 
-    /// Bを全部消す。設定のストレージの「キャッシュを消去」で呼ぶ。Aは、絵文字ピッカーを空白なく出すのに要り、次に応答を読めば先読みでまた取得するので、消さない。
+    /// Bを全部消す。設定のストレージの「キャッシュを消去」で呼ぶ。Aは、絵文字ピッカーを空白なく出すのに要り、次に応答を読めばプリフェッチでまた取得するので、消さない。
     public func removeOthers() async throws {
         generation += 1
         try await others.removeCachedFiles()
     }
 
-    /// 状態ダンプに出す数を読み直す。
+    /// 状態ダンプに出す数を取得し直す。
     public func refreshStats() async {
         let summary = await others.summary()
         let trims = await others.trimCount

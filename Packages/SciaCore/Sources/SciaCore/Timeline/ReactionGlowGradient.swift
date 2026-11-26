@@ -114,10 +114,10 @@ extension SRGBColor {
     }
 }
 
-/// お気に入りとブーストの光の、左から右への色と濃さ。両方光っていれば、左半分がブースト、右半分がお気に入りで、真ん中の混ぜる幅の中で入れ替わる。
+/// お気に入りとブーストの光の、左から右への色と不透明度。両方光っていれば、左半分がブースト、右半分がお気に入りで、真ん中の混ぜる幅の中で入れ替わる。
 ///
 /// 2色を別々に薄くして重ねると、真ん中で覆う割合が足りずに暗くなり、上に重ねた色が勝つ。
-/// 1本のグラデーションで、位置ごとに2色の重みから濃さと色を決める。重みの和は1を超えず、両方光っていれば真ん中も同じ濃さになる。
+/// 1本のグラデーションで、位置ごとに2色の重みから不透明度と色を決める。重みの和は1を超えず、両方光っていれば真ん中も同じ不透明度になる。
 public struct ReactionGlowGradient: Equatable, Sendable {
     public struct Stop: Equatable, Sendable {
         /// 左の端が0、右の端が1。
@@ -161,7 +161,7 @@ public struct ReactionGlowGradient: Equatable, Sendable {
         self.fillsWidthWhenAlone = fillsWidthWhenAlone
     }
 
-    /// `location`（左の端が0、右の端が1）での色と濃さ。
+    /// `location`（左の端が0、右の端が1）での色と不透明度。
     public func sample(at location: Double) -> Stop {
         let start = 0.5 - blendFraction / 2
         let t: Double = if blendFraction > 0 {

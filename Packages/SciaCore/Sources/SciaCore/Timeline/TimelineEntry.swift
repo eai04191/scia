@@ -13,7 +13,7 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
     case unreadable(UnreadableItem)
     /// 人のリストに並ぶアカウント。
     case account(Account)
-    /// 保留中の通知のリストに並ぶ、1人分のまとまり。
+    /// 保留中の通知のリストに並ぶ、1人分のグループ。
     case notificationRequest(NotificationRequest)
     /// 検索の結果に並ぶ、投稿と人のほかの行。
     case search(SearchRow)
@@ -116,7 +116,7 @@ public struct UnreadableItem: Hashable, Sendable, Identifiable {
     public let id: String
     /// ブラウザで開くページ。投稿ならその投稿、通知なら対象の投稿。読めなければnil。
     public let url: URL?
-    /// 読めなかった通知のまとまりの、読んだ範囲の最も古い通知のID。続きを読む位置に使う。まとまりでなければnil。
+    /// 読めなかった通知のグループの、読んだ範囲の最も古い通知のID。続きを読む位置に使う。グループでなければnil。
     public let pageMinID: String?
     /// 表示中にクラッシュしたため隠している投稿か。docs/crash-quarantine.md
     public let isCrashQuarantined: Bool

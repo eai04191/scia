@@ -1,6 +1,6 @@
 import Foundation
 
-/// `GET /api/v2/notifications`の応答。まとまりは、アカウントと投稿をIDで指すため、組み立ててから`MastodonNotification`にする。
+/// `GET /api/v2/notifications`の応答。グループは、アカウントと投稿をIDで指すため、組み立ててから`MastodonNotification`にする。
 /// https://docs.joinmastodon.org/methods/grouped_notifications/#GroupedNotificationsResults
 struct GroupedNotificationsResults: Decodable {
     let page: NotificationPage
@@ -53,13 +53,13 @@ struct GroupedNotificationsResults: Decodable {
         }
     }
 
-    /// まとまりが指すアカウントや投稿が、応答の中で読めなかった。
+    /// グループが指すアカウントや投稿が、応答の中で読めなかった。
     private struct MissingReference: Error {
         let groupKey: String
     }
 
-    /// まとまり1つ。読めなくても投げず、最も新しい通知のIDが読めれば読めなかった行にする。
-    /// 読めなかった行にも、まとまりの最も古い通知のIDを残す。続きをそこから読まないと、同じまとまりの古い側を読み直して、読めない行が重なるため。
+    /// グループ1つ。読めなくても投げず、最も新しい通知のIDが読めれば読めなかった行にする。
+    /// 読めなかった行にも、グループの最も古い通知のIDを残す。続きをそこから読まないと、同じグループの古い側を再読み込みして、読めない行が重なるため。
     private enum GroupElement: Decodable {
         case readable(Group)
         case unreadable(UnreadableItem)

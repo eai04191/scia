@@ -1,4 +1,4 @@
-/// 投票と、投票の結果の読み直し。投票は取り消せないため、お気に入りなどと違い、サーバーの結果を待ってから表示へ反映する。
+/// 投票と、投票の結果の再読み込み。投票は取り消せないため、お気に入りなどと違い、サーバーの結果を待ってから表示へ反映する。
 @MainActor
 public final class PollVoting {
     /// APIを呼ぶ口。テストでは差し替える。
@@ -26,9 +26,9 @@ public final class PollVoting {
     private let update: StatusInteractions.Update
     /// 結果を待っている投票。同じ投票を重ねて送らない。
     public private(set) var inFlight: Set<Poll.ID> = []
-    /// 結果を待っている読み直し。同じ投票を重ねて読み直さない。
+    /// 結果を待っている再読み込み。同じ投票を重ねて再読み込みしない。
     public private(set) var refreshing: Set<Poll.ID> = []
-    /// 投票が反映された回数。読み直している間に投票が反映されたら、読み直した結果は投票の前のものなので捨てる。
+    /// 投票が反映された回数。再読み込みしている間に投票が反映されたら、再読み込みした結果は投票の前のものなので捨てる。
     private var adoptedVotes: [Poll.ID: Int] = [:]
 
     public init(operations: Operations, update: @escaping StatusInteractions.Update) {
@@ -49,8 +49,8 @@ public final class PollVoting {
         return true
     }
 
-    /// `status`（ブーストなら元の投稿）の投票を読み直し、すべてのタイムラインに反映する。
-    /// 投票を送っている間と、同じ投票を読み直している間は、何もせずfalseを返す。送っている投票は、その結果で反映する。
+    /// `status`（ブーストなら元の投稿）の投票を再読み込みし、すべてのタイムラインに反映する。
+    /// 投票を送っている間と、同じ投票を再読み込みしている間は、何もせずfalseを返す。送っている投票は、その結果で反映する。
     @discardableResult
     public func refresh(_ status: Status) async throws -> Bool {
         let target = status.displayed

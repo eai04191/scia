@@ -113,7 +113,7 @@ struct RecentLogReaderDeduplicationTests {
         LogLine(date: Date(timeIntervalSince1970: seconds), category: "timeline", level: "notice", message: message)
     }
 
-    /// iOS 27のシミュレーターで、OSLogStoreが同じログを2回返し、読み直すと1回になったことがある。
+    /// iOS 27のシミュレーターで、OSLogStoreが同じログを2回返し、再読み込みすると1回になったことがある。
     @Test func removesRepeatedEntriesKeepingOrder() {
         let lines = [line(1, "a"), line(1, "a"), line(2, "b"), line(1, "a")]
 

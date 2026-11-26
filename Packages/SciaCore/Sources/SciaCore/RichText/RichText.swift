@@ -8,7 +8,7 @@ public struct RichText: Hashable, Sendable {
         self.blocks = blocks
     }
 
-    /// 段落、引用、コードブロック、リスト項目のまとまり。
+    /// 段落、引用、コードブロック、リスト項目のどれか1つのブロック。
     public struct Block: Hashable, Sendable {
         public var inlines: [Inline]
         /// 引用の深さ。0なら引用ではない。
@@ -74,7 +74,7 @@ public struct RichText: Hashable, Sendable {
         case mention(acct: String, url: URL)
         /// `name`は`#`を除いた名前。
         case hashtag(name: String, url: URL)
-        /// 文字のまま書かれたハンドル。プロフィールのURLもIDも分からないので、押してから`acct`（`user@domain`）で探す。
+        /// 文字のまま書かれたハンドル。プロフィールのURLもIDも分からないので、選択してから`acct`（`user@domain`）で探す。
         case handle(acct: String)
     }
 
@@ -179,7 +179,7 @@ struct CustomEmojiSplitter {
 
 extension RichText {
     /// 段落と改行を詰めて、1つの段落にしたもの。通知で再掲する投稿の本文に使う。決まりはdocs/notification-display.mdの「再掲する投稿の本文」にある。
-    /// 境目には空白を1つ置き、境目の前後がもともと空白なら足さない。引用とリストの字下げはせず、リスト項目の記号は文字として残す。
+    /// 境目には空白を1つ置き、境目の前後がもともと空白なら足さない。引用とリストのインデントはせず、リスト項目の記号は文字として残す。
     /// コードブロックの文字とリンクは、改行を空白にし、等幅の書体で描くよう`code`の書式を付ける。
     /// リンクは1つの部品のまま残し、表示する文字の中の改行（`<a>`の中の`<br>`）も空白にする。
     public func joiningLines() -> RichText {

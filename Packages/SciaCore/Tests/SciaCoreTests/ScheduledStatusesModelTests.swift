@@ -38,7 +38,7 @@ struct ScheduledStatusesModelTests {
         return (model, display)
     }
 
-    /// 読んでいる間に予約できたら、その前に送った読み込みの古い応答で、予約した行を消さない。読み直して、新しい応答を使う。
+    /// 読んでいる間に予約できたら、その前に送った読み込みの古い応答で、予約した行を消さない。再読み込みして、新しい応答を使う。
     @Test func localChangeDuringLoadIsNotOverwritten() async throws {
         let gate = Gate()
         let calls = Mutex(0)
@@ -114,7 +114,7 @@ struct ScheduledStatusesModelTests {
         #expect(display.statusesCalls.count == callsBefore)
     }
 
-    /// 読めた予約投稿は、読み直しに失敗しても消さない。まだ何も読めていなければ、理由をタイムラインの場所に出す。
+    /// 読めた予約投稿は、再読み込みに失敗しても消さない。まだ何も読めていなければ、理由をタイムラインの場所に出す。
     @Test func reloadFailureKeepsLoadedList() async throws {
         let fails = Mutex(true)
         let transport = RoutedTransport { _ in

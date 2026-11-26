@@ -11,7 +11,7 @@ extension UIViewController {
         return presenter
     }
 
-    /// 重ねた画面のどれかを閉じている途中なら、閉じ終えてから`body`を呼ぶ。途中でなければ、すぐ呼ぶ。
+    /// モーダルビューのどれかを閉じている途中なら、閉じ終えてから`body`を呼ぶ。途中でなければ、すぐ呼ぶ。
     /// 閉じている途中は、閉じていく画面にもその下の画面にも重ねられず、UIKitが出さずに捨てる。その下の画面を閉じ始めても、閉じられずに残る。
     /// 待つ間にこの画面がなくなったら、呼ばない。
     func afterOngoingDismissal(_ body: @escaping @MainActor () -> Void) {
@@ -26,7 +26,7 @@ extension UIViewController {
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.afterOngoingDismissal(body) }
     }
 
-    /// いちばん手前の画面を`body`に渡す。重ねた画面のどれかを閉じている途中なら、閉じ終えてから、そのとき手前にある画面を渡す。
+    /// いちばん手前の画面を`body`に渡す。モーダルビューのどれかを閉じている途中なら、閉じ終えてから、そのとき手前にある画面を渡す。
     /// 手前の画面に何かを出すときは、ここか`presentOnFrontmost`を通す。
     func withFrontmostPresented(_ body: @escaping @MainActor (UIViewController) -> Void) {
         afterOngoingDismissal { [weak self] in
@@ -35,7 +35,7 @@ extension UIViewController {
         }
     }
 
-    /// いちばん手前の画面に`viewController`を出す。重ねた画面のどれかを閉じている途中なら、閉じ終えてから、そのとき手前にある画面に出す。
+    /// いちばん手前の画面に`viewController`を出す。モーダルビューのどれかを閉じている途中なら、閉じ終えてから、そのとき手前にある画面に出す。
     func presentOnFrontmost(_ viewController: UIViewController, animated: Bool = true, completion: (() -> Void)? = nil) {
         withFrontmostPresented { $0.present(viewController, animated: animated, completion: completion) }
     }

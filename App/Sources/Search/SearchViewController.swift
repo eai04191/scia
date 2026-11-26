@@ -2,19 +2,19 @@ import SciaCore
 import UIKit
 
 /// 検索の画面。上に検索欄を置き、打っている途中の候補と最近の検索、確定した語の結果を、1つのリストに入れ替えて並べる。決まりはdocs/search.mdにある。
-/// 検索のタブの一番下の画面にするほか、検索を無効にしているときは、開いているタブに積んで開く。
+/// 検索のタブの一番下の画面にするほか、検索を無効にしているときは、開いているタブにプッシュする。
 ///
 /// 候補と結果は同じリストに並べる。両方にある行（同じ人、同じハッシュタグ、見出し）は、確定したときも打ち直したときも、その場に残す。
-/// `UISearchController`の結果の画面には載せない。結果の画面はナビゲーションの外に出るため、候補からプロフィールなどを積めないため。
+/// `UISearchController`の結果の画面には載せない。結果の画面はナビゲーションの外に出るため、候補からプロフィールなどをプッシュできないため。
 @MainActor
 final class SearchViewController: UIViewController, UISearchBarDelegate, UISearchControllerDelegate, UISearchResultsUpdating, UIGestureRecognizerDelegate {
     /// 確定した語の結果を読むモデルを作る。今の候補と、結果を並べるリストを渡す。リストに伝え始めるのと読み始めるのは、この画面が行う。
     var makeResults: ((SearchInput, SearchSuggestions.Content, TimelineViewController) -> SearchModel?)?
     /// 候補と結果を並べるリストを作る。画面を読み込むときに1度だけ呼ぶ。
     var makeList: (() -> TimelineViewController)?
-    /// 候補のハッシュタグと「#名前を開く」を押したときに呼ぶ。
+    /// 候補のハッシュタグと「#名前を開く」を選択したときに呼ぶ。
     var onOpenHashtag: ((String, UIViewController) -> Void)?
-    /// ハッシュタグ、「すべて見る」、失敗の行を押したときに、確定した語の結果（まだなければnil）を添えて呼ぶ。「すべて見る」で積む結果のリストと同じ扱いにする。
+    /// ハッシュタグ、「すべて見る」、失敗の行を選択したときに、確定した語の結果（まだなければnil）を添えて呼ぶ。「すべて見る」でプッシュする結果のリストと同じ扱いにする。
     var onResultRowSelect: ((SearchRow, SearchModel?, UIViewController) -> Void)?
     /// 打っている途中の候補と最近の検索。セッションが入れる。
     var suggestions: SearchSuggestions? {
@@ -92,7 +92,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         }
         suggestions.map { show($0.content) }
         updateListVisibility()
-        // キーボードがタブバーを覆うので、行のないところを押したらキーボードだけを閉じ、ほかのタブへ移れるようにする。
+        // キーボードがタブバーを覆うので、行のないところをタップしたらキーボードだけを閉じ、ほかのタブへ移れるようにする。
         let dismissTap = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         dismissTap.cancelsTouchesInView = false
         dismissTap.delegate = self
@@ -103,8 +103,8 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         dismissesKeyboard(touching: touch.view)
     }
 
-    /// 押したところでキーボードを閉じるか。検索欄にフォーカスがある間に、押しても何も起きないところ（行のない空き、見出しの行）を押したときだけ閉じる。
-    /// ボタンと、押すと開く行では閉じない。
+    /// タップしたところでキーボードを閉じるか。検索欄にフォーカスがある間に、タップしても何も起きないところ（行のない空き、見出しの行）をタップしたときだけ閉じる。
+    /// ボタンと、選択すると開く行では閉じない。
     func dismissesKeyboard(touching touchedView: UIView?) -> Bool {
         guard searchController.searchBar.searchTextField.isFirstResponder else { return false }
         var ancestor = touchedView
@@ -136,7 +136,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         focusSearchField()
     }
 
-    /// 検索欄にフォーカスを入れる。開いたときと、検索のタブをもう一度押したときに呼ぶ。検索欄を閉じていれば、押したときと同じく開く。
+    /// 検索欄にフォーカスを入れる。開いたときと、検索のタブをもう一度選択したときに呼ぶ。検索欄を閉じていれば、選択したときと同じく開く。
     /// 検索欄を閉じる動きの途中では、フォーカスを入れても閉じ終えたときに外れるので、閉じ終えてから入れる。
     func focusSearchField() {
         guard let coordinator = searchController.transitionCoordinator else {
@@ -172,7 +172,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         submit(searchBar.text ?? "")
     }
 
-    /// リストを引っぱったときに、結果を並べていれば同じ語でもう一度探す。候補を並べている間は何もしない。
+    /// リストをpull to refreshしたときに、結果を並べていれば同じ語でもう一度探す。候補を並べている間は何もしない。
     func refreshResults() async {
         await shownResults?.refresh()
     }
@@ -264,7 +264,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         list.view.isHidden = showsSuggestions && (suggestions?.content.entries.isEmpty ?? true)
     }
 
-    /// 積んで開いた検索の画面を閉じたら、結果の読み込みをやめ、候補の問い合わせもやめる。
+    /// プッシュした検索の画面を閉じたら、結果の読み込みをやめ、候補の問い合わせもやめる。
     override func didMove(toParent parent: UIViewController?) {
         super.didMove(toParent: parent)
         guard parent == nil else { return }

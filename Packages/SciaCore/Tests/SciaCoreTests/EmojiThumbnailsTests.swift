@@ -43,7 +43,7 @@ struct EmojiThumbnailsTests {
         #expect(next.image(for: try url("missing.png")) == nil)
     }
 
-    /// 画素はLZ4で圧縮して書く。単色の画像なら、展開した画素よりずっと小さいファイルになり、読み直しても同じ画素に戻る。
+    /// 画素はLZ4で圧縮して書く。単色の画像なら、展開した画素よりずっと小さいファイルになり、再読み込みしても同じ画素に戻る。
     @Test func storesCompressedPixels() async throws {
         let thumbnails = EmojiThumbnails(file: file, pixelHeight: 32)
         thumbnails.load()

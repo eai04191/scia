@@ -1,4 +1,4 @@
-/// カスタム絵文字のメニューの項目を押したときの操作。
+/// カスタム絵文字のメニューの項目を選択したときの操作。
 public enum CustomEmojiMenuCommand {
     /// `:shortcode:`の文字をコピーする。
     case copyShortcode(String)
@@ -96,7 +96,7 @@ public struct CustomEmojiMenuTree {
         .action(item.title, icon: .symbol(item.symbolName), command)
     }
 
-    /// メディアのメニューの「メディアの情報」と同じく、値を名前にし、何の値かをサブタイトルに置く。押すと値をコピーする。
+    /// メディアのメニューの「メディアの情報」と同じく、値を名前にし、何の値かをサブタイトルに置く。選択すると値をコピーする。
     private func infoMenu(_ item: CustomEmojiMenuItem) -> MenuNode<CustomEmojiMenuCommand>? {
         let lines = MediaInfo(emoji.attachment, details: nil).lines
         guard !lines.isEmpty else { return nil }

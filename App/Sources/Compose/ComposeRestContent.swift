@@ -3,7 +3,7 @@ import SciaCore
 import UIKit
 
 /// 書いていないときのカプセルの1行。返信や編集のラベルのアイコン、予約の時計、添付のサムネイル、自分で書いた本文を、この順に並べる。
-/// 投稿を送っている間と、準備を待っている間は、右端に回る表示を出す。
+/// 投稿を送っている間と、準備を待っている間は、右端にアクティビティインジケーターを出す。
 /// ラベルは文字を出さずアイコンだけにする。開閉では、ラベルのアイコンとサムネイルを、書いているときのラベルと列の同じものとのあいだで動かすため、それぞれを外から読めるようにする。
 @MainActor
 final class ComposeRestContent: UIView {
@@ -84,7 +84,7 @@ final class ComposeRestContent: UIView {
 
 /// カプセルに出す添付のサムネイル。重ね方は`PhotoStackView`にあり、ここではカプセルの1行の高さに収める大きさと、チューニングで決める置き方を渡す。
 /// 送れなかった添付があるときだけ、エラーのアイコンを付ける。
-/// 角度と影の濃さは好みで決まるので、チューニングの値で決める。投稿欄を勢いよく閉じたときは、正解の置き方から散らばらせる。
+/// 角度と影の不透明度は好みで決まるので、チューニングの値で決める。投稿欄を勢いよく閉じたときは、正解の置き方から散らばらせる。
 @MainActor
 final class ComposeRestThumbnails: PhotoStackView {
     private let tuning: TuningStore
@@ -99,7 +99,7 @@ final class ComposeRestThumbnails: PhotoStackView {
         followTuning()
     }
 
-    /// 角度と影の濃さを、チューニングの値に合わせ続ける。
+    /// 角度と影の不透明度を、チューニングの値に合わせ続ける。
     private func followTuning() {
         withObservationTracking {
             applyTuning()
@@ -157,7 +157,7 @@ final class ComposeRestThumbnails: PhotoStackView {
         setPlacements(scatteredPlacements ?? basePlacements)
     }
 
-    /// 写真のスタックがカプセルの面に落とす影の濃さ。開閉で動かす複製の影も、カプセルに着くときにこの濃さにする。
+    /// 写真のスタックがカプセルの面に落とす影の不透明度。開閉で動かす複製の影も、カプセルに着くときにこの不透明度にする。
     static func stackShadowOpacity(in tuning: TuningStore) -> Float {
         Float(tuning.value(of: TuningCatalog.composeStackShadowOpacity))
     }

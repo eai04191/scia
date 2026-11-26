@@ -3,7 +3,7 @@ public import Observation
 
 /// 使う人が設定画面で選ぶ値。変更はObservationで購読できる。
 /// プリセットに含める値は、`target`が指すプリセットから読み、そこへ書く。含めない値は、端末に1つの`SettingsStore`に読み書きする（docs/preset.md）。
-/// 同じ`SettingsStore`を共有する`AppSettings`を、アプリ（`AppDependencies.settings`）と、窓に開いたアカウントごと（`forAccount(_:)`）に作る。
+/// 同じ`SettingsStore`を共有する`AppSettings`を、アプリ（`AppDependencies.settings`）と、ウィンドウに開いたアカウントごと（`forAccount(_:)`）に作る。
 @MainActor
 @Observable
 public final class AppSettings {
@@ -115,7 +115,7 @@ public final class AppSettings {
         set { write(.bool(newValue), Keys.usesDynamicProfileAccent) }
     }
 
-    /// Xの投稿へのリンクを、fxtwitterから読んだ作者、本文、添付ファイルの囲みで出す。
+    /// Xの投稿へのリンクを、fxtwitterから読んだ作者、本文、添付ファイルのカードで出す。
     /// 表示しただけでSciaと関係のないfxtwitterとXに通信するので、既定はオフにし、使う人がオンにしたときだけ通信する（docs/link-card.md）。
     /// 組み込みのプリセットはこの値を持たない（docs/preset.md）。
     public var expandsXPosts: Bool {
@@ -443,8 +443,8 @@ public final class AppSettings {
     }
 
     /// 表示しているアカウントの、サーバーの設定「アニメーションGIFを自動再生する」（`reading:autoplay:gifs`）。
-    /// アカウントの設定は、そのアカウントの覚えた値を読む。アプリの設定は、最後に表示を始めたアカウントの値を読む。
-    /// 読めた値を覚えていないアカウントでは、Mastodonの既定と同じくfalseにする。
+    /// アカウントの設定は、そのアカウントのキャッシュした値を読む。アプリの設定は、最後に表示を始めたアカウントの値を読む。
+    /// 読めた値をキャッシュしていないアカウントでは、Mastodonの既定と同じくfalseにする。
     public var serverAutoplaysAnimations: Bool {
         guard let account else { return store.lastServerAutoplaysAnimations }
         return store.serverAnimationAutoplays[account] ?? false
@@ -459,28 +459,28 @@ public final class AppSettings {
     }
 
     /// 表示しているアカウントの、サーバーの設定「メディアの表示」（`reading:expand:media`）。読み方は`serverAutoplaysAnimations`と同じ。
-    /// 読めた値を覚えていないアカウントでは、Mastodonの既定と同じく閲覧注意だけ隠す。
+    /// 読めた値をキャッシュしていないアカウントでは、Mastodonの既定と同じく閲覧注意だけ隠す。
     public var serverMediaDisplay: MediaDisplay {
         guard let account else { return store.lastServerMediaDisplay }
         return store.serverMediaDisplays[account] ?? .hidesSensitive
     }
 
-    /// 読めたサーバーの値を覚える。表示しているアカウントの値なら、すぐ従う。
+    /// 読めたサーバーの値をキャッシュする。表示しているアカウントの値なら、すぐ従う。
     public func rememberServerMediaDisplay(_ display: MediaDisplay, of account: String) {
         store.rememberServerMediaDisplay(display, of: account)
     }
 
-    /// 表示を始めるアカウントの、覚えたサーバーの値に従う。
+    /// 表示を始めるアカウントの、キャッシュしたサーバーの値に従う。
     public func followServerPreferences(of account: String) {
         store.followServerPreferences(of: account)
     }
 
-    /// 読めたサーバーの値を覚える。表示しているアカウントの値なら、すぐ従う。
+    /// 読めたサーバーの値をキャッシュする。表示しているアカウントの値なら、すぐ従う。
     public func rememberServerAnimations(_ autoplays: Bool, of account: String) {
         store.rememberServerAnimations(autoplays, of: account)
     }
 
-    /// ログアウトしたアカウントの並び、最後に開いた項目、覚えたサーバーの値、プリセットの割り当てを忘れる。保存したキーは`AccountScopedDefaults.removeData`が消す。
+    /// ログアウトしたアカウントの並び、最後に開いた項目、キャッシュしたサーバーの値、プリセットの割り当てを忘れる。保存したキーは`AccountScopedDefaults.removeData`が消す。
     func forgetAccount(_ account: String) {
         store.forgetAccount(account)
     }
@@ -650,9 +650,9 @@ public final class AppSettings {
         set { write(.bool(newValue), Keys.hidesEmptyComposeBar) }
     }
 
-    /// 書いていないときも投稿欄を細いカプセルに畳まず、書いているときの形で出しておく。
-    /// 畳むのはタイムラインを広く使うためで、画面の広いMacやiPadでは、押した投稿欄が広がって、押した位置にボタンが来てしまうのを避けたいため。
-    /// 既定は初期化子で渡す。Macでは、書き始めても欄がその場で広がるので、既定で畳まない。
+    /// 書いていないときも投稿欄を細いカプセルに折りたたまず、書いているときの形で出しておく。
+    /// 折りたたむのはタイムラインを広く使うためで、画面の広いMacやiPadでは、選択した投稿欄が広がって、選択した位置にボタンが来てしまうのを避けたいため。
+    /// 既定は初期化子で渡す。Macでは、書き始めても欄がその場で広がるので、既定で折りたたまない。
     public var keepsComposeBarOpen: Bool {
         get { bool(Keys.keepsComposeBarOpen, default: store.keepsComposeBarOpenByDefault) }
         set { write(.bool(newValue), Keys.keepsComposeBarOpen) }
@@ -958,7 +958,7 @@ public final class SettingsStore {
     private let selectionChange = ChangeSignal()
     private let anyChange = ChangeSignal()
 
-    /// プリセットごとの、解決した「投稿の見た目」の選択肢。行を描くたびに読むので、プリセットが変わるまで覚える。
+    /// プリセットごとの、解決した「投稿の見た目」の選択肢。行を描くたびに読むので、プリセットが変わるまでキャッシュする。
     @ObservationIgnored private var appearanceCache: [PresetID: AppearanceChoices] = [:]
 
     public let userDisplayImageDirectory: URL
@@ -984,11 +984,11 @@ public final class SettingsStore {
         }
     }
 
-    /// サーバーごとの、`customEmojiDisplayRules`から作った描き方。文字を描くたびに引くので、決まりが変わるまで覚える。
+    /// サーバーごとの、`customEmojiDisplayRules`から作った描き方。文字を描くたびに引くので、決まりが変わるまでキャッシュする。
     @ObservationIgnored private var customEmojiDisplays: [String: CustomEmojiDisplays] = [:]
 
     func customEmojiDisplays(localServer: String?) -> CustomEmojiDisplays {
-        // 覚えた描き方を返すときも、読んだ側が決まりの変化を購読できるよう、決まりを読む。
+        // キャッシュした描き方を返すときも、読んだ側が決まりの変化を購読できるよう、決まりを読む。
         let rules = customEmojiDisplayRules
         let key = localServer ?? ""
         if let displays = customEmojiDisplays[key] { return displays }
@@ -1030,13 +1030,13 @@ public final class SettingsStore {
     /// アカウントごとの、最後に見ていたタブの項目。切り替えタブの中なら、開いていた項目。起動したときに、この項目を開く。タブを移るたびに書くので、変更を購読させない。
     @ObservationIgnored private(set) var shownTabItems: [String: TabItem]
 
-    /// アカウントごとに覚えた、サーバーの「アニメーションGIFを自動再生する」。キーはアカウントのハンドル。
-    /// 起動のたびに既定から始めて、読めたところで動き出さないよう、読めた値を覚えておき、表示を始めるときに使う。
+    /// アカウントごとにキャッシュした、サーバーの「アニメーションGIFを自動再生する」。キーはアカウントのハンドル。
+    /// 起動のたびに既定から始めて、読めたところで動き出さないよう、読めた値をキャッシュしておき、表示を始めるときに使う。
     private(set) var serverAnimationAutoplays: [String: Bool]
 
     /// アプリの設定（`AppDependencies.settings`）が読む、最後に表示を始めたアカウントのサーバーの値。
     private(set) var lastServerAutoplaysAnimations = false
-    /// アカウントごとに覚えた、サーバーの「メディアの表示」。キーはアカウントのハンドル。覚える理由は`serverAnimationAutoplays`と同じ。
+    /// アカウントごとにキャッシュした、サーバーの「メディアの表示」。キーはアカウントのハンドル。キャッシュする理由は`serverAnimationAutoplays`と同じ。
     private(set) var serverMediaDisplays: [String: MediaDisplay]
 
     /// アプリの設定が読む、最後に表示を始めたアカウントのサーバーの「メディアの表示」。
@@ -1148,7 +1148,7 @@ public final class SettingsStore {
         return entry
     }
 
-    /// 対象とキーの読み取り先を再利用し、値が無効になったときだけプリセットと継承先をたどる。値がない場合も覚える。
+    /// 対象とキーの読み取り先を再利用し、値が無効になったときだけプリセットと継承先をたどる。値がない場合もキャッシュする。
     fileprivate func read(_ entry: ReadEntry) -> PresetValue? {
         _ = entry.signal.revision
         if let cached = entry.value { return cached }
@@ -1306,7 +1306,7 @@ public final class SettingsStore {
     }
 }
 
-/// 購読させるための印。値が変わったことだけを知らせる。
+/// 購読させるためのシグナル。値が変わったことだけを知らせる。
 @MainActor
 @Observable
 final class ChangeSignal {

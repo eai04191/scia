@@ -21,7 +21,7 @@ public final class SavedStatusesModel {
     private var isStopped: Bool { tasks.isClosed }
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     public var runningTaskCount: Int { tasks.runningCount }
-    /// タイムライン全体の状態。失敗したままなら、電波の回復や引っぱった読み直しでやり直す。
+    /// タイムライン全体の状態。失敗したままなら、電波の回復やpull to refreshでやり直す。
     public private(set) var contentState = TimelineContentState.loaded
     /// 末尾の読み込みの状態。失敗したままなら、電波の回復でやり直す。
     public private(set) var footerState = TimelineFooterState.idle
@@ -51,7 +51,7 @@ public final class SavedStatusesModel {
         start(purpose: .action)
     }
 
-    /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    /// - Parameter purpose: 使う人が開いたり再試行を選択したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
     @discardableResult
     private func start(purpose: RequestPurpose) -> Task<Void, Never>? {
         guard !isStopped else { return nil }
@@ -139,7 +139,7 @@ public final class SavedStatusesModel {
         display?.setFooterState(state)
     }
 
-    /// タイムラインを引っぱって離したときに、最新のページを読んで、一番上の投稿より後に付けた分を上に足す。
+    /// タイムラインをpull to refreshしたときに、最新のページを読んで、一番上の投稿より後に付けた分を上に足す。
     /// 最初の読み込みに失敗したままなら、それをやり直す。
     public func refresh() async {
         guard !isStopped, hasStarted else { return }
@@ -153,7 +153,7 @@ public final class SavedStatusesModel {
         await refreshNewest(purpose: .action)?.value
     }
 
-    /// 失敗の表示の再試行が押されたときに呼ぶ。
+    /// 失敗の表示の再試行が選択されたときに呼ぶ。
     public func retry() {
         // 読み込みの最中なら、その結果を待つ。ストアは重ねて読まないので、ここで読み込み中の表示にすると、戻すものがなくなる。
         guard !store.isLoading else { return }
@@ -185,9 +185,9 @@ public final class SavedStatusesModel {
         }
     }
 
-    /// 最新のページを読み、手元より新しい分を先頭に足す。失敗しても、タイムラインはそのまま見せ、次に開いたときに読み直す。
+    /// 最新のページを読み、手元より新しい分を先頭に足す。失敗しても、タイムラインはそのまま見せ、次に開いたときに再読み込みする。
     @discardableResult
-    /// - Parameter purpose: 引っぱって読み込み直したときは`.action`。タブを見せ始めたときやアプリに戻ったときは`.display`。
+    /// - Parameter purpose: pull to refreshしたときは`.action`。タブを見せ始めたときやアプリに戻ったときは`.display`。
     private func refreshNewest(purpose: RequestPurpose) -> Task<Void, Never>? {
         guard !isStopped, store.isLoaded, !store.isLoading else { return nil }
         return run(purpose) { model in
@@ -202,8 +202,8 @@ public final class SavedStatusesModel {
         }
     }
 
-    /// 押したギャップを1ページ分読む。押した位置の側に続く行を基準にして、その位置を保つ。
-    /// 間は上からしか読めないため、押した位置で変えるのは、位置を保つ行だけにする。
+    /// 選択したギャップを1ページ分読む。選択した位置の側に続く行を基準にして、その位置を保つ。
+    /// 間は上からしか読めないため、選択した位置で変えるのは、位置を保つ行だけにする。
     public func selectGap(_ id: String, from direction: TimelineStore.GapDirection) {
         guard !isStopped, !store.loadingGapIDs.contains(id), let index = store.entries.firstIndex(where: { $0.id == .gap(id) }) else { return }
         let neighborIndex = direction == .fromOlder ? store.entries.index(after: index) : store.entries.index(before: index)
@@ -276,7 +276,7 @@ public final class SavedStatusesModel {
         showEntries(animatesRemoval: true)
     }
 
-    /// 並びを描き直す。フッターの文は、行がないときとあるときで変わるため、一緒に描き直す。
+    /// 並びを再描画する。フッターの文は、行がないときとあるときで変わるため、一緒に再描画する。
     ///
     /// 先頭に足したときは、最上部にいても新着のように追従せず、表示領域の上端にかかっている行の位置を保つ。
     /// 付けた投稿や、ほかの端末で付けた投稿は、読んでいる行を動かしてまで見せるものではないため。

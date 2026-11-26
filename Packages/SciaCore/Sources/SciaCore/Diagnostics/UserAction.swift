@@ -5,11 +5,11 @@ import OSLog
 /// ログの本文は`名前 引数...`の形で書き、`OperationTimeline`が読み戻して文章にする。
 public enum UserAction: Sendable, Equatable {
     case selectTab(String)
-    /// 選んでいるタブをもう一度押した。
+    /// 選んでいるタブをもう一度選択した。
     case reselectTab(String)
     /// 指でタイムラインを動かし、止まった。
     case scroll(ScrollRecord)
-    /// ステータスバーを押して最上部へ動かした。
+    /// ステータスバーを選択して最上部へ動かした。
     case scrollToTop(screen: String)
     case tapNewArrivals(screen: String)
     case tapGap(screen: String)
@@ -20,7 +20,7 @@ public enum UserAction: Sendable, Equatable {
     case openProfile
     /// 人のリスト（お気に入りした人、ブーストした人、フォロー、フォロワー）を開いた。
     case openAccountList
-    /// 投稿の行を押して、スレッドを開いた。
+    /// 投稿の行を選択して、スレッドを開いた。
     case openThread(screen: String)
     case reply
     /// 投稿のメニューで、投稿を引用して書き始めた。

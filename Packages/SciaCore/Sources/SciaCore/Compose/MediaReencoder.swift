@@ -131,7 +131,7 @@ public enum ImageReencoder {
     /// これより小さくしないと容量の上限に収まらないなら、収められないとする。
     static let minimumLongSide = 256
 
-    /// ファイルの容量。同じファイルに書き直すので、URLが覚えている値（`resourceValues`）を使わず、毎回読む。
+    /// ファイルの容量。同じファイルに書き直すので、URLがキャッシュしている値（`resourceValues`）を使わず、毎回読む。
     public static func byteCount(of url: URL) -> Int {
         (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
     }

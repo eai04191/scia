@@ -3,31 +3,31 @@ public import Foundation
 /// 自分に関わる出来事の通知。FoundationのNotificationと名前がぶつかるため、Mastodonを付ける。
 ///
 /// 通知のタイムラインでは、同じ投稿へのお気に入りやブーストのように、サーバーがまとめた通知を1行に出す。
-/// まとまりも、その中で最も新しい通知として持ち、まとまりの人数と、並べるアカウントを添える。まとめない通知は、1人のまとまりになる。
+/// グループも、その中で最も新しい通知として持ち、グループの人数と、並べるアカウントを添える。まとめない通知は、1人のグループになる。
 /// https://docs.joinmastodon.org/entities/Notification/
 /// https://docs.joinmastodon.org/methods/grouped_notifications/#NotificationGroup
 public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
-    /// 通知のID。まとまりなら、読んだ範囲の中で最も新しい通知のID。並びと既読の位置に使う。
+    /// 通知のID。グループなら、読んだ範囲の中で最も新しい通知のID。並びと既読の位置に使う。
     public let id: String
     public let type: Kind
-    /// まとまりなら、`id`の通知の日時。
+    /// グループなら、`id`の通知の日時。
     public let createdAt: Date
-    /// 通知のもとになる操作をしたアカウント。まとまりなら、最も新しい通知の人。
+    /// 通知のもとになる操作をしたアカウント。グループなら、最も新しい通知の人。
     public let account: Account
     /// お気に入り、ブースト、メンションなどの対象の投稿。フォローなどでは無い。
     public let status: Status?
-    /// まとまりを表すキー。まとめない通知は`ungrouped-<通知のID>`にする。削除と、届いた通知を同じまとまりへ足すのに使う。
+    /// グループを表すキー。まとめない通知は`ungrouped-<通知のID>`にする。削除と、届いた通知を同じグループへ足すのに使う。
     public let groupKey: String
-    /// まとまりに入っている通知の数。まとめない通知は1。
+    /// グループに入っている通知の数。まとめない通知は1。
     public let notificationsCount: Int
-    /// まとまりに通知を送った人のうち、新しい人から最大`maxSampleAccounts`人。先頭は`account`。
+    /// グループに通知を送った人のうち、新しい人から最大`maxSampleAccounts`人。先頭は`account`。
     public let sampleAccounts: [Account]
-    /// 読んだ範囲の中で、まとまりの最も古い通知のID。続きを読む位置に使う。まとめない通知は`id`。
+    /// 読んだ範囲の中で、グループの最も古い通知のID。続きを読む位置に使う。まとめない通知は`id`。
     public let pageMinID: String
     /// 絵文字のリアクションの通知で、付けた絵文字。Fedibirdの拡張で、ほかの種類ではnil（docs/emoji-reaction.md）。
     public let reactionEmoji: ReactionEmoji?
 
-    /// まとまりに並べるアカウントの数の上限。Mastodonのwebとサーバーに合わせる。
+    /// グループに並べるアカウントの数の上限。Mastodonのwebとサーバーに合わせる。
     public static let maxSampleAccounts = 8
 
     public init(
@@ -63,7 +63,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
 
     private static let ungroupedPrefix = "ungrouped-"
 
-    /// まとめない通知のキーなら、その通知のID。まとまりのキーならnil。
+    /// まとめない通知のキーなら、その通知のID。グループのキーならnil。
     static func ungroupedID(of groupKey: String) -> String? {
         guard groupKey.hasPrefix(ungroupedPrefix) else { return nil }
         let id = String(groupKey.dropFirst(ungroupedPrefix.count))
@@ -104,7 +104,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
         return ReactionEmoji(name: isShortcode ? String(emoji.dropFirst().dropLast()) : emoji, url: url, staticUrl: url)
     }
 
-    /// 1件の通知の形で書く。まとまりの人数とアカウントは書かない。
+    /// 1件の通知の形で書く。グループの人数とアカウントは書かない。
     public func encode(to encoder: any Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -187,7 +187,7 @@ public struct MastodonNotification: Codable, Hashable, Sendable, Identifiable {
 }
 
 extension MastodonNotification {
-    /// 届いた1件の通知を、同じまとまりに足す。人数を1つ増やし、その人をアカウントの先頭に足して、`notification`をまとまりの最も新しい通知にする。
+    /// 届いた1件の通知を、同じグループに足す。人数を1つ増やし、その人をアカウントの先頭に足して、`notification`をグループの最も新しい通知にする。
     /// すでに並べている人の通知（お気に入りを外して付け直したときなど）は足さず、nilを返す。
     public func adding(_ notification: MastodonNotification) -> MastodonNotification? {
         guard !sampleAccounts.contains(where: { $0.id == notification.account.id }) else { return nil }
@@ -205,7 +205,7 @@ extension MastodonNotification {
         )
     }
 
-    /// まとまりの値を変えずに、対象の投稿だけを差し替える。
+    /// グループの値を変えずに、対象の投稿だけを差し替える。
     func replacing(status: Status?) -> MastodonNotification {
         MastodonNotification(
             id: id, type: type, createdAt: createdAt, account: account, status: status, groupKey: groupKey,
@@ -223,7 +223,7 @@ extension MastodonNotification {
     }
 
     /// `accountIDs`の人を、並べるアカウントから外す。外した人の数だけ人数を減らす。並べる人が残らなければnil。
-    /// まとまりの人数には並べていない人も入っているため、並べている人を外しても、ほかの人が残ることがある。
+    /// グループの人数には並べていない人も入っているため、並べている人を外しても、ほかの人が残ることがある。
     func removingAccounts(_ accountIDs: Set<String>) -> MastodonNotification? {
         let remaining = sampleAccounts.filter { !accountIDs.contains($0.id) }
         guard remaining.count != sampleAccounts.count else { return self }

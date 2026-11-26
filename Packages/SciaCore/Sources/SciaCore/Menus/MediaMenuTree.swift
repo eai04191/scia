@@ -1,6 +1,6 @@
 public import Foundation
 
-/// メディアのメニューの項目を押したときの操作。
+/// メディアのメニューの項目を選択したときの操作。
 public enum MediaMenuCommand {
     case open
     case share
@@ -22,7 +22,7 @@ public struct MediaMenuTree {
     public let kind: MediaAttachment.Kind
     /// 代替テキストを見せる項目と、メディアの情報を組むのに使う。手元のファイルを開いたビューアではnil。
     public let attachment: MediaAttachment?
-    /// 項目ごとに、置く側が行えるか。nilなら出さず、値は押せるか。ビューアでは、元のファイルが届くまで共有と保存を押せなくする。
+    /// 項目ごとに、置く側が行えるか。nilなら出さず、値は選択できるか。ビューアでは、元のファイルが届くまで共有と保存を無効にする。
     public var open: Bool?
     public var share: Bool?
     public var saveToPhotos: Bool?
@@ -93,7 +93,7 @@ public struct MediaMenuTree {
         .action(item.title, icon: .symbol(item.symbolName), isEnabled: isEnabled, command)
     }
 
-    /// 値を名前にし、何の値かをサブタイトルに置いて、値を読みやすくする。押すと値をコピーする。
+    /// 値を名前にし、何の値かをサブタイトルに置いて、値を読みやすくする。選択すると値をコピーする。
     private func infoMenu(_ item: MediaMenuItem) -> MenuNode<MediaMenuCommand>? {
         guard let attachment else { return nil }
         let lines = MediaInfo(attachment, details: details).lines

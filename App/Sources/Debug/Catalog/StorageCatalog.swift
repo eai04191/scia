@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 設定のストレージの画面。ファイルを測ったり消したりせずに、測っている途中、消している途中、消せなかったとき、測れない項目があるとき、GBの大きさを並べる。消すを押しても何も消さない。
+/// 設定のストレージの画面。ファイルを測ったり消したりせずに、測っている途中、消している途中、消せなかったとき、測れない項目があるとき、GBの大きさを並べる。消すを選択しても何も消さない。
 enum StorageCatalog {
     private struct Failure: LocalizedError {
         var errorDescription: String? { "ファイルを消す権限がありません。" }
@@ -75,8 +75,8 @@ enum StorageCatalog {
         appBytes: 1_234_567_890
     )
 
-    /// ストレージのメディアのキャッシュの段（表示済みと先読み）の中身の画面。アプリのキャッシュに触れず、カタログ用の場所に書いた画像を並べる。
-    /// 押すと開くが、キャッシュから消えていた失敗はアラートなので、`open`がnilを返す状態で押して確かめる。
+    /// ストレージのメディアのキャッシュの段（表示済みとプリフェッチ）の中身の画面。アプリのキャッシュに触れず、カタログ用の場所に書いた画像を並べる。
+    /// 選択すると開くが、キャッシュから消えていた失敗はアラートなので、`open`がnilを返す状態で選択して確かめる。
     @MainActor
     static func mediaCacheStates() -> [CatalogState] {
         let files = catalogMediaFiles()

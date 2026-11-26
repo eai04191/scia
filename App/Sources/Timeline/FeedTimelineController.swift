@@ -4,7 +4,7 @@ import SciaCore
 import UIKit
 
 /// ホームや公開タイムラインの画面を組み立て、読み込みとストリーミングを受け持つ`FeedTimelineModel`とTimelineViewControllerをつなぐ。
-/// タブのタイムラインのほか、開いたタイムラインに積むハッシュタグのタイムラインにも使う。
+/// タブのタイムラインのほか、開いたタイムラインにプッシュするハッシュタグのタイムラインにも使う。
 @MainActor
 final class FeedTimelineController {
     private(set) lazy var viewController = TimelineViewController(texts: texts, settings: settings) { [weak model] in await model?.refresh() }
@@ -30,7 +30,7 @@ final class FeedTimelineController {
     /// ステータスバーの通知を出し続けているか。デバッグメニューのチェックマークに使う。
     var isStatusBarTickerLooping: (() -> Bool)?
     #endif
-    /// 走っている補完が終わるのを待っている、引っぱった読み直しの数。テストで、待ち始めたことを時間を待たずに確かめる。
+    /// 走っている補完が終わるのを待っている、pull to refreshの数。テストで、待ち始めたことを時間を待たずに確かめる。
     var fillWaiterCount: Int { model.fillWaiterCount }
 
     init(
@@ -64,7 +64,7 @@ final class FeedTimelineController {
         viewController.debugActions = makeDebugActions()
         #endif
         model.onStop { [weak viewController] in
-            // 積んで開いたタイムラインは、画面がこのコントローラーを生かしているため、持ち合いを解いて捨てられるようにする。
+            // プッシュしたタイムラインは、画面がこのコントローラーを生かしているため、持ち合いを解いて捨てられるようにする。
             viewController?.lifetimeOwner = nil
         }
     }
@@ -109,7 +109,7 @@ final class FeedTimelineController {
         model.markUnavailableOnServer()
     }
 
-    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いたタイムラインがナビゲーションから外されたときに呼ぶ。
+    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、プッシュしたタイムラインがナビゲーションから外されたときに呼ぶ。
     /// セッションを閉じたときは、呼ばなくても持ち主が閉じて止まる。
     func stop() {
         model.stop()

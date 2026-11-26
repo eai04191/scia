@@ -131,7 +131,7 @@ struct MediaPreparationTests {
         #expect(plan.mimeType == "image/png")
     }
 
-    /// 透過を持つHEICは、HEICを処理できないサーバー（JPEGで送り直すとき）や載せていないサーバーでも、JPEGにせずPNGで作り直す。
+    /// 透過を持つHEICは、HEICを処理できないサーバー（JPEGで再送するとき）や載せていないサーバーでも、JPEGにせずPNGで作り直す。
     @Test func keepsTransparencyWhenHEICIsUnavailable() throws {
         let unprocessable = try #require(try imagePlan(4032, 3024, unprocessable: ["image/heic", "image/heif", "image/avif"], hasAlpha: true))
         #expect(unprocessable.mimeType == "image/png")

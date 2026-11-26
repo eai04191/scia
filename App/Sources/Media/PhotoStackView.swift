@@ -3,7 +3,7 @@ import UIKit
 
 /// 添付ファイルを、白いフチを付けた紙焼きの写真に見立てて、1枚目を手前にして重ねる。投稿欄のカプセルと、タイムラインで本文の右に出す添付ファイルで使う。
 /// アイコンのように見えないよう写真に見立て、2枚目より後ろは1枚目の下に重ねる。重ねる枚数は使う側が決め、それより後ろはいちばん奥の写真の下に隠れているものとし、枚数のバッジは付けない。
-/// 回す角度とずらす量、影の濃さは、使う側が決めて渡す。
+/// 回す角度とずらす量、影の不透明度は、使う側が決めて渡す。
 ///
 /// 影は、写真のスタックが下の面に落とす影と、上の写真が下の写真に落とす影の2つに分ける。写真ごとに影を付けると、
 /// 重なったところで影が二重に濃くなり、写真の上に落ちる影も下の面に落ちる影と同じ広さになるため。
@@ -15,7 +15,7 @@ class PhotoStackView: UIView {
     private var offsets: [CGPoint]
     /// 写真ごとの大きさの倍率。
     private var scales: [CGFloat]
-    /// 写真同士の影の濃さ。
+    /// 写真同士の影の不透明度。
     private var betweenShadowOpacity: Float = 0
 
     /// 写真の一辺（フチを含む）。
@@ -73,8 +73,8 @@ class PhotoStackView: UIView {
     }
 
     /// - Parameters:
-    ///   - stack: 写真のスタックが下の面に落とす影の濃さ。
-    ///   - between: 上の写真が下の写真に落とす影の濃さ。
+    ///   - stack: 写真のスタックが下の面に落とす影の不透明度。
+    ///   - between: 上の写真が下の写真に落とす影の不透明度。
     func setShadowOpacities(stack: Float, between: Float) {
         betweenShadowOpacity = between
         PhotoStackShadow.castStack(on: stackShadow.layer, opacity: stack)
@@ -89,7 +89,7 @@ class PhotoStackView: UIView {
         stackShadow.alpha = concealed ? 0 : 1
     }
 
-    /// 隠していた写真を見せ直した。その写真と、その下の写真の写真同士の影は、隠している間は描いていなかったので、一度に現れないよう浮かび上がらせる。
+    /// 隠していた写真を見せ直した。その写真と、その下の写真の写真同士の影は、隠している間は描いていなかったので、一度に現れないようフェードインさせる。
     /// ビューアの開閉で動かす画像も、写真同士の影を落とさない。
     func photoDidReappear(_ photo: StackedPhotoView) {
         guard let index = photos.firstIndex(where: { $0 === photo }) else { return }
@@ -99,10 +99,10 @@ class PhotoStackView: UIView {
         }
     }
 
-    /// 写真同士の影を浮かび上がらせる時間。投稿欄のカプセルに着いたときと同じ。
+    /// 写真同士の影をフェードインさせる時間。投稿欄のカプセルに着いたときと同じ。
     static let betweenShadowRevealDuration: TimeInterval = 0.15
 
-    /// 写真同士の影を、薄い状態から浮かび上がらせる。開閉で写真が着いたあとに呼ぶ。動いている間の複製は、写真同士の影を落とさないため。
+    /// 写真同士の影を、薄い状態からフェードインさせる。開閉で写真が着いたあとに呼ぶ。動いている間の複製は、写真同士の影を落とさないため。
     func revealBetweenShadows(duration: TimeInterval) {
         for photo in photos {
             photo.revealBetweenShadow(duration: duration)
@@ -213,7 +213,7 @@ enum PhotoPaper {
 /// 白いフチの付いた紙焼きの写真。自分では影を落とさず、上に重ねた写真の影を、自分の中にだけ描く。
 @MainActor
 final class StackedPhotoView: UIView {
-    /// フチの太さと角の丸み。紙焼きの写真は、大きく焼いてもフチや角が大きさに比例して太くならないので、写真の大きさによらず同じにする。
+    /// フチの太さとradius。紙焼きの写真は、大きく焼いてもフチや角が大きさに比例して太くならないので、写真の大きさによらず同じにする。
     static let border: CGFloat = 2
     static let cornerRadius: CGFloat = 3
 
@@ -260,7 +260,7 @@ final class StackedPhotoView: UIView {
         didSet { failureMark.isHidden = !showsFailure }
     }
 
-    /// 右下の角の失敗のアイコン。出していなければ隠している。投稿欄の開閉で、複製に像を載せる。
+    /// 右下の角の失敗のアイコン。出していなければ隠している。投稿欄の開閉で、複製にスナップショットを載せる。
     var failureMarkView: UIView { failureMark }
 
     init(store: MediaImageStore<UIImage>) {
@@ -312,7 +312,7 @@ final class StackedPhotoView: UIView {
         CATransaction.commit()
     }
 
-    /// 上に重ねた写真が落としている影の像。影を描いていなければnil。開閉で動かす複製に載せ、動き始めに薄くするために使う。
+    /// 上に重ねた写真が落としている影のスナップショット。影を描いていなければnil。開閉で動かす複製に載せ、動き始めに薄くするために使う。
     func betweenShadowSnapshot() -> UIView? {
         guard betweenShadow.shadowPath != nil, betweenShadow.shadowOpacity > 0, betweenShadowClip.alpha > 0 else { return nil }
         return betweenShadowClip.snapshotView(afterScreenUpdates: false)

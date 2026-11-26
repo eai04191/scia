@@ -317,7 +317,7 @@ struct ComposeModelTests {
         #expect(model.showsSpoiler)
     }
 
-    /// 添付のない投稿では、空の注意書きの欄を開け閉めしても送る内容は変わらないので、同じIdempotency-Keyで送り直す。
+    /// 添付のない投稿では、空の注意書きの欄を開け閉めしても送る内容は変わらないので、同じIdempotency-Keyで再送する。
     @Test func togglingEmptySpoilerWithoutMediaKeepsIdempotencyKey() async {
         var sent: [StatusDraft] = []
         let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { draft in

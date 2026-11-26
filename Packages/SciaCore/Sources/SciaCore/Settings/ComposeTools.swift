@@ -5,15 +5,15 @@ public enum ComposeToolItem: String, MenuItemKind {
     case media
     case expand
     case spoiler
-    /// 本文の下に投票の欄を出す。出している間に押すと外す。
+    /// 本文の下に投票の欄を出す。出している間に選択すると外す。
     case poll
-    /// 返信や編集のラベルの下に予約の行を出す。出している間に押すと外す。決まりはdocs/compose.mdの「予約投稿」にある。
+    /// 返信や編集のラベルの下に予約の行を出す。出している間に選択すると外す。決まりはdocs/compose.mdの「予約投稿」にある。
     case schedule
     /// 投稿の言語を選ぶシートを出す。決まりはdocs/compose.mdの「投稿の言語」にある。
     case language
     /// 本文のURLを選び、リンク先のページのタイトルを付ける。
     case linkTitle
-    /// カスタム絵文字を並べたシートを出す。出している間に押すとキーボードに戻す。
+    /// 絵文字ピッカーを出す。出している間に選択するとキーボードに戻す。
     case customEmoji
     /// この並びを変える画面を開く。ほかの項目と同じく、置き場所を選べ、使わなければ隠せる。
     case customize
@@ -27,7 +27,7 @@ public enum ComposeToolItem: String, MenuItemKind {
     case account
 
     /// ＋のメニューはボタンの上に開き、下ほど指が届きやすいので、使う頻度の低いカスタマイズをいちばん上に、書きながら何度も使う記号をいちばん下に置く。
-    /// カスタマイズのまとまりには、カスタマイズだけを置く。
+    /// カスタマイズのグループには、カスタマイズだけを置く。
     public static let defaultLayout = MenuLayout<ComposeToolItem>(defaultElements: [
         .item(.customize, isVisible: true),
         .separator,
@@ -54,7 +54,7 @@ public enum ComposeToolItem: String, MenuItemKind {
 public struct ComposeToolPlacement: Equatable, Sendable {
     /// ツールバーに、＋の右から出す項目。並びの順。
     public var row: [ComposeToolItem]
-    /// ＋のメニューのまとまり。上から並びの順。行に入りきらなかった項目は、最後のまとまりにする。空なら＋を出さない。
+    /// ＋のメニューのグループ。上から並びの順。行に入りきらなかった項目は、最後のグループにする。空なら＋を出さない。
     public var menu: [MenuLayout<ComposeToolItem>.Group]
 
     public var showsAddButton: Bool { !menu.isEmpty }
@@ -65,7 +65,7 @@ public struct ComposeToolPlacement: Equatable, Sendable {
     }
 
     /// 行に常に出す項目のうち、入りきらない分を、並びの後ろ（行の右端）から＋のメニューの最後へ回す。
-    /// ＋のメニューはボタンの上に開くので、最後のまとまりがいちばん＋に近く、設定で境目のすぐ下にあった順に並ぶ。
+    /// ＋のメニューはボタンの上に開くので、最後のグループがいちばん＋に近く、設定で境目のすぐ下にあった順に並ぶ。
     /// ＋のメニューが空で、行に全部入るときだけ＋を出さない。＋を出すなら、その幅も行から差し引く。
     /// - Parameters:
     ///   - available: 行のうち、部品を足す項目と＋に使える幅。

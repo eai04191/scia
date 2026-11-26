@@ -36,9 +36,9 @@ enum DebugURL: Equatable {
     case dummySession
     /// `scia-debug://new-window`で、新しいウィンドウを開く。ウィンドウごとのアカウントを、Dockやメニューを触らずに確かめるため。セッションがなくても受け付ける。
     case newWindow
-    /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
+    /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、再読み込みする。
     case unreadable
-    /// `scia-debug://status/<ステータスコード>`。以後のREST APIにそのステータスのHTMLのエラーページを返させ、読み込み直す。
+    /// `scia-debug://status/<ステータスコード>`。以後のREST APIにそのステータスのHTMLのエラーページを返させ、再読み込みする。
     /// `?retry-after=<秒>`を付けると、`Retry-After`ヘッダーも返す。`?target=<経路>`で、REST API（`api`、省略時）のほかの経路にも返させる（`DebugFaults.Target`）。
     /// `scia-debug://status/ok`で戻す。
     case status(Int, retryAfter: Int?, target: DebugFaults.Target)
@@ -62,7 +62,7 @@ enum DebugURL: Equatable {
     /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://upload/normal`で戻す。
     case slowUploads(seconds: Double?)
     /// `scia-debug://notice/progress`で、出たままの「処理中」のチップを、進み具合を少しずつ進めながら60秒出す。`?seconds=<秒>`で長さを、`?title=<文言>`で文言を変える。
-    /// アプリ全体のアプリ内通知として出すため、画面を移る途中や引っぱる途中のチップの列の動きを、ダウンロードを用意せずに確かめられる。
+    /// アプリ全体のアプリ内通知として出すため、画面遷移の途中や引っぱる途中のチップの列の動きを、ダウンロードを用意せずに確かめられる。
     case progressNotice(seconds: Double, title: String?)
     /// `scia-debug://notice/transient?title=<文言>`で、数秒で消えるチップを出す。`&seconds=<秒>`で消えるまでの長さを変える。
     /// 2行に折り返す長い文言の出入りや差し替えを、その文言になる失敗を起こさずに確かめるため。
@@ -95,7 +95,7 @@ enum DebugURL: Equatable {
     /// `scia-debug://browser?url=<URL>&style=<sheet|fullScreen>`。アプリ内のSafariでURLを開く。実機でアプリ内のSafariのデータを溜めるため。
     /// `style`を省くと、設定の開く場所に従う。
     case browser(URL, style: LinkBrowser?)
-    /// `scia-debug://reset`。重ねた画面をすべて閉じ、どのタブも最初の画面に戻して、ホームのタブを選ぶ。
+    /// `scia-debug://reset`。モーダルビューをすべて閉じ、どのタブも最初の画面に戻して、ホームのタブを選ぶ。
     case reset
     /// `scia-debug://tuning`。チューニングパネルを開く。
     case tuning
@@ -105,13 +105,13 @@ enum DebugURL: Equatable {
     /// サムネイルをタップしたのと同じ経路で開く。
     case viewer(index: Int)
     /// `scia-debug://arrivals/hold`で、以後に届いた新着をタイムラインに挿入せずに溜める。`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。
-    /// ストリーミングはつないだままなので、切断の知らせやポーリングでタイムラインが動かない。
+    /// ストリーミングはつないだままなので、切断の通知やポーリングでタイムラインが動かない。
     case holdArrivals(Bool)
     /// `scia-debug://autoscroll?distance=<pt>&speed=<pt/秒>`。選んでいるタブのタイムラインを、決まった速さで決まった距離だけ動かす。distanceが負なら上へ戻す。
     /// 指で操作できない検証用の実機で、スクロールの重さ（hitch）を同じ条件で測るため。慣性のない一定の速さで動かすので、指のスクロールとは動きが違う。
     case autoScroll(distance: CGFloat, speed: CGFloat)
-    /// `scia-debug://emoji-palette/section?index=<n>`。開いている絵文字ピッカーで、n番目（0から。負なら後ろから）のまとまりのボタンを押したのと同じく移る。
-    /// 指で操作できない検証用の実機で、遠くのまとまりへ移るときの重さ（hitch）を同じ条件で測るため。
+    /// `scia-debug://emoji-palette/section?index=<n>`。開いている絵文字ピッカーで、n番目（0から。負なら後ろから）のグループのボタンを選択したのと同じく移る。
+    /// 指で操作できない検証用の実機で、遠くのグループへ移るときの重さ（hitch）を同じ条件で測るため。
     case emojiPaletteSection(index: Int)
     /// `scia-debug://appearance?json=<パーセントエンコードしたJSON>`。「投稿の見た目」の選ぶ項目（`AppearanceChoices`）のうち、JSONに書いた項目だけを上書きする。
     /// 例は`{"showsActionBar":false}`。設定のファイルを書き換えられない検証用の実機で、設定を変えて測り比べるため。`scia-debug://appearance?json={}`では何も変わらない。
@@ -127,7 +127,7 @@ enum DebugURL: Equatable {
     case compose(text: String?, mediaCount: Int, pollOptions: [String]? = nil)
     /// `scia-debug://compose/close`。キーボードを閉じて、投稿欄を書いていないときのカプセルに戻す。下書きは残す。
     case composeClose
-    /// `scia-debug://compose/open`。下書きを変えずに、カプセルを押したときと同じく書き始める。開閉の動きを確かめるため。
+    /// `scia-debug://compose/open`。下書きを変えずに、カプセルを選択したときと同じく書き始める。開閉の動きを確かめるため。
     case composeOpen
     /// `scia-debug://compose/reply?file=<ファイル名>`。`inject`と同じ置き場所のファイルにある最初の投稿へ、返信を始める。
     /// タイムラインで投稿を探して長押しせずに、長いハンドルの人への返信を作るため。
@@ -148,14 +148,14 @@ enum DebugURL: Equatable {
     /// セッションがなくても受け付け、ログイン画面にも出す。起動し直すと消える。
     case hitAreas(Bool)
 
-    /// `scia-debug://lists/create?title=<名前>`でリストを作り、`scia-debug://lists/delete?id=<ID>`で消して、リストを読み直す。
+    /// `scia-debug://lists/create?title=<名前>`でリストを作り、`scia-debug://lists/delete?id=<ID>`で消して、リストを再読み込みする。
     /// リストのタブを実物で確かめるのに使う。サーバーのリストを書き換える。
     case createList(title: String)
     case deleteList(id: String)
     /// `scia-debug://marker/<home|notifications>?id=<投稿か通知のID>`で、サーバーの既読位置をそのIDにする。起動し直すと、その位置から読み込む。
     /// 既読位置より新しい投稿が多い起動（大きなギャップ）を実物で作るのに使う。サーバーの既読位置を書き換え、同じアカウントのほかの端末の起動位置も変わる。
     case marker(MarkerTimeline, id: String)
-    /// `scia-debug://tags/follow?name=<名前>`でハッシュタグをフォローし、`scia-debug://tags/unfollow?name=<名前>`で外す。メニューから押したときと同じく、知らせを出し、「フォロー中のハッシュタグ」の画面に反映する。
+    /// `scia-debug://tags/follow?name=<名前>`でハッシュタグをフォローし、`scia-debug://tags/unfollow?name=<名前>`で外す。メニューから選択したときと同じく、チップを出し、「フォロー中のハッシュタグ」の画面に反映する。
     /// 「フォロー中のハッシュタグ」を実物で確かめるのに使う。サーバーのフォローを書き換える。
     case followTag(name: String)
     case unfollowTag(name: String)

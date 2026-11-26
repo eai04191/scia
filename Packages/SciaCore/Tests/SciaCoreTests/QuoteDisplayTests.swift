@@ -45,7 +45,7 @@ struct QuoteDisplayTests {
         #expect(NestedQuote(quoted.quote) == .link("150"))
     }
 
-    /// Fedibirdの`quote_muted`は、引用元の人をミュートかブロックしていることを表す。押して開くまで隠す。
+    /// Fedibirdの`quote_muted`は、引用元の人をミュートかブロックしていることを表す。選択して開くまで隠す。
     @Test func concealsFedibirdQuoteOfMutedAccount() throws {
         var json = try #require(JSONSerialization.jsonObject(with: try fixture("fedibird_status_with_quote")) as? [String: Any])
         var quoted = try #require(json["quote"] as? [String: Any])
@@ -122,7 +122,7 @@ struct QuoteDisplayTests {
         #expect(RichText.status(status("1", content: content)).plainText.hasPrefix("RE: "))
     }
 
-    /// 出せない`state`でも、`quote`があれば除く。引用の囲みの代わりに、出せない理由の1行を出すため。
+    /// 出せない`state`でも、`quote`があれば除く。引用のカードの代わりに、出せない理由の1行を出すため。
     @Test func dropsQuoteInlineWhenQuoteIsUnavailable() {
         let content = #"<p class="quote-inline">RE: <a href="https://example.social/@bob/1">example.social/@bob/1</a></p><p>本文</p>"#
 
@@ -156,7 +156,7 @@ struct QuoteDisplayTests {
         #expect(display(status("1", quote: Quote(state: "revoked", quotedStatus: status("10")))) == .unavailable(.withdrawn))
     }
 
-    /// ブロックかミュートしている人の引用元は、押して開くまで出さない。
+    /// ブロックかミュートしている人の引用元は、選択して開くまで出さない。
     @Test func blockedAndMutedAreConcealedUntilRevealed() {
         let quoted = status("10")
 
@@ -183,7 +183,7 @@ struct QuoteDisplayTests {
         #expect(display(status("1", quote: Quote(state: "accepted", quotedStatus: quoted))) { filtering.verdict(for: $0) } == .filtered)
     }
 
-    /// 囲みは1段だけ。引用元の中の引用は、IDが届くときだけ押せる1行にする。
+    /// カードは1段だけ。引用元の中の引用は、IDが届くときだけ選択できる1行にする。
     @Test func nestedQuoteLinksOnlyWithID() {
         #expect(NestedQuote(Quote(state: "accepted", quotedStatusID: "5")) == .link("5"))
         #expect(NestedQuote(Quote(state: "muted_account", quotedStatusID: "5")) == .link("5"))
@@ -203,7 +203,7 @@ struct QuoteDisplayTests {
         #expect(!reveals.isRevealed(status("3")))
     }
 
-    /// 引用元の編集は、囲みに出す引用元を新しい中身に替える。
+    /// 引用元の編集は、カードに出す引用元を新しい中身に替える。
     @Test func sourceChangesApplyEdits() {
         var changes = QuoteSourceChanges()
         let status = status("1", quote: Quote(state: "accepted", quotedStatus: status("10", content: "<p>前</p>")))
@@ -225,7 +225,7 @@ struct QuoteDisplayTests {
         #expect(display(applied) == .unavailable(.deleted))
     }
 
-    /// 読み込んだあとでミュートかブロックした人の引用元は、押して開くまで隠し、解除したら戻す。
+    /// 読み込んだあとでミュートかブロックした人の引用元は、選択して開くまで隠し、解除したら戻す。
     @Test func sourceChangesConcealMutedAccountsUntilUnmuted() {
         var changes = QuoteSourceChanges()
         let quoted = status("10")
@@ -241,7 +241,7 @@ struct QuoteDisplayTests {
         #expect(display(changes.applying(to: quoting)) == .post(quoted))
     }
 
-    /// 届いた編集より新しい版を読み直した引用元は、読み直した版のまま出す。
+    /// 届いた編集より新しい版を再読み込みした引用元は、再読み込みした版のまま出す。
     @Test func sourceChangesKeepNewerFetchedVersion() {
         var changes = QuoteSourceChanges()
         changes.edit(status("10", content: "<p>1回目の編集</p>", editedAt: Date(timeIntervalSince1970: 10)))

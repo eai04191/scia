@@ -55,14 +55,14 @@ public enum MediaArrangement: String, Codable, CaseIterable, Sendable {
     case besideBody
 }
 
-/// 引用とXの投稿の囲みの中の添付ファイルの並べ方。決まりはdocs/timeline-media.mdにある。
+/// 引用とXの投稿のカードの中の添付ファイルの並べ方。決まりはdocs/timeline-media.mdにある。
 public enum EmbedMediaArrangement: String, Codable, CaseIterable, Sendable {
     /// 投稿の並べ方に従う。
     case sameAsPost
     case belowBody
     case besideBody
 
-    /// 投稿の並べ方が`post`のときに、囲みの中で使う並べ方。
+    /// 投稿の並べ方が`post`のときに、カードの中で使う並べ方。
     public func resolved(post: MediaArrangement) -> MediaArrangement {
         switch self {
         case .sameAsPost: post
@@ -77,7 +77,7 @@ public enum ReactionGlowIcons: String, Codable, CaseIterable, Sendable {
     case none
     /// 下の端に、ブーストとお気に入りのアイコンを1つずつ置く。
     case atBottom
-    /// 下の端に、小さなアイコンを大きさと濃さを変えて散らす。
+    /// 下の端に、小さなアイコンを大きさと不透明度を変えて散らす。
     case scattered
 }
 

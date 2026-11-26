@@ -4,7 +4,7 @@ import UIKit
 
 /// カタログの部品に渡す、通信せずに出せるデータと、読み込みの途中や失敗で止まる画像の読み込み口。
 enum CatalogFixtures {
-    /// 単色に格子を描いた画像のdata URL。画像の読み込みはURLSessionで行い、data URLもそのまま読めるため、本物の読み込み口のまま通信せずに出せる。
+    /// 単色にグリッドを描いた画像のdata URL。画像の読み込みはURLSessionで行い、data URLもそのまま読めるため、本物の読み込み口のまま通信せずに出せる。
     static func imageURL(width: Int, height: Int, color: UIColor, label: String = "") -> URL? {
         let image = DummyMedia.image(size: CGSize(width: width, height: height), color: color, label: label)
         guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }

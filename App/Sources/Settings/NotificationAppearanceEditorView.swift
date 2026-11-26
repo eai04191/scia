@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// 「通知の見た目」。上にプレビューを固定し、下に通知のために足す部品ごとの分類を、通知の行の上から下への並びで置く。
-/// 分類を押すと、その分類の画面（`NotificationAppearanceGroupEditorView`）を重ねる。
+/// 分類を選択すると、その分類の画面（`NotificationAppearanceGroupEditorView`）を重ねる。
 /// メンションなどの投稿の部品は「投稿の見た目」で決めるので、ここには置かない。プレビューの決まりは「投稿の見た目」と同じで、docs/appearance.mdにある。
 struct NotificationAppearanceEditorView: View {
     @Bindable var settings: AppSettings

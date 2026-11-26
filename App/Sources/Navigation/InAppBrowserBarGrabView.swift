@@ -5,7 +5,7 @@ import UIKit
 struct InAppBrowserBarGrab {
     /// Safariのバーの上端から下へ伸ばす高さ。0なら重ねない。
     var height: CGFloat
-    /// 左右の空き。Safariの×とメニューのボタンを押せるように空ける。
+    /// 左右の空き。Safariの×とメニューのボタンを選択できるように空ける。
     var inset: CGFloat
     /// 範囲がどこにあるかを確かめるために、見える色で塗る。
     var isVisible: Bool
@@ -25,7 +25,7 @@ struct InAppBrowserBarGrab {
 
 /// アプリ内のSafariのバーの上に重ねる、シートを引ける範囲のビュー。シートのSafari（`InAppBrowserSheet`）と、重ねたウインドウのSafari（`InAppBrowserOverlayWindow`。伏せている間と全画面の間）で、同じ見た目と範囲にする。
 /// Safariの上で触れたことは、アプリの`hitTest`を通らずにSafariのプロセスへ行く。上に自分のビューを重ねると、そこで触れたことはアプリに届く。
-/// 色のない（完全に透明な）ビューでは、触れたことが重ねたビューを通り抜けてSafariへ行く（シミュレーターで確かめた）。そのため、見た目にはわからない濃さの色を付ける。
+/// 色のない（完全に透明な）ビューでは、触れたことが重ねたビューを通り抜けてSafariへ行く（シミュレーターで確かめた）。そのため、見た目にはわからない不透明度の色を付ける。
 /// Safariのバーとページは別のプロセスが描いていて、アプリからはどちらの上かを触れた場所で選び分けられないので、範囲の高さと左右の空きはチューニングで決める。
 final class InAppBrowserBarGrabView: UIView {
     let barGrab: InAppBrowserBarGrab

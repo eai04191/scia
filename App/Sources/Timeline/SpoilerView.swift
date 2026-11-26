@@ -1,9 +1,9 @@
 import UIKit
 import SciaCore
 
-/// 注意書き（CW）。本文の上に置き、押すと本文を開閉する。フィルターの警告も、同じボックスで注意書きの上に出す。
+/// 注意書き（CW）。本文の上に置き、選択すると本文を開閉する。フィルターの警告も、同じボックスで注意書きの上に出す。
 ///
-/// 注意書きはただの文字と見分けがつくよう、地の色を敷いたボックスに入れ、押せることが分かるよう、開閉の文言と記号を添える。
+/// 注意書きはただの文字と見分けがつくよう、地の色を敷いたボックスに入れ、選択できることが分かるよう、開閉の文言と記号を添える。
 final class SpoilerView: UIControl {
     struct Content: Equatable {
         var text: NSAttributedString
@@ -15,7 +15,7 @@ final class SpoilerView: UIControl {
         var buttonFont: UIFont
         /// 注意書きの文字と、開閉のボタンのあいだ。
         var buttonSpacing: CGFloat
-        /// ボックスの角の丸み。
+        /// ボックスのradius。
         var cornerRadius: CGFloat
     }
 

@@ -1,11 +1,11 @@
 import SciaCore
 import UIKit
 
-/// SciaCoreで組んだメニューの木（`MenuNode`）を、UIKitのメニューに描く。何をどの順に出すかは木が決め、ここでは描くだけにする。
-/// 項目を押したら、その項目の操作を`perform`に渡す。
+/// SciaCoreで組んだメニューのツリー（`MenuNode`）を、UIKitのメニューに描く。何をどの順に出すかはツリーが決め、ここでは描くだけにする。
+/// 項目を選択したら、その項目の操作を`perform`に渡す。
 @MainActor
 struct MenuRenderer<Command> {
-    /// 押された項目の操作を行う。
+    /// 選択された項目の操作を行う。
     let perform: @MainActor (Command) -> Void
     /// 記号でないアイコン（人のアイコン、カスタム絵文字）の画像。nilを返したら、アイコンの記号を出す。
     var customIcon: @MainActor (MenuIcon) -> UIImage? = { _ in nil }
@@ -17,7 +17,7 @@ struct MenuRenderer<Command> {
         self.customIcon = customIcon
     }
 
-    /// 木の根を、見出しを付けたメニューにする。見出しの名前が空なら、見出しを置かない。
+    /// ツリーのルートを、見出しを付けたメニューにする。見出しの名前が空なら、見出しを置かない。
     func menu(_ root: MenuNode<Command>) -> UIMenu {
         UIMenu(title: root.headingTitle, subtitle: root.subtitle, image: image(root.icon), children: elements(root.children))
     }
@@ -26,7 +26,7 @@ struct MenuRenderer<Command> {
         nodes.map { element($0) }
     }
 
-    /// - Parameter showsSubtitle: 横並びのまとまりで横に並ぶ項目ではfalse。決まりはdocs/menus.mdの「並びの設定」にある。
+    /// - Parameter showsSubtitle: 横並びのグループで横に並ぶ項目ではfalse。決まりはdocs/menus.mdの「並びの設定」にある。
     func element(_ node: MenuNode<Command>, showsSubtitle: Bool = true) -> UIMenuElement {
         switch node.content {
         case .action:
@@ -34,8 +34,8 @@ struct MenuRenderer<Command> {
         case .submenu(let children):
             return UIMenu(title: node.headingTitle, subtitle: showsSubtitle ? node.subtitle : nil, image: image(node.icon), children: elements(children))
         case .group(let children, let row):
-            // 横に並ぶ項目は、まとまりの先頭から横に並ぶ数までとして、サブタイトルを除く。
-            // 開いてから中身を読む項目（関係を覚えていない相手の関係の項目など）は、読む前の1個として数えるので、読んだ結果が0個や2個以上だと、後ろの項目の位置がずれる。
+            // 横に並ぶ項目は、グループの先頭から横に並ぶ数までとして、サブタイトルを除く。
+            // 開いてから中身を読む項目（関係をキャッシュしていない相手の関係の項目など）は、読む前の1個として数えるので、読んだ結果が0個や2個以上だと、後ろの項目の位置がずれる。
             // 0個なら、詰まって横に並んだ後ろの項目にサブタイトルが残り、2個以上なら、押し出されてふだんの行で出る項目のサブタイトルが消える。
             // 後ろの項目は読み終える前に描き、UIKitは描いたあとの項目を差し替えさせないため、読んだあとの位置では決められない。問題を認識したうえで、対応しない。
             let hidden = row.map { MenuRowSubtitles.areShown ? 0 : $0.capacity } ?? 0
@@ -54,7 +54,7 @@ struct MenuRenderer<Command> {
         }
     }
 
-    /// 項目を描く。項目でないものは、押せない項目にする。
+    /// 項目を描く。項目でないものは、無効の項目にする。
     func action(_ node: MenuNode<Command>, showsSubtitle: Bool = true) -> UIAction {
         var attributes: UIMenuElement.Attributes = []
         if !node.isEnabled { attributes.insert(.disabled) }
@@ -75,7 +75,7 @@ struct MenuRenderer<Command> {
     }
 }
 
-/// 組んだメニューの木と、その描き方。タップや長押しに割り当てた1項目を行うときは、木を見て決める。
+/// 組んだメニューのツリーと、その描き方。タップや長押しに割り当てた1項目を行うときは、ツリーを見て決める。
 @MainActor
 struct BuiltMenu<Command> {
     let root: MenuNode<Command>
@@ -103,7 +103,7 @@ struct BuiltMenu<Command> {
         return renderer.menu(root.loadingSubmenusBeforeShowing())
     }
 
-    /// 木の一部を描く。
+    /// ツリーの一部を描く。
     func elements(_ nodes: [MenuNode<Command>]) -> [UIMenuElement] {
         defer { didRender() }
         return renderer.elements(nodes)

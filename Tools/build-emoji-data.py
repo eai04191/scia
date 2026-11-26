@@ -1,9 +1,9 @@
 # /// script
 # requires-python = ">=3.12"
 # ///
-"""投稿欄の絵文字のシートに並べる、Unicodeの絵文字のリストを作る。
+"""投稿欄の絵文字ピッカーに並べる、Unicodeの絵文字のリストを作る。
 
-並びとまとまりは、Unicodeの絵文字のリスト（emoji-test.txt）の順にする。iOSの絵文字キーボードとほぼ同じ並び。
+並びとグループは、Unicodeの絵文字のリスト（emoji-test.txt）の順にする。iOSの絵文字キーボードとほぼ同じ並び。
 検索に使う名前と言葉は、CLDRの絵文字の注釈（日本語と英語）から取る。本体の注釈にない並び（肌の色や旗など）は、派生の注釈から取る。
 注釈はU+FE0Fを除いた並びで引く。どちらにもなければ、emoji-test.txtの英語の名前だけを使う。
 英語の名前（emoji-test.txtの名前）は、補完で名前と一致するものを先に並べるために、言葉とは別にも持つ。
@@ -12,7 +12,7 @@
 入れないもの:
 - 完全な形でない並び（minimally-qualified、unqualified）。同じ絵文字の完全な形が別にあるため
 - 肌の色を付けた並びは、1つの絵文字としては並べない。肌の色のない形の`t`に、変化形として持たせる（下の「肌の色」）
-- 部品（Component）のまとまり。肌の色や髪型の部品だけでは絵文字にならないため
+- 部品（Component）のグループ。肌の色や髪型の部品だけでは絵文字にならないため
 
 肌の色:
 - 肌の色を変えられる絵文字は、`t`に肌の色を付けた並びを持つ。肌の色は明るいほうから5つ（U+1F3FB〜U+1F3FF）
@@ -35,7 +35,7 @@ CLDR_VERSION = "48.2.3"
 GEMOJI_VERSION = "v4.1.0"
 OUTPUT = Path("Packages/SciaCore/Sources/SciaCore/EmojiPalette/Resources/standard-emoji.json")
 
-# emoji-test.txtのまとまりの名前を、iOSの絵文字キーボードに近い日本語の名前にする。
+# emoji-test.txtのグループの名前を、iOSの絵文字キーボードに近い日本語の名前にする。
 GROUP_TITLES = {
     "Smileys & Emotion": "顔と感情",
     "People & Body": "人と体",

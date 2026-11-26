@@ -4,19 +4,19 @@ import SwiftUI
 /// 描き方を既定から変えたカスタム絵文字の一覧。決まりはdocs/animated-custom-emoji.mdの「絵文字ごとの描き方」にある。
 struct CustomEmojiDisplaySettingsView: View {
     @Bindable var settings: AppSettings
-    /// 詳細の画面で開いている絵文字。描き方を選び直すと行が別の節へ移ったり一覧から外れたりするので、行の遷移に持たせず、一覧と別に持つ。
+    /// 詳細の画面で開いている絵文字。描き方を選び直すと行が別のセクションへ移ったり一覧から外れたりするので、行の遷移に持たせず、一覧と別に持つ。
     @State private var opened: CustomEmojiDisplayRule?
 
     var body: some View {
         Form {
-            // 画面のどの値もプリセットに含まれないので、節ごとの情報ボタンではなく、一覧の上に1行で書く。
+            // 画面のどの値もプリセットに含まれないので、セクションごとの情報ボタンではなく、一覧の上に1行で書く。
             Text(SettingsTexts.Presets.notInPreset)
                 .foregroundStyle(.secondary)
             if settings.customEmojiDisplayRules.isEmpty {
                 Text(SettingsTexts.CustomEmojis.empty)
                     .foregroundStyle(.secondary)
             } else {
-                // 行はショートコードとサーバー名の2行を使うので、選んだ描き方は行に置かず、描き方ごとの節の見出しにする。
+                // 行はショートコードとサーバー名の2行を使うので、選んだ描き方は行に置かず、描き方ごとのセクションの見出しにする。
                 ForEach(displaySections, id: \.display) { section in
                     Section {
                         ForEach(section.rules) { rule in
@@ -44,7 +44,7 @@ struct CustomEmojiDisplaySettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// 描き方ごとの節。選択肢の順に並べ、節の中は描き方を変えた順。変えた絵文字のない描き方の節は出さない。
+    /// 描き方ごとのセクション。選択肢の順に並べ、セクションの中は描き方を変えた順。変えた絵文字のない描き方のセクションは出さない。
     private var displaySections: [(display: CustomEmojiDisplay, rules: [CustomEmojiDisplayRule])] {
         let rules = settings.customEmojiDisplayRules
         return CustomEmojiDisplay.allCases.compactMap { display in
@@ -59,7 +59,7 @@ struct CustomEmojiDisplaySettingsView: View {
     }
 }
 
-/// 一覧の行。ショートコードとサーバー名はどちらも長くなりうるので、1行ずつ使う。長ければ中ほどで切り、全体は行を押して開く詳細の画面で見る（HIGの「リストとテーブル」）。
+/// 一覧の行。ショートコードとサーバー名はどちらも長くなりうるので、1行ずつ使う。長ければ中ほどで切り、全体は行を選択して開く詳細の画面で見る（HIGの「リストとテーブル」）。
 private struct CustomEmojiDisplayRow: View {
     let rule: CustomEmojiDisplayRule
     let choice: EmojiImageChoice

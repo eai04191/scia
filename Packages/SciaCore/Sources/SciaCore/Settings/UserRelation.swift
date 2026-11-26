@@ -71,7 +71,7 @@ extension UserRelationChange {
         }
     }
 
-    /// フォローそのものを変える。フォロワー数が変わるため、開いているプロフィールのアカウントを読み直す。
+    /// フォローそのものを変える。フォロワー数が変わるため、開いているプロフィールのアカウントを再読み込みする。
     public var changesFollow: Bool {
         switch self {
         // Mastodonはドメインをブロックすると、APIのドキュメントと違い、そのドメインの人への自分のフォローも外す（`AfterBlockDomainFromAccountService#remove_follows!`）。
@@ -80,7 +80,7 @@ extension UserRelationChange {
         }
     }
 
-    /// 送れたときの知らせ。メニューを閉じると変わったことが見えないため知らせる。鍵のかかった相手のフォローは、リクエストになったことを伝える。
+    /// 送れたときのチップ。メニューを閉じると変わったことが見えないため知らせる。鍵のかかった相手のフォローは、リクエストになったことを伝える。
     public func doneTitle(_ relationship: Relationship) -> String {
         switch self {
         case .follow: relationship.requested ? "フォローをリクエストしました" : "フォローしました"
@@ -122,7 +122,7 @@ public struct UserIdentity: Sendable {
 }
 
 /// メニューを1回開く間、相手を1度だけ探し、相手との関係を1度だけ読む。項目ごとに探したり読んだりしないよう、同じユーザーの項目で分け合う。
-/// 関係を覚えていない相手にだけ使う。覚えている相手は、`UserMenuActions.knownRelation`の関係でその場で組む。
+/// 関係をキャッシュしていない相手にだけ使う。キャッシュしている相手は、`UserMenuActions.knownRelation`の関係でその場で組む。
 @MainActor
 public final class UserRelationLoad {
     private let resolve: @MainActor () async throws -> UserIdentity
@@ -156,12 +156,12 @@ public final class UserRelationLoad {
 
 /// 関係の項目を組むときに、手元で分かっている相手との関係。
 public enum KnownRelation: Sendable {
-    /// 自分。関係の項目のうちメモだけを出す。自分との関係を覚えていなければnil。
+    /// 自分。関係の項目のうちメモだけを出す。自分との関係をキャッシュしていなければnil。
     case myself(UserRelation?)
     case relation(UserRelation)
 }
 
-/// 読めなかったことを知らせる項目。項目ごとに同じ知らせが並ばないよう、失敗の種類ごとに1か所にだけ出す。
+/// 読めなかったことを知らせる項目。項目ごとに同じ失敗の行が並ばないよう、失敗の種類ごとに1か所にだけ出す。
 public struct RelationFailureSlots: Equatable, Sendable {
     /// 相手は分かって、関係だけ読めなかったときに知らせる項目。最初に出る、関係で中身が変わる項目。
     public let relation: UserMenuItem?

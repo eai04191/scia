@@ -65,7 +65,7 @@ struct AccountSessionStoresTests {
 
         #expect(session.diagnostics.serverVersion == "4.7.3")
         #expect(loaded?.autoplaysAnimations == true)
-        // 次の起動では、読み直す前から、覚えた値で描く。
+        // 次の起動では、再読み込みする前から、覚えた値で描く。
         let next = AppSettings(defaults: defaults)
         next.followServerPreferences(of: session.credential.handle)
         #expect(next.animatesAvatars == settings.animatesAvatars)

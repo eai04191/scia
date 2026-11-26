@@ -9,7 +9,7 @@ extension RichText {
     /// `media`のfacetは、長い投稿では本文にない位置を指すため使わない。通常の投稿では見せる範囲の外にあるため、使わなくても困らない。
     init(xPost raw: FxTwitterResponse.RawText) {
         let scalars = Array(raw.text.unicodeScalars)
-        // 見せる範囲の始まりは使わない。返信の先頭の宛先のメンションは、Xでは「返信先」として本文の外に出るが、囲みには返信先の表示がないため、本文に残してリンクにする。
+        // 見せる範囲の始まりは使わない。返信の先頭の宛先のメンションは、Xでは「返信先」として本文の外に出るが、カードには返信先の表示がないため、本文に残してリンクにする。
         // 長い投稿の見せる範囲はfxtwitterが本文のUTF-16の長さで作るため、スカラー値で数えた長さを超えることがある。そのときは全文を見せる。
         let end = min(raw.displayTextRange?.last ?? scalars.count, scalars.count)
         var inlines: [Inline] = []
@@ -41,7 +41,7 @@ extension RichText {
         let xPage = URL(string: "https://x.com")
         switch facet.type {
         case "url":
-            // fxtwitterの応答もサーバーから来る値なので、押して開く先はhttpとhttpsだけを受け付ける。ほかのスキームは文字のまま残す。
+            // fxtwitterの応答もサーバーから来る値なので、選択して開く先はhttpとhttpsだけを受け付ける。ほかのスキームは文字のまま残す。
             guard let url = (facet.replacement ?? facet.original).flatMap(URL.init(string:)).flatMap(ServerURLKind.destination.accepting) else { return nil }
             return .link(facet.display ?? text, .url(url), [])
         case "hashtag":

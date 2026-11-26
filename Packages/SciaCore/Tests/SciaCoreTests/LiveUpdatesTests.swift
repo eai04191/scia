@@ -41,17 +41,17 @@ struct LiveUpdatesTests {
         let updates = makeUpdates(connector, clock: clock)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        // つなぎ直し（10ms後）、ポーリング（15ms後）、知らせ（30ms後）を待ち始めてから、30msまで進める。
+        // 再接続（10ms後）、ポーリング（15ms後）、途切れのイベント（30ms後）を待ち始めてから、30msまで進める。
         try await waitUntil { await log.labels == ["disconnected"] && clock.sleeperCount(remaining: .milliseconds(10)) >= 1 && clock.sleeperCount(remaining: .milliseconds(15)) >= 1 && clock.sleeperCount(remaining: .milliseconds(30)) >= 1 }
         clock.advance(by: .milliseconds(10))
         try await waitUntil { await log.labels.count >= 2 && clock.sleeperCount(remaining: .milliseconds(5)) >= 1 && clock.sleeperCount(remaining: .milliseconds(20)) >= 2 }
         #expect(await log.labels.count == 2)
         clock.advance(by: .milliseconds(20))
-        // つながるのは、まだ進めていない4回目のつなぎ直しの後なので、ポーリングと知らせは必ずその前に届く。
+        // つながるのは、まだ進めていない4回目の再接続の後なので、ポーリングと途切れのイベントは必ずその前に届く。
         try await log.waitUntil { $0.contains("poll") && $0.contains("outage started") && $0.filter { $0 == "disconnected" }.count >= 3 }
         #expect(await log.labels.filter { $0 == "disconnected" }.count == 3)
         try await waitUntil(advancing: clock, by: .milliseconds(10)) { await log.labels.contains("outage ended") }
-        // つながったら、ポーリングと知らせの待ちを取り消している。
+        // つながったら、ポーリングと途切れのイベントの待ちを取り消している。
         #expect(clock.sleeperCount(dueWithin: .seconds(1)) == 0)
         task.cancel()
         _ = await task.result
@@ -71,7 +71,7 @@ struct LiveUpdatesTests {
         let updates = makeUpdates(connector, clock: clock)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        // つないだと知らせ、ポーリングと知らせの待ちを取り消してから、時計を進めて静かなままかを見る。
+        // つないだと知らせ、ポーリングと途切れのイベントの待ちを取り消してから、時計を進めて静かなままかを見る。
         try await waitUntil { await log.labels.contains("connected") && clock.sleeperCount(dueWithin: .seconds(1)) == 0 }
         // 待ちが消えたことを確かめてから進め、何も起きないことを見るので、起こしたい待ちはない。
         // scialint:disable:next advance_after_sleeper_count
@@ -90,15 +90,15 @@ struct LiveUpdatesTests {
         ])
         let log = LiveLog()
         let clock = TestClock()
-        // つなぎ直しの10msより十分長くする。
+        // 再接続の10msより十分長くする。
         let updates = makeUpdates(connector, policy: LiveUpdates.Policy(pollingInterval: .milliseconds(80), outageNoticeDelay: .milliseconds(80)), clock: clock)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        // 切れてつなぎ直しを待ち始めたら、つなぎ直す10msだけ進める。
+        // 切れて再接続を待ち始めたら、再接続する10msだけ進める。
         try await waitUntil { await log.labels.count >= 3 && clock.sleeperCount(remaining: .milliseconds(10)) >= 1 }
         #expect(await log.labels.count == 3)
         clock.advance(by: .milliseconds(10))
-        // つなぎ直して、ポーリングと知らせの待ちを取り消してから、その締め切りより先まで進める。
+        // 再接続して、ポーリングと途切れのイベントの待ちを取り消してから、その締め切りより先まで進める。
         try await waitUntil { await log.labels.filter { $0 == "connected" }.count >= 2 && clock.sleeperCount(dueWithin: .seconds(1)) == 0 }
         #expect(await log.labels.filter { $0 == "connected" }.count == 2)
         // 待ちが消えたことを確かめてから進め、何も起きないことを見るので、起こしたい待ちはない。
@@ -117,7 +117,7 @@ struct LiveUpdatesTests {
         let updates = makeUpdates(connector, clock: clock)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        // 切れるまでは時計を進めないので、つながる前のポーリングや知らせは届かない。切れてから、順は問わずに進める。
+        // 切れるまでは時計を進めないので、つながる前のポーリングや途切れのイベントは届かない。切れてから、順は問わずに進める。
         try await log.waitUntil { $0.contains("disconnected") }
         try await waitUntil(advancing: clock, by: .milliseconds(5)) {
             let labels = await log.labels
@@ -142,7 +142,7 @@ struct LiveUpdatesTests {
         #expect(connector.closedCount == 1)
     }
 
-    /// 待つ時間はすべて`clock`で数える。進めなければ、つなぎ直しもポーリングも知らせも起きない。
+    /// 待つ時間はすべて`clock`で数える。進めなければ、再接続もポーリングも途切れのイベントも起きない。
     private func makeUpdates(_ connector: ScriptedConnector, policy: LiveUpdates.Policy = Self.policy, clock: TestClock = TestClock()) -> LiveUpdates {
         let client = StreamingClient(
             credential: Credential(

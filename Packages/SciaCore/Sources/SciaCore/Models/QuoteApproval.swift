@@ -57,10 +57,10 @@ public enum QuoteAvailability: Hashable, Sendable {
     /// 引用できない。
     /// - Parameter followersOnly: 投稿者のフォロワーなら引用できる。理由の文言を分けるために使う。
     case denied(followersOnly: Bool)
-    /// ログインしていない人向けに届いたため、自分が引用できるか分からない。投稿を読み直して確かめる。
+    /// ログインしていない人向けに届いたため、自分が引用できるか分からない。投稿を再読み込みして確かめる。
     case unverified
 
-    /// 引用の項目を押せる。分からないときも押せるようにし、押してから確かめる。
+    /// 引用の項目を選択できる。分からないときも選択できるようにし、選択してから確かめる。
     public var canQuote: Bool {
         switch self {
         case .automatic, .manual, .unverified: true

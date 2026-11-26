@@ -95,7 +95,7 @@ public struct ChoiceTuning<Choice: TuningChoice>: AnyChoiceTuning, Identifiable 
     }
 }
 
-/// 触覚フィードバックの種類。`UIImpactFeedbackGenerator`のスタイルと、`UISelectionFeedbackGenerator`の選択の触覚。
+/// ハプティクスの種類。`UIImpactFeedbackGenerator`のスタイルと、`UISelectionFeedbackGenerator`の選択のハプティクス。
 public enum HapticStyle: String, TuningChoice {
     case light
     case medium
@@ -110,19 +110,19 @@ public enum HapticStyle: String, TuningChoice {
 /// アプリで使うチューニング項目のリスト。値を足すときは、ここに定義を追加してTuningStoreから読む。
 public enum TuningCatalog {
 
-    /// 行を押している間の背景の色の強さ。UIKitの既定の押下の色に対する割合で、1なら既定のまま。
+    /// 行が押されている状態の背景の色の強さ。UIKitの既定の押下の色に対する割合で、1なら既定のまま。
     public static let rowHighlightBackgroundStrength = NumberTuning(
         id: "timeline.rowHighlightBackgroundStrength",
-        title: "行を押している間の背景の色の強さ",
+        title: "行が押されている状態の背景の色の強さ",
         range: 0...1,
         step: 0.05,
         defaultValue: 0.5
     )
 
-    /// 行を押している間に、行の中身に押下の色を混ぜる強さ。背景の色の強さより大きくすると、背景は重ねた分の色になる。
+    /// 行が押されている状態で、行の中身に押下の色を混ぜる強さ。背景の色の強さより大きくすると、背景は重ねた分の色になる。
     public static let rowHighlightContentStrength = NumberTuning(
         id: "timeline.rowHighlightContentStrength",
-        title: "行を押している間の中身に混ぜる色の強さ",
+        title: "行が押されている状態の中身に混ぜる色の強さ",
         range: 0...0.9,
         step: 0.05,
         defaultValue: 0.3
@@ -137,7 +137,7 @@ public enum TuningCatalog {
         defaultValue: 0.5
     )
 
-    /// 投票する形と結果の形を入れ替えるときの、割合を浮かび上がらせる時間と、選んだ選択肢のフチを移す時間。
+    /// 投票する形と結果の形を入れ替えるときの、割合をフェードインさせる時間と、選んだ選択肢のフチを移す時間。
     /// 割合は、この半分だけ待って、先頭の記号が消えかけてから出す。下の行のボタンは、この半分で前のボタンを消し、続く半分で新しいボタンを出す。0なら動かさない。
     public static let pollModeChangeDuration = NumberTuning(
         id: "timeline.pollModeChangeDuration",
@@ -176,28 +176,28 @@ public enum TuningCatalog {
 
     public static let translationSectionID = "translation"
 
-    /// 自動翻訳で、文字の濃さを変える幅の、1行に対する割合。
+    /// 自動翻訳で、文字の不透明度を変える幅の、1行に対する割合。
     public static let translationFadeWidth = NumberTuning(
         id: "timeline.translationFadeWidth",
-        title: "自動翻訳の文字の濃さを変える幅（1行に対する割合）",
+        title: "自動翻訳の文字の不透明度を変える幅（1行に対する割合）",
         range: 0.1...1,
         step: 0.05,
         defaultValue: 0.5
     )
 
-    /// 自動翻訳で、語が浮かび上がるスプリングの時間。
+    /// 自動翻訳で、語がフェードインするスプリングの時間。
     public static let translationWordDuration = NumberTuning(
         id: "timeline.translationWordDuration",
-        title: "自動翻訳の語が浮かび上がるスプリングの時間（秒）",
+        title: "自動翻訳の語がフェードインするスプリングの時間（秒）",
         range: 0.05...1,
         step: 0.05,
         defaultValue: 0.35
     )
 
-    /// 自動翻訳の訳文が届いてから、まとめて描き直すまでの間。
+    /// 自動翻訳の訳文が届いてから、まとめて再描画するまでの間。
     public static let translationApplyInterval = NumberTuning(
         id: "timeline.translationApplyInterval",
-        title: "自動翻訳の訳文をまとめて描き直す間隔（秒）",
+        title: "自動翻訳の訳文をまとめて再描画する間隔（秒）",
         range: 0...2,
         step: 0.05,
         defaultValue: 0.25
@@ -212,7 +212,7 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
-    /// アクションバーの引き出しを開閉するときに、投稿が伸び縮みしてまわりのアイテムが動く時間。0なら動かさない。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    /// アクションバーを開閉するときに、投稿が伸び縮みしてまわりのアイテムが動く時間。0なら動かさない。決まりはdocs/post-action-bar.mdの「開閉」にある。
     public static let actionBarDrawerDuration = NumberTuning(
         id: "timeline.actionBarDrawerDuration",
         title: "アクションバーを開閉する時間（秒）",
@@ -221,34 +221,34 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
-    /// アクションバーの引き出しをタップで開閉したときの触覚を、開閉の動きが着いたとき（「アクションバーを開閉する時間」が過ぎたとき）に鳴らす。切ると、指を離したときに鳴らす。
-    /// 実機で比べて、既定はオフにした。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    /// アクションバーをタップで開閉したときのハプティクスを、開閉の動きが着いたとき（「アクションバーを開閉する時間」が過ぎたとき）に鳴らす。切ると、指を離したときに鳴らす。
+    /// 実機で比べて、既定はオフにした。決まりはdocs/post-action-bar.mdの「開閉」にある。
     public static let actionBarDrawerHapticAtLanding = ToggleTuning(
         id: "timeline.actionBarDrawerHapticAtLanding",
-        title: "アクションバーの開閉の触覚を動きが着いたときに鳴らす（オフで指を離したとき）",
+        title: "アクションバーの開閉のハプティクスを動きが着いたときに鳴らす（オフで指を離したとき）",
         defaultValue: false
     )
 
-    /// アクションバーの引き出しをタップで開閉したときの、触覚フィードバックの種類。実機で比べて、既定は`soft`にした。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    /// アクションバーをタップで開閉したときの、ハプティクスの種類。実機で比べて、既定は`soft`にした。決まりはdocs/post-action-bar.mdの「開閉」にある。
     public static let actionBarDrawerHapticStyle = ChoiceTuning(
         id: "timeline.actionBarDrawerHapticStyle",
-        title: "アクションバーをタップで開閉したときの触覚の種類",
+        title: "アクションバーをタップで開閉したときのハプティクスの種類",
         defaultValue: HapticStyle.soft
     )
 
-    /// アクションバーの引き出しをタップで開閉したときの、触覚フィードバックの強さ。0なら出さない。種類が`selection`のときは強さを選べないので、0かどうかだけを見る。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    /// アクションバーをタップで開閉したときの、ハプティクスの強さ。0なら出さない。種類が`selection`のときは強さを選べないので、0かどうかだけを見る。決まりはdocs/post-action-bar.mdの「開閉」にある。
     public static let actionBarDrawerHapticIntensity = NumberTuning(
         id: "timeline.actionBarDrawerHapticIntensity",
-        title: "アクションバーをタップで開閉したときの触覚の強さ（0で出さない）",
+        title: "アクションバーをタップで開閉したときのハプティクスの強さ（0で出さない）",
         range: 0...1,
         step: 0.05,
         defaultValue: 1
     )
 
-    /// アクションバーのボタンの押せる範囲を、アイコンの左端から左へ広げる長さ。アイコンの大きさに対する割合で、0なら広げない。決まりはdocs/post-action-bar.mdにある。
+    /// アクションバーのボタンのヒット領域を、アイコンの左端から左へ広げる長さ。アイコンの大きさに対する割合で、0なら広げない。決まりはdocs/post-action-bar.mdにある。
     public static let actionBarLeadingHitReach = NumberTuning(
         id: "timeline.actionBarLeadingHitReach",
-        title: "アクションバーのボタンを左へ押せる範囲（アイコンの大きさに対する割合）",
+        title: "アクションバーのボタンのヒット領域を左へ広げる長さ（アイコンの大きさに対する割合）",
         range: 0...1.5,
         step: 0.1,
         defaultValue: 0.5
@@ -403,19 +403,19 @@ public enum TuningCatalog {
         defaultValue: -0.04
     )
 
-    /// 本文の右に重ねた写真のスタックが、タイムラインの背景に落とす影の濃さ。
+    /// 本文の右に重ねた写真のスタックが、タイムラインの背景に落とす影の不透明度。
     public static let mediaStackShadowOpacity = NumberTuning(
         id: "timeline.stackShadowOpacity",
-        title: "本文の右の重ねた写真が背景に落とす影の濃さ",
+        title: "本文の右の重ねた写真が背景に落とす影の不透明度",
         range: 0...0.6,
         step: 0.01,
         defaultValue: 0.15
     )
 
-    /// 本文の右に重ねた写真のうち、上の写真が下の写真に落とす影の濃さ。
+    /// 本文の右に重ねた写真のうち、上の写真が下の写真に落とす影の不透明度。
     public static let mediaStackBetweenShadowOpacity = NumberTuning(
         id: "timeline.stackBetweenShadowOpacity",
-        title: "本文の右の重ねた写真同士の影の濃さ",
+        title: "本文の右の重ねた写真同士の影の不透明度",
         range: 0...0.6,
         step: 0.01,
         defaultValue: 0.15
@@ -476,7 +476,7 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// スレッドを開くとき、タイムラインの上に重ねて薄く出していく時間。押した行はタイムラインで見えていた位置に置くので、ほかの行だけが入れ替わって見える。
+    /// スレッドを開くとき、タイムラインの上に重ねて薄く出していく時間。選択した行はタイムラインで見えていた位置に置くので、ほかの行だけが入れ替わって見える。
     public static let threadOpenDuration = NumberTuning(
         id: "thread.openDuration",
         title: "開くときのフェード（秒）",
@@ -485,11 +485,11 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
-    /// 読み込んだとき、押した投稿の下の返信が画面の外にあれば、押した投稿を上端まで動かして返信を見せる。
-    /// オフなら、押した投稿を押した位置から動かさない。
+    /// 読み込んだとき、選択した投稿の下の返信が画面の外にあれば、選択した投稿を上端まで動かして返信を見せる。
+    /// オフなら、選択した投稿を選択した位置から動かさない。
     public static let threadRaisesFocusedPost = ToggleTuning(
         id: "thread.raisesFocusedPost",
-        title: "返信が画面の外なら押した投稿を上へ寄せる",
+        title: "返信が画面の外なら選択した投稿を上へ寄せる",
         defaultValue: false
     )
 
@@ -529,7 +529,7 @@ public enum TuningCatalog {
         defaultValue: 32
     )
 
-    /// プロフィールの自己紹介の「さらに表示」を押して全文に広げるときに、下の内容を下げていく時間。0なら切り替える。
+    /// プロフィールの自己紹介の「さらに表示」を選択して全文に広げるときに、下の内容を下げていく時間。0なら切り替える。
     public static let profileNoteExpandDuration = NumberTuning(
         id: "profile.noteExpandDuration",
         title: "自己紹介を「さらに表示」で広げる時間（秒）",
@@ -637,10 +637,10 @@ public enum TuningCatalog {
         defaultValue: 0
     )
 
-    /// 長押しにメニュー以外を選んだ対象を長押ししたときの、触覚フィードバックの強さ。スタイルは`medium`で、0なら出さない。決まりはdocs/object-actions.mdにある。
+    /// 長押しにメニュー以外を選んだ対象を長押ししたときの、ハプティクスの強さ。スタイルは`medium`で、0なら出さない。決まりはdocs/object-actions.mdにある。
     public static let objectLongPressHapticIntensity = NumberTuning(
         id: "timeline.objectLongPressHapticIntensity",
-        title: "長押しで操作を行うときの触覚の強さ（0で出さない）",
+        title: "長押しで操作を行うときのハプティクスの強さ（0で出さない）",
         range: 0...1,
         step: 0.05,
         defaultValue: 1
@@ -691,7 +691,7 @@ public enum TuningCatalog {
         defaultValue: 0
     )
 
-    /// つなぎ直したとき、切れていた間の投稿を手元とつながるまで続けて読むページ数の上限。1ページは40件。
+    /// 再接続したとき、切れていた間の投稿を手元とつながるまで続けて読むページ数の上限。1ページは40件。
     /// 超えた分はギャップとして残り、近づいたときに読む。
     public static let fillPageLimit = NumberTuning(
         id: "streaming.fillPageLimit",
@@ -722,7 +722,7 @@ public enum TuningCatalog {
         defaultValue: 2
     )
 
-    /// ストリーミングにつながらない間、切れていた間の新着をRESTで読む間隔。つなぎ直しはその間も続ける。
+    /// ストリーミングにつながらない間、切れていた間の新着をRESTで読む間隔。再接続はその間も続ける。
     public static let pollingInterval = NumberTuning(
         id: "streaming.pollingInterval",
         title: "つながらない間に新着を読む間隔（秒）",
@@ -731,11 +731,11 @@ public enum TuningCatalog {
         defaultValue: 60
     )
 
-    /// 補完の読み込みに、サーバーがホームを作り直している最中だと返されたとき、読み直すまでの間隔。
-    /// 作り直しが終わるまで、この間隔で読み直し続ける。
+    /// 補完の読み込みに、サーバーがホームを作り直している最中だと返されたとき、再読み込みするまでの間隔。
+    /// 作り直しが終わるまで、この間隔で再読み込みし続ける。
     public static let regeneratingRetryInterval = NumberTuning(
         id: "streaming.regeneratingRetryInterval",
-        title: "ホームの作り直し中に読み直す間隔（秒）",
+        title: "ホームの作り直し中に再読み込みする間隔（秒）",
         range: 5...120,
         step: 5,
         defaultValue: 10
@@ -983,7 +983,7 @@ public enum TuningCatalog {
         defaultValue: 8
     )
 
-    /// 知らせのチップ（写真に保存しました、ダウンロード中など）が出入りし、並びを詰め直す時間。
+    /// チップ（写真に保存しました、ダウンロード中など）が出入りし、並びを詰め直す時間。
     public static let noticeAnimationDuration = NumberTuning(
         id: "notice.animationDuration",
         title: "アプリ内通知のチップの出入りの時間（秒）",
@@ -1010,7 +1010,7 @@ public enum TuningCatalog {
         defaultValue: 300
     )
 
-    /// お気に入りやブーストの失敗など、押し直せば済む失敗を知らせるチップを出しておく時間。指が触れている間は数えない。
+    /// お気に入りやブーストの失敗など、もう一度選択すれば済む失敗を知らせるチップを出しておく時間。指が触れている間は数えない。
     public static let noticeFailureChipDuration = NumberTuning(
         id: "notice.failureChipDuration",
         title: "失敗を知らせるチップを出しておく時間（秒）",
@@ -1019,25 +1019,25 @@ public enum TuningCatalog {
         defaultValue: 4
     )
 
-    /// 絵文字、アイコン、添付ファイルの画像を、通信の失敗やサーバーの一時的な障害で読めなかったあと、読み直すまでの最初の間隔。続けて失敗するたびに倍にする。
+    /// 絵文字、アイコン、添付ファイルの画像を、通信の失敗やサーバーの一時的な障害で読めなかったあと、再読み込みするまでの最初の間隔。続けて失敗するたびに倍にする。
     public static let imageRetryInitialDelay = NumberTuning(
         id: "images.retryInitialDelay",
-        title: "読めなかった画像を読み直すまでの最初の間隔（秒）",
+        title: "読めなかった画像を再読み込みするまでの最初の間隔（秒）",
         range: 1...30,
         step: 1,
         defaultValue: 5
     )
 
-    /// 読めなかった画像を読み直す間隔の上限。ストリーミングのつなぎ直しの上限と揃える。
+    /// 読めなかった画像を再読み込みする間隔の上限。ストリーミングの再接続の上限と揃える。
     public static let imageRetryMaxDelay = NumberTuning(
         id: "images.retryMaxDelay",
-        title: "読めなかった画像を読み直す間隔の上限（秒）",
+        title: "読めなかった画像を再読み込みする間隔の上限（秒）",
         range: 10...600,
         step: 10,
         defaultValue: 60
     )
 
-    /// 読めなかった画像が隠れている間に、見えるようになったかを確かめる間隔。見えてから読み直し始めるまでの遅れになる。
+    /// 読めなかった画像が隠れている間に、見えるようになったかを確かめる間隔。見えてから再読み込みし始めるまでの遅れになる。
     public static let imageRetryHiddenRecheck = NumberTuning(
         id: "images.retryHiddenRecheck",
         title: "読めなかった画像が隠れている間に、見えたかを確かめる間隔（秒）",
@@ -1047,7 +1047,7 @@ public enum TuningCatalog {
     )
 
     /// プロフィールを開くときに、探し始めてから「取得中」のチップを出すまでの時間。すぐ見つかったときに、チップが一瞬だけ出入りしないようにする。
-    /// 押しても応答が届くまで画面が変わらないほかの操作（`SlowActivity`）の「取得中」と「削除中」のチップも、この時間で出す。
+    /// 選択しても応答が届くまで画面が変わらないほかの操作（`SlowActivity`）の「取得中」と「削除中」のチップも、この時間で出す。
     public static let profileLookupChipDelay = NumberTuning(
         id: "notice.profileLookupChipDelay",
         title: "取得中と削除中のチップを出すまでの時間（秒）",
@@ -1283,10 +1283,10 @@ public enum TuningCatalog {
         defaultValue: 14
     )
 
-    /// アプリ内のSafariを伏せたときの、縮めた後ろの画面の下の角の丸み（pt）。
+    /// アプリ内のSafariを伏せたときの、縮めた後ろの画面の下の角のradius（pt）。
     public static let inAppBrowserDockCornerRadius = NumberTuning(
         id: "browser.dockCornerRadius",
-        title: "アプリ内のSafariのシートと、縮めた後ろの画面の角の丸み（pt）",
+        title: "アプリ内のSafariのシートと、縮めた後ろの画面の角のradius（pt）",
         range: 0...80,
         step: 1,
         defaultValue: 38
@@ -1311,7 +1311,7 @@ public enum TuningCatalog {
     )
 
     /// アプリ内のSafariのバーの上に重ねる、引いてシートの高さを変える範囲の高さ（pt）。上端の帯のすぐ下から数え、帯の高さの分も範囲に含める。0で重ねない。
-    /// Safariのバーはページをスクロールすると細くなり、アプリからは今の高さがわからない。細いバーより高くすると、そのときにページの上を覆い、覆ったところのリンクを押せなくなる。
+    /// Safariのバーはページをスクロールすると細くなり、アプリからは今の高さがわからない。細いバーより高くすると、そのときにページの上を覆い、覆ったところのリンクを選択できなくなる。
     public static let inAppBrowserBarGrabHeight = NumberTuning(
         id: "browser.barGrabHeight",
         title: "アプリ内のSafariのバーの上の、引ける範囲の高さ（pt）",
@@ -1320,7 +1320,7 @@ public enum TuningCatalog {
         defaultValue: 16
     )
 
-    /// アプリ内のSafariのバーの上に重ねる、引ける範囲の左右の空き（pt）。左右のSafariのボタン（×とメニュー）を押せるように空ける。
+    /// アプリ内のSafariのバーの上に重ねる、引ける範囲の左右の空き（pt）。左右のSafariのボタン（×とメニュー）を選択できるように空ける。
     public static let inAppBrowserBarGrabInset = NumberTuning(
         id: "browser.barGrabInset",
         title: "アプリ内のSafariのバーの上の、引ける範囲の左右の空き（pt）",
@@ -1374,11 +1374,11 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// 投稿欄の開閉で、片方にしかない本文の文字を入れ替えるとき、入ってくる文字が浮かび上がり終える時点。形を変える時間に対する割合。
-    /// 浮かび上がり始めるのは、消し切る時点から。
+    /// 投稿欄の開閉で、片方にしかない本文の文字を入れ替えるとき、入ってくる文字がフェードインし終える時点。形を変える時間に対する割合。
+    /// フェードインし始めるのは、消し切る時点から。
     public static let composeTextSwapInEnd = NumberTuning(
         id: "compose.textSwapInEnd",
-        title: "本文の入れ替えで浮かび上がり終える時点（割合）",
+        title: "本文の入れ替えでフェードインし終える時点（割合）",
         range: 0.1...1,
         step: 0.05,
         defaultValue: 0.5
@@ -1490,19 +1490,19 @@ public enum TuningCatalog {
         defaultValue: 2500
     )
 
-    /// カプセルに重ねた写真のスタックが、カプセルの面に落とす影の濃さ。
+    /// カプセルに重ねた写真のスタックが、カプセルの面に落とす影の不透明度。
     public static let composeStackShadowOpacity = NumberTuning(
         id: "compose.stackShadowOpacity",
-        title: "カプセルの写真のスタックが背景に落とす影の濃さ",
+        title: "カプセルの写真のスタックが背景に落とす影の不透明度",
         range: 0...0.6,
         step: 0.01,
         defaultValue: 0.15
     )
 
-    /// カプセルに重ねた写真のうち、上の写真が下の写真に落とす影の濃さ。
+    /// カプセルに重ねた写真のうち、上の写真が下の写真に落とす影の不透明度。
     public static let composeStackBetweenShadowOpacity = NumberTuning(
         id: "compose.stackBetweenShadowOpacity",
-        title: "カプセルの写真同士の影の濃さ",
+        title: "カプセルの写真同士の影の不透明度",
         range: 0...0.6,
         step: 0.01,
         defaultValue: 0.15
@@ -1518,7 +1518,7 @@ public enum TuningCatalog {
         defaultValue: 0.04
     )
 
-    /// リンクにタイトルを付けるとき、URLを次の行の位置へ動かし、タイトルを浮かび上がらせる動きの時間。0なら動かさずに置き換える。
+    /// リンクにタイトルを付けるとき、URLを次の行の位置へ動かし、タイトルをフェードインさせる動きの時間。0なら動かさずに置き換える。
     public static let linkTitleMorphDuration = NumberTuning(
         id: "compose.linkTitleMorphDuration",
         title: "リンクにタイトルを付けるときの変形の時間（秒）",
@@ -1599,7 +1599,7 @@ public enum TuningCatalog {
         defaultValue: 1.4
     )
 
-    /// 着いた形を薄くして消す時間と、最初の形を浮かび上がらせる時間。
+    /// 着いた形を薄くして消す時間と、最初の形をフェードインさせる時間。
     public static let extendedURLFadeDuration = NumberTuning(
         id: "compose.extendedURLFadeDuration",
         title: "URLの後ろの文字：薄くして繰り返す時間（秒）",
@@ -1617,7 +1617,7 @@ public enum TuningCatalog {
         defaultValue: 1.2
     )
 
-    /// リンクにタイトルを付けるとき、きらめきを浮かび上がらせたり、薄くして消したりする時間。読み終えたときと、読んでいる間にURLの折り返しが変わって入れ替えるときに使う。
+    /// リンクにタイトルを付けるとき、きらめきをフェードインさせたり、薄くして消したりする時間。読み終えたときと、読んでいる間にURLの折り返しが変わって入れ替えるときに使う。
     public static let linkTitleShimmerFadeDuration = NumberTuning(
         id: "compose.linkTitleShimmerFadeDuration",
         title: "きらめきを出し入れする時間（秒）",
@@ -1626,10 +1626,10 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// メニューの並びの設定で、横並びに入る項目が変わり、字下げが付いたり外れたりする時間。
+    /// メニューの並びの設定で、横並びに入る項目が変わり、インデントが付いたり外れたりする時間。
     public static let menuLayoutIndentDuration = NumberTuning(
         id: "settings.menuLayoutIndentDuration",
-        title: "メニューの並びの設定で、横並びの字下げが変わる時間（秒）",
+        title: "メニューの並びの設定で、横並びのインデントが変わる時間（秒）",
         range: 0...1.5,
         step: 0.05,
         defaultValue: 0.25
@@ -1663,7 +1663,7 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
-    /// 投票の選択肢の欄が増減したときに、投稿欄の高さを変え、欄を浮かび上がらせる（薄くする）時間。
+    /// 投票の選択肢の欄が増減したときに、投稿欄の高さを変え、欄をフェードインさせる（薄くする）時間。
     public static let composePollOptionDuration = NumberTuning(
         id: "compose.pollOptionDuration",
         title: "投票の選択肢の欄が増減したときに欄の高さを変える時間（秒）",
@@ -1717,46 +1717,46 @@ public enum TuningCatalog {
         defaultValue: 5
     )
 
-    /// メディアを選ぶシートと絵文字のパレットのシートの低いときの高さを、最後に出したキーボードの高さに合わせる。
+    /// メディアを選ぶシートと絵文字ピッカーの低いときの高さを、最後に出したキーボードの高さに合わせる。
     /// 切ると、キーボードを一度も出していないときと同じく、決めた高さで出す。
     public static let composePickerMatchesKeyboard = ToggleTuning(
         id: "compose.pickerMatchesKeyboard",
-        title: "メディアと絵文字のシートをキーボードの高さに合わせる",
+        title: "メディアのシートと絵文字ピッカーをキーボードの高さに合わせる",
         defaultValue: true
     )
 
-    /// メディアを選ぶシートと絵文字のパレットのシートの、低いときの画面の下端からの高さ（pt）。キーボードの高さが分からないときや、合わせないときに使う。
+    /// メディアを選ぶシートと絵文字ピッカーの、低いときの画面の下端からの高さ（pt）。キーボードの高さが分からないときや、合わせないときに使う。
     /// 2つのシートは同じ高さにする。入れ替えても投稿欄のバーが上下に動かないようにするため。
     /// キーボードの高さは日本語入力の候補の段や他社のキーボードで変わり、ハードウェアキーボードでは0になる。
     public static let composePickerHeight = NumberTuning(
         id: "compose.pickerHeight",
-        title: "メディアと絵文字のシートの決めた高さ（pt）",
+        title: "メディアのシートと絵文字ピッカーの決めた高さ（pt）",
         range: 200...500,
         step: 2,
         defaultValue: 336
     )
 
-    /// 絵文字のシートで、絵文字を並べた部分の上下の端の効果を、検索欄の下端と下の段の上端ではっきり区切る（`.hard`）。切ると、やわらかくぼかす（`.soft`）。
+    /// 絵文字ピッカーで、絵文字を並べた部分の上下の端の効果を、検索欄の下端と下の段の上端ではっきり区切る（`.hard`）。切ると、やわらかくぼかす（`.soft`）。
     /// 実機で見比べて、既定は`.soft`にした。
     public static let composeEmojiPaletteHardEdgeEffect = ToggleTuning(
         id: "compose.emojiPalette.hardEdgeEffect",
-        title: "絵文字のシートの絵文字の並びの上下の端をはっきり区切る",
+        title: "絵文字ピッカーの絵文字の並びの上下の端をはっきり区切る",
         defaultValue: false
     )
 
-    /// 絵文字のシートで絵文字を入れたときと削除キーを押したときの、触覚フィードバックの強さ。スタイルは`light`で、0なら出さない。決まりはdocs/compose.mdの「入れ方」にある。
+    /// 絵文字ピッカーで絵文字を入れたときと削除キーを押したときの、ハプティクスの強さ。スタイルは`light`で、0なら出さない。決まりはdocs/compose.mdの「入れ方」にある。
     public static let composeEmojiPaletteHapticIntensity = NumberTuning(
         id: "compose.emojiPalette.hapticIntensity",
-        title: "絵文字のシートで入れたときの触覚の強さ（0で出さない）",
+        title: "絵文字ピッカーで入れたときのハプティクスの強さ（0で出さない）",
         range: 0...1,
         step: 0.05,
         defaultValue: 1
     )
 
-    /// 絵文字のシートの下の段（まとまりのボタンと削除キー）の高さ（pt）。HIGの勧める44ptに届かなくても、押せなくて困る操作ではないため、絵文字を並べた部分の広さと見比べて選ぶ。
+    /// 絵文字ピッカーの下の段（グループのボタンと削除キー）の高さ（pt）。HIGの勧める44ptに届かなくても、選択できなくて困る操作ではないため、絵文字を並べた部分の広さと見比べて選ぶ。
     public static let composeEmojiPaletteBarHeight = NumberTuning(
         id: "compose.emojiPalette.barHeight",
-        title: "絵文字のシートの下の段の高さ（pt）",
+        title: "絵文字ピッカーの下の段の高さ（pt）",
         range: 28...50,
         step: 1,
         defaultValue: 38
@@ -1807,11 +1807,11 @@ public enum TuningCatalog {
         defaultValue: 24
     )
 
-    /// 絵文字のパレットで、静止画が届くまでの間に描く小さい静止画の高さのピクセル数（`EmojiThumbnails`）。
+    /// 絵文字のパレットで、静止画が届くまでの間に描くサムネイルの高さのピクセル数（`EmojiThumbnails`）。
     /// 変えると、作ってあるものを捨てて作り直す。起動し直したときから効く。
     public static let composeEmojiPaletteThumbnailHeight = NumberTuning(
         id: "compose.emojiPalette.thumbnailHeight",
-        title: "絵文字のパレットの小さい静止画の高さ（px、起動し直すと効く）",
+        title: "絵文字のパレットのサムネイルの高さ（px、起動し直すと効く）",
         range: 8...96,
         step: 4,
         defaultValue: 32
@@ -1945,7 +1945,7 @@ public enum TuningCatalog {
         [.mention: 0, .hashtag: 0, .emoji: Int(store.value(of: completionEmojiMinimumQuery))]
     }
 
-    /// 読めなかった画像を読み直す間隔。
+    /// 読めなかった画像を再読み込みする間隔。
     @MainActor
     public static func imageRetry(in store: TuningStore) -> RetrySchedule.Policy {
         RetrySchedule.Policy(
@@ -2065,7 +2065,7 @@ public enum TuningCatalog {
             .number(insertionScrollBounce),
             .number(newArrivalsButtonDuration),
         ]),
-        TuningSection(id: "timeline.press", title: "タイムライン：押したとき", items: [
+        TuningSection(id: "timeline.press", title: "タイムライン：押されている状態", items: [
             .number(rowHighlightBackgroundStrength),
             .number(rowHighlightContentStrength),
             .number(objectLongPressHapticIntensity),
@@ -2134,7 +2134,7 @@ public enum TuningCatalog {
             .number(regeneratingRetryInterval),
             .number(outageNoticeDelay),
         ]),
-        TuningSection(id: "imageRetry", title: "画像の読み直し", items: [
+        TuningSection(id: "imageRetry", title: "画像の再読み込み", items: [
             .number(imageRetryInitialDelay),
             .number(imageRetryMaxDelay),
             .number(imageRetryHiddenRecheck),
@@ -2218,7 +2218,7 @@ public enum TuningCatalog {
             .number(extendedURLEndHold),
             .number(extendedURLFadeDuration),
         ]),
-        TuningSection(id: "compose.picker", title: "投稿欄：メディアと絵文字のシート", items: [
+        TuningSection(id: "compose.picker", title: "投稿欄：メディアのシートと絵文字ピッカー", items: [
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
             .toggle(composeEmojiPaletteHardEdgeEffect),

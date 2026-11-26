@@ -2,7 +2,7 @@ import os
 import SciaCore
 import UIKit
 
-/// 絵文字ピッカーの小さい静止画（`EmojiThumbnails`）と、Unicodeの絵文字の画像（`EmojiGlyphArchive`）を、裏で作る。
+/// 絵文字ピッカーのサムネイル（`EmojiThumbnails`）と、Unicodeの絵文字の画像（`EmojiGlyphArchive`）を、裏で作る。
 /// 一度も表示していない絵文字も、初めて流したときから枠が空かないようにするため（docs/animated-custom-emoji.mdの「絵文字ピッカーのサムネイル」）。
 /// 絵文字ピッカーが開いている間は、Unicodeの絵文字の小さい画像だけを作り、ほかは閉じるまで待つ。作る処理がCPUを使い、絵文字ピッカーの絵文字の読み込みを待たせるため。
 /// Unicodeの絵文字の小さい画像だけは、作り終える前に初めて開いたときも枠を空けないよう、開いている間も作る。

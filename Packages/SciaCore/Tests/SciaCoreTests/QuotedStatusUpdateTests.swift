@@ -3,8 +3,8 @@ import SciaTesting
 import Testing
 @_spi(FailureDisplay) @testable import SciaCore
 
-/// 引用の囲みから行ったお気に入りやブックマークの結果を、引用元を出している囲みにも反映することを確かめる。
-/// 反映しないと、囲みは操作の前の状態のままになり、もう一度行うと取り消しではなく同じ操作をもう一度送る。
+/// 引用のカードから行ったお気に入りやブックマークの結果を、引用元を出しているカードにも反映することを確かめる。
+/// 反映しないと、カードは操作の前の状態のままになり、もう一度行うと取り消しではなく同じ操作をもう一度送る。
 @MainActor
 struct QuotedStatusUpdateTests {
     private let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)

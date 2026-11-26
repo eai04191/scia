@@ -196,7 +196,7 @@ struct CompletionModelTests {
         #expect(completion.content == .loading)
     }
 
-    /// 一度引いた語は覚えておき、消して打ち直したときは問い合わせない。
+    /// 一度引いた語はキャッシュしておき、消して打ち直したときは問い合わせない。
     @Test func cachesResults() async throws {
         let completion = makeCompletion()
         completion.textDidChange(mention("bob"))
@@ -245,7 +245,7 @@ struct CompletionModelTests {
         #expect(await server.emojiRequests == 1)
     }
 
-    /// 絵文字のリストを読む前に打ったら、読み終えたところで出す。読めなければ失敗を出し、再試行で読み直す。
+    /// 絵文字のリストを読む前に打ったら、読み終えたところで出す。読めなければ失敗を出し、再試行で再読み込みする。
     @Test func loadsEmojisOnDemandAndRetries() async throws {
         let completion = makeCompletion()
         await server.setFailsEmojis(true)
@@ -262,7 +262,7 @@ struct CompletionModelTests {
         #expect(accts(completion.content).first == ":blobcat:")
     }
 
-    /// 別の画面がこの起動で読み終えた絵文字のリストを残していれば、作ったときから持ち、読み直さない。ピッカーに出さない絵文字は除く。
+    /// 別の画面がこの起動で読み終えた絵文字のリストを残していれば、作ったときから持ち、再読み込みしない。ピッカーに出さない絵文字は除く。
     /// 絵文字のパレットを開いたときに、読み込み中の段を挟まずに並べるため。
     @Test func startsWithEmojisLoadedElsewhere() async throws {
         let server = server
@@ -282,7 +282,7 @@ struct CompletionModelTests {
         #expect(await server.emojiRequests == 1)
     }
 
-    /// 取得元に覚えさせると、読めた絵文字のリストを覚え、次の画面の補完に渡せる。読めなかったときは、前に読めたリストを残す。
+    /// 取得元にキャッシュさせると、読めた絵文字のリストをキャッシュし、次の画面の補完に渡せる。読めなかったときは、前に読めたリストを残す。
     @Test func remembersLoadedEmojisInCache() async throws {
         let server = server
         let cache = CustomEmojiCaches(directory: TestScratch.url("CompletionModelTests-emojis"), clock: TestClock()).cache(for: URL(string: "https://example.social")!)
@@ -402,7 +402,7 @@ struct CompletionModelTests {
         #expect(completion.token == nil)
     }
 
-    /// UIKitは打った文字を入れると、本文が変わった知らせより先にカーソルが動いた知らせを送る。その順でも新しい語を問い合わせる。
+    /// UIKitは打った文字を入れると、本文が変わったコールバックより先にカーソルが動いたコールバックを送る。その順でも新しい語を問い合わせる。
     @Test func selectionBeforeTextChangeStillLoads() async throws {
         let completion = makeCompletion()
         completion.textDidChange(mention("bo"))
@@ -427,7 +427,7 @@ struct CompletionModelTests {
         #expect(completion.selectedIndex == 0)
     }
 
-    /// 止められている間は、補完では自動で読み込み直さないので、押せば読み込めると伝える。
+    /// 止められている間は、補完では自動で再読み込みしないので、選択すれば読み込めると伝える。
     @Test func pausedMessageSaysTapToRetry() {
         let message = CompletionModel.failure(for: AutomaticRequestsPaused(until: Date(timeIntervalSince1970: 1_800_000_000))).text
         #expect(message.contains("タップして再読み込みできます"))
@@ -490,7 +490,7 @@ struct CompletionModelTests {
         #expect(accts(completion.content) == ["#犬", "#犬写真", "#犬2"])
     }
 
-    /// 自分のタグを読めなくても知らせず、検索の結果だけを出す。次に書き始めたときに読み直す。
+    /// 自分のタグを読めなくても知らせず、検索の結果だけを出す。次に書き始めたときに再読み込みする。
     @Test func ownHashtagFailureIsSilent() async throws {
         let completion = makeCompletion()
         await server.setFailsOwnTags(true)
@@ -505,7 +505,7 @@ struct CompletionModelTests {
         try await waitUntil { await server.ownTagRequests == 2 }
     }
 
-    /// プロフィールに載せるタグを変えたら、持っている自分のタグを忘れ、次に書き始めたときに読み直す。忘れる前に読み始めた応答では戻さない。
+    /// プロフィールに載せるタグを変えたら、持っている自分のタグを忘れ、次に書き始めたときに再読み込みする。忘れる前に読み始めた応答では戻さない。
     @Test func forgetOwnTagsReloadsOnNextPrefetch() async throws {
         let completion = makeCompletion()
         completion.prefetch()
@@ -557,7 +557,7 @@ struct CompletionModelTests {
         #expect(completion.content == nil)
     }
 
-    /// 出さない候補しかなくても、検索に失敗したことは知らせ、押して読み直せるようにする。
+    /// 出さない候補しかなくても、検索に失敗したことは知らせ、選択して再読み込みできるようにする。
     @Test func hiddenOnlyCandidatesStillShowFailure() async throws {
         let completion = makeCompletion()
         completion.prefetch()
@@ -611,7 +611,7 @@ struct CompletionModelTests {
         #expect(accts(completion.content) == ["#猫写真", "#猫缶", "#猫", "#猫鍋", "#今日の猫"])
     }
 
-    /// 最近の投稿のタグを読めなくても知らせず、ほかの自分のタグは出す。次に書き始めたときに読み直す。
+    /// 最近の投稿のタグを読めなくても知らせず、ほかの自分のタグは出す。次に書き始めたときに再読み込みする。
     @Test func statusTagFailureIsSilentAndRetried() async throws {
         await server.setStatusTags([Hashtag(name: "猫鍋"), Hashtag(name: "猫写真")])
         await server.setFailsStatusTags(true)
@@ -624,7 +624,7 @@ struct CompletionModelTests {
         completion.prefetch()
         try await waitUntil { !completion.isLoadingOwnTags }
         #expect(await server.statusTagRequests == 2)
-        // プロフィールのタグとよく使うタグは読めているので、読み直さない。
+        // プロフィールのタグとよく使うタグは読めているので、再読み込みしない。
         #expect(await server.ownTagRequests == 1)
         #expect(accts(completion.content) == ["#猫写真", "#猫鍋", "#猫", "#今日の猫"])
     }
@@ -643,7 +643,7 @@ struct CompletionModelTests {
         #expect(accts(completion.content) == ["#猫写真", "#猫鍋", "#猫", "#今日の猫"])
     }
 
-    /// 投稿の応答のタグは、自分のタグを忘れても残し、最近の投稿のタグは読み直さない。
+    /// 投稿の応答のタグは、自分のタグを忘れても残し、最近の投稿のタグは再読み込みしない。
     @Test func usedTagsSurviveForgetOwnTags() async throws {
         await server.setStatusTags([Hashtag(name: "猫鍋"), Hashtag(name: "猫写真")])
         let completion = makeCompletion(limit: 10, minimumSearch: 9)
@@ -782,7 +782,7 @@ struct CompletionModelTests {
         #expect(accts(completion.content) == ["@bob", "@bo1", "@bo2", "@bo3"])
     }
 
-    /// 返信先でメンションされた人は表示名とアイコンを持たないので、覚えている同じ人の情報で出し、表示名でも探せるようにする。
+    /// 返信先でメンションされた人は表示名とアイコンを持たないので、キャッシュしている同じ人の情報で出し、表示名でも探せるようにする。
     /// 返信先として出すことは変えない。
     @Test func replyParticipantUsesRememberedProfile() async throws {
         let recent = try makeRecentMentions()
@@ -794,7 +794,7 @@ struct CompletionModelTests {
         #expect(completion.candidates == [.localAccount(LocalMention(account: alice), .reply)])
     }
 
-    /// 表示名とアイコンを持たない返信先の人を選んでも、覚えている同じ人の情報を消さない。
+    /// 表示名とアイコンを持たない返信先の人を選んでも、キャッシュしている同じ人の情報を消さない。
     @Test func recordingMentionWithoutProfileKeepsRememberedProfile() throws {
         let recent = try makeRecentMentions()
         let alice = Account(id: "alice-id", username: "alice", acct: "alice", displayName: "Zoe", avatar: URL(string: "https://example.social/alice.png"))
@@ -804,7 +804,7 @@ struct CompletionModelTests {
         #expect(recent.mentions == [LocalMention(account: alice), LocalMention(account: .stub(id: "bob", acct: "bob"))])
     }
 
-    /// 返信先でメンションされた人は、アカウントをまとめて読んでアイコンと表示名を出す。読むのは一度だけで、届いたら出している候補を描き直す。
+    /// 返信先でメンションされた人は、アカウントをまとめて読んでアイコンと表示名を出す。読むのは一度だけで、届いたら出している候補を再描画する。
     @Test func loadsMentionedReplyParticipants() async throws {
         let completion = makeCompletion(minimumSearch: 2, recentMentions: try makeRecentMentions())
         completion.replyParticipants = {
@@ -862,7 +862,7 @@ struct CompletionModelTests {
         #expect(await server.queries.isEmpty)
     }
 
-    /// 投稿するアカウントを替えたら、替えた先のサーバーの絵文字を読み直す。替える前に読み始めた応答は使わない。
+    /// 投稿するアカウントを替えたら、替えた先のサーバーの絵文字を再読み込みする。替える前に読み始めた応答は使わない。
     @Test func switchingSourcesForgetsEmojisOfPreviousServer() async throws {
         let gate = Gate()
         let home = CompletionModel.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: {
@@ -881,7 +881,7 @@ struct CompletionModelTests {
         #expect(completion.emojis?.map { $0.shortcode } == ["other"])
     }
 
-    /// 個人セットは、絵文字のパレットを開くたびに読み直す。読み直せなかったときは、前に読んだものを残す。
+    /// 個人セットは、絵文字のパレットを開くたびに再読み込みする。再読み込みできなかったときは、前に読んだものを残す。
     @Test func reloadsPersonalEmojiSetAndKeepsItOnFailure() async throws {
         let responses = PersonalSetResponses([.success(.stub("first")), .failure(URLError(.timedOut)), .success(.stub("second"))])
         var sources = CompletionModel.Sources.unavailable

@@ -68,7 +68,7 @@ public enum SettingsTexts {
 
     /// 表示の画面。
     public enum Display {
-        /// iOS 26.0で、選んだアクセントカラーが選択中のタブを見分けにくくするときに、アクセントカラーの節の下に出す説明。
+        /// iOS 26.0で、選んだアクセントカラーが選択中のタブを見分けにくくするときに、アクセントカラーのセクションの下に出す説明。
         public static let accentColorObscuresSelectedTab = "iOS 26.0ではこのカラーを使用すると選択中のタブがほかのタブと区別しにくくなります。iOS 26.1以降での使用を推奨します。"
         /// ステータスバーの通知を出せない機種で、切り替えの下に出す説明。
         public static let statusBarTickerUnavailable = "このiPhoneでは使えません。"
@@ -108,13 +108,13 @@ public enum SettingsTexts {
             guard let parent else { return "この操作は取り消せません。" }
             return "このプリセットを使っているアプリとアカウントは、“\(parent)”に切り替わります。"
         }
-        /// プリセットの画面の、アカウントごとの行の節の見出し。
+        /// プリセットの画面の、アカウントごとの行のセクションの見出し。
         public static let accountsHeader = "アカウントごと"
         /// アカウントの選ぶ画面の、割り当てない選択肢。選ぶとどの見た目になるかが分かるよう、アプリのプリセットの名前を添える。
         public static func sameAsApp(name: String) -> String {
             "アプリと同じ（\(name)）"
         }
-        /// 組み込みのプリセットの節の見出し。
+        /// 組み込みのプリセットのセクションの見出し。
         public static let builtInHeader = "デフォルトプリセット"
         /// プリセットを作る・直す画面を開く行と、その画面の題。
         public static let manage = "プリセットを管理"
@@ -126,7 +126,7 @@ public enum SettingsTexts {
         public static let duplicateToEdit = "複製して変更"
         /// プリセットの画面の、プリセットを削除する行。
         public static let deletePreset = "プリセットを削除"
-        /// 「表示」「操作」「作成」の中の、プリセットに含めない設定の情報ボタンを押して出す説明。
+        /// 「表示」「操作」「作成」の中の、プリセットに含めない設定の情報ボタンを選択して出す説明。
         public static let notInPreset = "プリセットに含まれず、どのプリセットでも共通です。"
         /// プリセットに含めない設定の情報ボタンの読み上げ。
         public static let notInPresetInfo = "プリセットに含まれない設定"
@@ -150,7 +150,7 @@ public enum SettingsTexts {
         public static let compareTarget = "比較先"
         /// 比べた2つのプリセットで、読む値が違う項目がないときの一覧。
         public static let noDifferences = "違いはありません"
-        /// 並びが違う項目の行の値。押すと並びを並べた画面を開く。
+        /// 並びが違う項目の行の値。選択すると並びを並べた画面を開く。
         public static let layoutDiffers = "並びが異なります"
         /// 並びの画面で、非表示にした項目に添える文字。
         public static let hidden = "非表示"
@@ -167,7 +167,7 @@ public enum SettingsTexts {
             "\(number)行"
         }
 
-        /// 比べた項目の節の見出しの読み上げ。設定の画面の階層をつなぐ。画面では、名前をシェブロンでつないで描く。
+        /// 比べた項目のセクションの見出しの読み上げ。設定の画面の階層をつなぐ。画面では、名前をシェブロンでつないで描く。
         public static func pathAccessibilityLabel(_ titles: [String]) -> String {
             titles.joined(separator: "、")
         }
@@ -193,7 +193,7 @@ public enum SettingsTexts {
         public static let addSeparator = "区切り線を追加"
         public static let addRowSeparator = "横並びを追加"
         public static let reset = "デフォルトの並びに戻す"
-        /// 節に項目がないときの行。
+        /// セクションに項目がないときの行。
         public static let empty = "なし"
         /// 横並びに入る項目の読み上げのヒント。
         public static let rowGroupHint = "メニューで横に並びます。"
@@ -233,7 +233,7 @@ public enum SettingsTexts {
         public static let notificationFooter = "メンションなどの投稿の見た目と行の余白やアイコンの列の幅は、“表示”の“投稿”に従います。文字の大きさは投稿の本文との差を保ちます。"
         /// デフォルトから変えた項目に添えるインジケーターの読み上げ。
         public static let modified = "変更あり"
-        /// 読んでいるプリセットが変えた項目を、親のプリセット（`name`）の値に従わせるメニューの項目。押したあとも、親を変えれば一緒に変わる。
+        /// 読んでいるプリセットが変えた項目を、親のプリセット（`name`）の値に従わせるメニューの項目。選択したあとも、親を変えれば一緒に変わる。
         public static func followParent(name: String) -> String {
             "“\(name)”に従う"
         }
@@ -275,7 +275,7 @@ public enum SettingsTexts {
         public static let standardMode = "標準"
         public static let excludedUsers = "自動翻訳しないユーザー"
 
-        /// 端末にある言語の節の見出し。Apple Intelligenceのモデルで訳しているときは、言語ごとのダウンロードがないので、訳す元の言語として出す。
+        /// 端末にある言語のセクションの見出し。Apple Intelligenceのモデルで訳しているときは、言語ごとのダウンロードがないので、訳す元の言語として出す。
         public static func installedHeader(usesSharedModel: Bool) -> String {
             usesSharedModel ? "翻訳元" : "ダウンロード済み"
         }
@@ -358,7 +358,7 @@ public enum SettingsTexts {
         public static let create = "フィルターを作成"
         public static let empty = "フィルターはありません"
         public static let namePlaceholder = "名前"
-        /// フィルターを当てる場所の節の見出し。
+        /// フィルターを当てる場所のセクションの見出し。
         public static let contexts = "対象"
         /// 一致した投稿をどう扱うかを選ぶピッカー。
         public static let action = "一致した投稿"

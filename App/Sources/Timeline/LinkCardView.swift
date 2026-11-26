@@ -5,9 +5,9 @@ import UIKit
 /// 投稿のリンクカード。左にサムネイル、右にサイトの名前、見出し、説明を1行ずつ並べる。見せ方は`docs/link-card.md`。
 /// 画像のないカードにはサムネイルの枠を出さず、文字を左端から並べる。リンク先だけのカードには、リンクの記号を入れた枠を出す。
 ///
-/// 高さは文字の大きさだけで決め、中身によらない。サーバーのカードが後から届いて、リンク先だけのカードから描き直しても、行の高さを変えないため。
+/// 高さは文字の大きさだけで決め、中身によらない。サーバーのカードが後から届いて、リンク先だけのカードから再描画しても、行の高さを変えないため。
 /// 届いたカードに画像がなければ、枠を縮めて消し、文字を左へ寄せる動きでつなぐ。
-/// 閲覧注意の投稿では、添付ファイルと同じく、画像を読まずにblurhashで描いてぼかし、押されたらぼかしを外すよう置く側に知らせる。
+/// 閲覧注意の投稿では、添付ファイルと同じく、画像を読まずにblurhashで描いてぼかし、選択されたらぼかしを外すよう置く側に知らせる。
 /// タップ、キーボード、ポインタのどれで選ばれても`.primaryActionTriggered`で受けられるよう、`UIButton`にする。
 final class LinkCardView: UIButton {
     struct Content: Equatable {
@@ -64,7 +64,7 @@ final class LinkCardView: UIButton {
     private let descriptionLabel = TextKitLabel()
     private(set) var content: Content?
     private var loadTask: Task<Void, Never>?
-    /// いま描いているサムネイルの取得元。同じなら読み直さない。
+    /// いま描いているサムネイルの取得元。同じなら再読み込みしない。
     private var request: Request?
     /// 並べ方で、サムネイルの枠を出すか。枠を縮めて消す動きを始めるまでは、中身と食い違う。
     private var laysOutThumbnail = false
@@ -153,7 +153,7 @@ final class LinkCardView: UIButton {
             laysOutThumbnail = content.showsThumbnail
             return
         }
-        // タイムラインは動きを止めて描き直し（animatingDifferences: false）、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
+        // タイムラインは動きを止めて再描画し（animatingDifferences: false）、その中ではUIView.animateが動かないため、再描画を終えてから動かす。
         // サムネイルも、それまで前の中身のまま残し、動きの中で入れ替える。
         DispatchQueue.main.async { [weak self] in
             guard let self, self.content == content else { return }
@@ -163,7 +163,7 @@ final class LinkCardView: UIButton {
     }
 
     /// サーバーのカードが届いた。画像がなければ枠を縮めて消し、文字を左へ寄せる。動きは標準のスプリングで、1回で入れ替える。
-    /// 文字が変わる行は、古い文字の像を重ねて、新しい文字と一緒に動かしながら入れ替える。像を置かずに入れ替えると、
+    /// 文字が変わる行は、古い文字のスナップショットを重ねて、新しい文字と一緒に動かしながら入れ替える。スナップショットを置かずに入れ替えると、
     /// 古い文字が元の位置に残ったまま、寄ってくる新しい文字と重なって見えるため。ドメインのように変わらない行は、そのまま動かす。
     private func animateArrival(of content: Content) {
         let text = Self.text(of: content.card)
@@ -190,14 +190,14 @@ final class LinkCardView: UIButton {
             self.setNeedsLayout()
             self.layoutIfNeeded()
             for (label, snapshot) in snapshots {
-                // 像は古い文字の大きさのまま、新しい文字の左上に合わせて動かす。
+                // スナップショットは古い文字の大きさのまま、新しい文字の左上に合わせて動かす。
                 snapshot.frame.origin = label.frame.origin
             }
         }
-        // 濃さは位置と別に、古い文字を先に薄くし、新しい文字を少し遅れて濃くする。同時に入れ替えると、
+        // 不透明度は位置と別に、古い文字を先に薄くし、新しい文字を少し遅れて濃くする。同時に入れ替えると、
         // スプリングの出だしで両方が濃いまま重なり、読めない文字が数コマ出るため。
-        // 新しい文字は直前に濃さを0にしたばかりで、画面上はまだ濃いため、今の見た目からは始めない。
-        // 像は、薄くし終えてから外す。位置の動きの完了で外すと、サムネイルの枠が変わらないカードでは位置の動きが何も動かさず、
+        // 新しい文字は直前に不透明度を0にしたばかりで、画面上はまだ濃いため、今の見た目からは始めない。
+        // スナップショットは、薄くし終えてから外す。位置の動きの完了で外すと、サムネイルの枠が変わらないカードでは位置の動きが何も動かさず、
         // 完了がすぐ呼ばれて、古い文字が1コマで消えるため。
         UIView.animateSpring(duration: duration * 0.4, in: self) {
             for (_, snapshot) in snapshots { snapshot.alpha = 0 }
@@ -209,7 +209,7 @@ final class LinkCardView: UIButton {
         }
     }
 
-    /// 入れ替えの途中で重ねている、古い文字の像とリンクの記号の複製。
+    /// 入れ替えの途中で重ねている、古い文字のスナップショットとリンクの記号の複製。
     private var transitionSnapshots: [UIView] = []
 
     private func removeTransitionSnapshots(_ snapshots: [UIView]? = nil) {
@@ -218,7 +218,7 @@ final class LinkCardView: UIButton {
         transitionSnapshots.removeAll { removing.contains($0) }
     }
 
-    /// 閲覧注意でぼかした画像を押すと、ぼかしを外す。
+    /// 閲覧注意でぼかした画像を選択すると、ぼかしを外す。
     /// サムネイルの画像は、読み込む前（blurhashのぼかしのうち）も、添付ファイルと同じく開け、ビューアで読み込みを待つ。
     private func updateImageInteraction() {
         if isCoveringImage {
@@ -287,7 +287,7 @@ final class LinkCardView: UIButton {
     }
 
     /// 閲覧注意のぼかし。下のサムネイルは画像を読まずにblurhashで描くため、添付ファイルのぼかしと同じく、色が透けて見える薄い素材にする。
-    /// サムネイルには文字が入りきらないため、添付ファイルを1列に並べるときと同じく、記号だけを出す。押されたらサムネイルが受ける。
+    /// サムネイルには文字が入りきらないため、添付ファイルを1列に並べるときと同じく、記号だけを出す。選択されたらサムネイルが受ける。
     static func makeCover() -> UIView {
         let effect = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
         effect.isUserInteractionEnabled = false
@@ -539,7 +539,7 @@ final class LinkCardView: UIButton {
         updateThumbnail()
     }
 
-    /// カードが届いた動きを始めるまで、サムネイルを前の中身のまま残す。描き直しの中で入れ替えると、動かせずに1コマで替わるため。
+    /// カードが届いた動きを始めるまで、サムネイルを前の中身のまま残す。再描画の中で入れ替えると、動かせずに1コマで替わるため。
     private var holdsThumbnailForArrival = false
 
     /// サムネイルを、枠の大きさに合わせて読む。サムネイルのないカードとリンク先だけのカードには、リンクの記号を出す。
@@ -569,7 +569,7 @@ final class LinkCardView: UIButton {
             updateImageInteraction()
             return
         }
-        // ぼかしを掛けるときも外すときも、読み込んだ画像を残さず、ぼかしから描き直す。
+        // ぼかしを掛けるときも外すときも、読み込んだ画像を残さず、ぼかしから再描画する。
         let keepsImage = request != nil && request?.url == self.request?.url && request?.isCovered == false && self.request?.isCovered == false
         self.request = request
         loadTask?.cancel()
@@ -656,7 +656,7 @@ final class LinkCardView: UIButton {
         incoming.removeFromSuperview()
     }
 
-    /// リンクの記号の複製を重ねて薄くする。記号そのものは並べ方が濃さを決めるため、動かさずに隠す。
+    /// リンクの記号の複製を重ねて薄くする。記号そのものは並べ方が不透明度を決めるため、動かさずに隠す。
     private func fadeOutSymbol(duration: TimeInterval) {
         let copy = UIImageView(image: symbolView.image)
         copy.tintColor = symbolView.tintColor

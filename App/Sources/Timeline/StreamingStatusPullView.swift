@@ -7,7 +7,7 @@ import UIKit
 /// 切れているときにタイトルの下へ出す表示とは別に、いつでも見られる場所に置く。
 ///
 /// タイムラインの内容の上端より上（引っぱると現れる余白）に置く。`contentInset`や内容の大きさは変えないため、スクロール位置を保つ処理に関わらない。
-/// 引っぱって離したときの読み直しはタイムラインの更新コントロールが受け持ち、読んでいる間はこの表示を出さない。
+/// pull to refreshはタイムラインの更新コントロールが受け持ち、読んでいる間はこの表示を出さない。
 /// 更新コントロールは読んでいる間、タイムラインのすぐ上に止まり、位置を変えられないため、この表示を間に挟めない。
 final class StreamingStatusPullView: UIView {
     /// 今の日付。テストでは決まった日付に差し替える。
@@ -92,7 +92,7 @@ final class StreamingStatusPullView: UIView {
     func install(in scrollView: UIScrollView) {
         scrollView.addSubview(self)
         // タイムラインが画面の高さに満たないときも引っぱれるよう、タイムラインの側で縦にバウンスするようにしてある。
-        // ナビゲーションバーの後ろが透けるため、引っぱっていないときは見えないよう、引っぱった量で濃さを変える。
+        // ナビゲーションバーの後ろが透けるため、引っぱっていないときは見えないよう、引っぱった量で不透明度を変える。
         observations = [
             scrollView.observe(\.contentOffset) { [weak self] _, _ in
                 MainActor.assumeIsolated { self?.layoutInScrollView() }
@@ -180,7 +180,7 @@ final class StreamingStatusPullView: UIView {
                 tint: .systemOrange,
                 text: StreamingStatusTexts.paused,
                 detail: loadedUntil,
-                // 引っぱる間だけ出す表示で、ボタンを置けない。止めた理由は、時間を過ぎると自動で読み直す旨で、ログアウトにはならない。
+                // 引っぱる間だけ出す表示で、ボタンを置けない。止めた理由は、時間を過ぎると自動で再読み込みする旨で、ログアウトにはならない。
                 note: FailureText.withoutLogIn(ErrorPresentation(AutomaticRequestsPaused(until: until)))
             )
         case .failed(let presentation):

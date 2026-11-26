@@ -5,7 +5,7 @@ import os
 public enum AnnouncementsContentState: Equatable, Sendable {
     case loading
     case loaded
-    /// シートで開いたときか引っぱったときに読めなかった。読めていた行は残す。
+    /// シートで開いたときかpull to refreshしたときに読めなかった。読めていた行は残す。
     case failed(ErrorPresentation)
 }
 
@@ -33,7 +33,7 @@ public protocol AnnouncementsDisplay: AnyObject {
 
 /// サーバーのお知らせのリストを持ち、読み込み、既読、リアクションの通信を受け持つ。決まりはdocs/announcements.mdにある。
 ///
-/// セッションの間ずっと`user`のストリームを購読し、つながるたびにお知らせを読み直す。シートを開いていない間も、アカウントのボタンに未読の数を出すため。
+/// セッションの間ずっと`user`のストリームを購読し、つながるたびにお知らせを再読み込みする。シートを開いていない間も、アカウントのボタンに未読の数を出すため。
 @MainActor
 public final class AnnouncementsModel {
     /// APIを呼ぶ口。テストでは差し替える。
@@ -75,9 +75,9 @@ public final class AnnouncementsModel {
     struct PendingReaction {
         /// 付けるか外すか。
         let isOn: Bool
-        /// カスタム絵文字の画像。読み直しの応答にまだないリアクションを足し直すときと、外したリアクションを失敗して戻すときに使う。
+        /// カスタム絵文字の画像。再読み込みの応答にまだないリアクションを足し直すときと、外したリアクションを失敗して戻すときに使う。
         let customEmoji: CustomEmoji?
-        /// 今の数に、押した結果を手元で足し引きした分が入っているか。サーバーから届いた数に置き換わったら、押した結果を含まないので偽にする。
+        /// 今の数に、選択した結果を手元で足し引きした分が入っているか。サーバーから届いた数に置き換わったら、選択した結果を含まないので偽にする。
         /// 失敗したときは、入っていれば足し引きを戻し、入っていなければ数は変えずに自分がしたかだけを戻す。
         var countIncludesChange = true
     }
@@ -88,7 +88,7 @@ public final class AnnouncementsModel {
     }
     /// 未読の数が変わったときに呼ぶ。アカウントのボタンの点と、メニューの項目の件数に使う。
     public var onUnreadCountChange: (Int) -> Void = { _ in }
-    /// リアクションの付け外しに失敗して戻したときに呼ぶ。知らせ方と、出す理由は作る側が決める。
+    /// リアクションの付け外しに失敗して戻したときに呼ぶ。どう出すかと、出す理由は作る側が決める。
     public var onReactionFailure: (any Error) -> Void = { _ in }
     /// 新しい順に並べたお知らせ。
     public private(set) var announcements: [Announcement] = []
@@ -106,16 +106,16 @@ public final class AnnouncementsModel {
     private var isInForeground = true
     /// `start()`を呼んだ。それより前に戻っても購読しない。起動したときは、ホームの最初の読み込みを終えてから始めるため。
     private var hasStarted = false
-    /// 読み直している途中の読み込み。重ねて読まない。
+    /// 再読み込みしている途中の読み込み。重ねて読まない。
     private var loading: Task<Void, Never>?
-    /// 今の読み込みを、シートで開いたときか引っぱったときに始めたか。失敗をシートに出すかを決める。
+    /// 今の読み込みを、シートで開いたときかpull to refreshしたときに始めたか。失敗をシートに出すかを決める。
     private var loadingIsVisible = false
     private var hasLoaded = false
-    /// お知らせのリストの中身を手元で変えた回数。読んでいる間にストリーミングで届いた変化を、古い応答で戻さないよう、変わっていたら読み直す。
+    /// お知らせのリストの中身を手元で変えた回数。読んでいる間にストリーミングで届いた変化を、古い応答で戻さないよう、変わっていたら再読み込みする。
     private var changeCount = 0
-    /// 既読を送っていて、結果を待っているお知らせ。読み直しで未読に戻さない。
+    /// 既読を送っていて、結果を待っているお知らせ。再読み込みで未読に戻さない。
     private var dismissing: Set<Announcement.ID> = []
-    /// 結果を待っているリアクション。読み直しで押す前に戻さない。
+    /// 結果を待っているリアクション。再読み込みで選択する前に戻さない。
     private var pendingReactions: [ReactionKey: PendingReaction] = [:]
     /// シートを開いている間に未読だったお知らせ。既読にしても、閉じるまで点を残す。開いていなければnil。
     private var markedUnread: Set<Announcement.ID>?
@@ -142,7 +142,7 @@ public final class AnnouncementsModel {
         streamingSubscription = nil
     }
 
-    /// 戻ったら購読し直し、つながったところで読み直す。
+    /// 戻ったら購読し直し、つながったところで再読み込みする。
     public func enterForeground() {
         isInForeground = true
         startStreaming()
@@ -159,8 +159,8 @@ public final class AnnouncementsModel {
         guard !tasks.isClosed else { return }
         switch activity {
         case .connected:
-            // 切れていた間の追加、削除、リアクションを取りこぼさないよう、つながるたびに読み直す。
-            // つながる前に始めた読み込みの応答は、読んだあとからつながるまでの変化を含まないので、使わずに読み直させる。
+            // 切れていた間の追加、削除、リアクションを取りこぼさないよう、つながるたびに再読み込みする。
+            // つながる前に始めた読み込みの応答は、読んだあとからつながるまでの変化を含まないので、使わずに再読み込みさせる。
             changeCount += 1
             reload(purpose: .display)
         case .event(let event):
@@ -189,7 +189,7 @@ public final class AnnouncementsModel {
 
     // MARK: - シート
 
-    /// シートを開いたときに呼ぶ。今の未読に点を付け、読み直す。
+    /// シートを開いたときに呼ぶ。今の未読に点を付け、再読み込みする。
     public func appear() {
         markedUnread = Set(announcements.filter(\.isUnread).map(\.id))
         showItems()
@@ -201,7 +201,7 @@ public final class AnnouncementsModel {
         markedUnread = nil
     }
 
-    /// シートで引っぱったときに呼ぶ。読み終えるまで待てるタスクを返す。
+    /// シートでpull to refreshしたときに呼ぶ。読み終えるまで待てるタスクを返す。
     @discardableResult
     public func refresh() -> Task<Void, Never>? {
         reload(purpose: .action, isVisible: true)
@@ -221,11 +221,11 @@ public final class AnnouncementsModel {
                 // 既読にする前に送った読み込みの応答は、未読のままなので使わせない。
                 self?.changeCount += 1
             } catch let error as MastodonAPIError where error.statusCode == 404 {
-                // 取り下げられたあと。既読にするものがないので、送り直さない。
+                // 取り下げられたあと。既読にするものがないので、再送しない。
                 self?.logger.info("announcement dismiss found nothing")
             } catch {
                 guard let self, !tasks.isClosed, !(error is CancellationError) else { return }
-                // 使う人にできることがないので知らせない。未読に戻し、次に行が画面に出たときに送り直す。
+                // 使う人にできることがないので知らせない。未読に戻し、次に行が画面に出たときに再送する。
                 logger.error("announcement dismiss failed: \(SciaLog.describe(error), privacy: .public)")
                 dismissing.remove(id)
                 update(id) { $0.read = false }
@@ -237,8 +237,8 @@ public final class AnnouncementsModel {
 
     // MARK: - 読み込み
 
-    /// 読み直す。読んでいる途中なら、その読み込みに任せる。
-    /// - Parameter isVisible: シートで開いたときか引っぱったときか。失敗をシートに出す。
+    /// 再読み込みする。読んでいる途中なら、その読み込みに任せる。
+    /// - Parameter isVisible: シートで開いたときかpull to refreshしたときか。失敗をシートに出す。
     @discardableResult
     func reload(purpose: RequestPurpose, isVisible: Bool = false) -> Task<Void, Never>? {
         if isVisible {
@@ -279,7 +279,7 @@ public final class AnnouncementsModel {
         }
     }
 
-    /// 読んだお知らせに、結果を待っている既読とリアクションを重ねる。読んだ応答が、押す前の状態のことがあるため。
+    /// 読んだお知らせに、結果を待っている既読とリアクションを重ねる。読んだ応答が、選択する前の状態のことがあるため。
     private func applyingLocalChanges(_ announcement: Announcement) -> Announcement {
         var announcement = announcement
         if dismissing.contains(announcement.id) {
@@ -287,7 +287,7 @@ public final class AnnouncementsModel {
         }
         for (key, pending) in pendingReactions where key.announcementID == announcement.id {
             let isMine = announcement.reactions.first { $0.name == key.name }?.me == true
-            // 届いた数は、押した結果をまだ含まない数か、もう含む数のどちらか。含んでいなければ重ね、重ねたかを覚える。
+            // 届いた数は、選択した結果をまだ含まない数か、もう含む数のどちらか。含んでいなければ重ね、重ねたかを覚える。
             // ストリーミングのお知らせは自分がしたかを持たず、手元の値を残すので、ここでは重ねない。
             let reapplies = isMine != pending.isOn
             if reapplies {
@@ -340,14 +340,14 @@ public final class AnnouncementsModel {
 
     // MARK: - リアクション
 
-    /// 並んでいるリアクションを押したとき。自分のリアクションを付け外しする。同じリアクションの結果を待っている間は何もしない。
+    /// 並んでいるリアクションを選択したとき。自分のリアクションを付け外しする。同じリアクションの結果を待っている間は何もしない。
     public func toggleReaction(_ name: String, on id: Announcement.ID) {
         guard let announcement = announcements.first(where: { $0.id == id }) else { return }
         let isMine = announcement.reactions.first { $0.name == name }?.me == true
         send(name, !isMine, on: id, customEmoji: nil)
     }
 
-    /// 絵文字のシートで選んだとき。自分がすでにしている絵文字なら、付けたままにする。
+    /// 絵文字ピッカーで選んだとき。自分がすでにしている絵文字なら、付けたままにする。
     /// - Parameter customEmoji: カスタム絵文字なら、届くまでの行に描く画像。
     public func addReaction(_ name: String, customEmoji: CustomEmoji?, to id: Announcement.ID) {
         guard let announcement = announcements.first(where: { $0.id == id }) else { return }
@@ -373,7 +373,7 @@ public final class AnnouncementsModel {
                 }
                 self?.logger.info("announcement reaction done")
                 self?.pendingReactions[key] = nil
-                // 押す前に送った読み込みの応答は、押した結果を含まないので使わせない。
+                // 選択する前に送った読み込みの応答は、選択した結果を含まないので使わせない。
                 self?.changeCount += 1
             } catch {
                 guard let self, !tasks.isClosed, !(error is CancellationError) else { return }
@@ -386,7 +386,7 @@ public final class AnnouncementsModel {
         }
     }
 
-    /// 付け外しに失敗した操作を戻した並び。今の数がサーバーから届いた数なら、押した結果を含まないので、数は変えずに自分がしたかだけを戻す。
+    /// 付け外しに失敗した操作を戻した並び。今の数がサーバーから届いた数なら、選択した結果を含まないので、数は変えずに自分がしたかだけを戻す。
     static func reverting(_ name: String, _ isOn: Bool, in reactions: [AnnouncementReaction], customEmoji: CustomEmoji?, countIncludesChange: Bool) -> [AnnouncementReaction] {
         guard !countIncludesChange else { return setting(name, !isOn, in: reactions, customEmoji: customEmoji) }
         var reactions = reactions

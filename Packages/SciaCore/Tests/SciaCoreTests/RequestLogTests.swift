@@ -80,7 +80,7 @@ struct RequestLogTests {
 
         await #expect(throws: URLError.self) { try await makeClient(transport, log: log).homeTimeline(TimelineQuery(limit: 40)) }
 
-        // 送り直した分は残さず、最後の失敗だけを残す。
+        // 再送した分は残さず、最後の失敗だけを残す。
         #expect(log.recentFailures.map(\.logMessage) == ["GET /api/v1/timelines/home URLError -1009"])
     }
 

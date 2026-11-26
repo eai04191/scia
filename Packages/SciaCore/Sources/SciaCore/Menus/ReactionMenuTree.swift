@@ -1,6 +1,6 @@
 import Foundation
 
-/// 絵文字のリアクションのボタンのメニューの項目を押したときの操作。
+/// 絵文字のリアクションのボタンのメニューの項目を選択したときの操作。
 public enum ReactionMenuCommand: Equatable, Sendable {
     /// 付け外しする。trueなら付け、falseなら外す。
     case toggle(turningOn: Bool)
@@ -13,7 +13,7 @@ public enum ReactionMenuCommand: Equatable, Sendable {
 }
 
 /// 投稿の絵文字のリアクションのボタンのメニュー。決まりはdocs/emoji-reaction.mdの「リアクションのボタンのメニュー」にある。
-/// 項目の名前、並び、出す条件、見出しはここだけが知る。押したときの動き（ビューアや人のリストを開く先）は、出す場所が決める。
+/// 項目の名前、並び、出す条件、見出しはここだけが知る。選択したときの動き（ビューアや人のリストを開く先）は、出す場所が決める。
 public struct ReactionMenuTree {
     public let reaction: EmojiReaction
     /// その絵文字でリアクションした人を読めるサーバーか。読めなければ「リアクションした人」を出さない。

@@ -3,7 +3,7 @@ import os
 import Synchronization
 
 /// ホームや公開タイムラインの読み込み、ストリーミング、既読位置、ポーリング、補完、新着の挿入の予約を受け持ち、結果をタイムラインの画面（`TimelineDisplay`）へ命令として伝える。
-/// タブのタイムラインのほか、開いたタイムラインに積むハッシュタグのタイムラインにも使う。
+/// タブのタイムラインのほか、開いたタイムラインにプッシュするハッシュタグのタイムラインにも使う。
 @MainActor
 public final class FeedTimelineModel {
     /// 1回に読む件数。APIの上限が40件。
@@ -14,7 +14,7 @@ public final class FeedTimelineModel {
     public let filtering: StatusFiltering
     /// 結果を伝えるタイムラインの画面。
     public weak var display: (any TimelineDisplay)?
-    /// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態の表示。
+    /// タイムラインでpull to refreshしたときに見せる、ストリーミングの状態の表示。
     public weak var streamingStatus: (any StreamingStatusDisplay)?
     private let store: TimelineStore
     private let client: MastodonClient
@@ -26,16 +26,16 @@ public final class FeedTimelineModel {
     private let tasks: TaskScope
     /// 走り終えていない読み込みなどの処理の数。止めたものも、取り消しを受けて戻り切るまで数える。止めたあとに何も起きないことを、テストが確かめるのに使う。
     public var runningTaskCount: Int { tasks.runningCount }
-    /// 新着をまとめて挿入する間隔、ポーリング、作り直しの読み直しを待つ時計。テストでは手で進める時計に替える。
+    /// 新着をまとめて挿入する間隔、ポーリング、作り直しの再読み込みを待つ時計。テストでは手で進める時計に替える。
     public let clock: any Clock<Duration>
     /// 補完を終えた日時、新着の届いた日時、ダミーの投稿の日時に使う今の日付。テストでは決まった日付に替える。
     public let now: () -> Date
     public var isStopped: Bool { tasks.isClosed }
-    /// タイムライン全体の状態。失敗したままなら、電波の回復や引っぱった読み直しでやり直す。
+    /// タイムライン全体の状態。失敗したままなら、電波の回復やpull to refreshでやり直す。
     public private(set) var contentState = TimelineContentState.loaded
     /// 末尾の読み込みの状態。失敗したままなら、電波の回復でやり直す。
     public private(set) var footerState = TimelineFooterState.idle
-    /// 設定で無効にしているか、サーバーが読ませない。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
+    /// 設定で無効にしているか、サーバーが読ませない。購読せず、有効に戻したら再接続して、無効だった間を補う。
     private var isDisabled: Bool { isDisabledInSettings || isUnavailable }
     private var isDisabledInSettings = false
     /// サーバーがこのタイムラインを読ませない。読まず、購読もせず、読めないと出す（docs/tabs.md）。
@@ -44,9 +44,9 @@ public final class FeedTimelineModel {
     /// タイムラインのストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
     public var isSubscribedToStreaming: Bool { streamingSubscription != nil }
-    /// 切れていた間の投稿を読む補完の状態。ストリーミングの状態と並べて、引っぱったときに見せる。
+    /// 切れていた間の投稿を読む補完の状態。ストリーミングの状態と並べて、pull to refreshしたときに見せる。
     private var catchUp = CatchUpStatus()
-    /// ストリーミングで届いた新着の流れの速さ。引っぱったときに見せる。
+    /// ストリーミングで届いた新着の流れの速さ。pull to refreshしたときに見せる。
     private var arrivalRate = ArrivalRate()
     /// 最初の読み込みが済んだ。空のホームでも、済んでいればつなぐ。
     private var hasLoadedInitial = false
@@ -54,7 +54,7 @@ public final class FeedTimelineModel {
     public var onInitialLoadFinished: (@MainActor () -> Void)?
     /// バックグラウンドでは接続しない。最初の読み込みの途中でバックグラウンドへ入っても、読み込み後につながないようにする。
     private var isInForeground = true
-    /// 近づいたときの自動の読み込みに失敗した、または進まなかったギャップ。読み直し続けないよう、タップされるまで自動では読まない。
+    /// 近づいたときの自動の読み込みに失敗した、または進まなかったギャップ。再読み込みし続けないよう、タップされるまで自動では読まない。
     private var autoLoadFailedGapIDs: Set<String> = []
     /// 既読位置を保存する。既読位置のないタイムラインではnil。
     private var readPosition: ReadPositionSaver?
@@ -66,20 +66,20 @@ public final class FeedTimelineModel {
     /// 新着の挿入を保留している間に、補完を見送った。保留を解いたときに補完する。
     private var isFillHeld = false
     #endif
-    /// サーバーがホームを作り直している最中だったので、時間をおいて補完を読み直す。読み直すまで次は予約しない。
+    /// サーバーがホームを作り直している最中だったので、時間をおいて補完を再読み込みする。再読み込みするまで次は予約しない。
     private var regeneratingRetryTask: Task<Void, Never>?
-    /// 画面が前に出ている。ストリームでは足りないタイムラインは、前に出ている間だけ新着を読み直す。
+    /// 画面が前に出ている。ストリームでは足りないタイムラインは、前に出ている間だけ新着を再読み込みする。
     private var isShown = false
-    /// 前に出ている間に新着を読み直す繰り返し。
+    /// 前に出ている間に新着を再読み込みする繰り返し。
     private var pollingTask: Task<Void, Never>?
-    /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
+    /// 走っている補完の数と、すべて終わるのを待っているpull to refresh。
     private var activeFills = 0
     /// バックグラウンドから戻ってから、切れていた間の補完を終えるまで。最上部にいても追従せず、一番上に見えていた行の位置を保つ。
     /// 戻ってから始めた補完があり、走っている補完がすべて終わり、その間に届いた新着も挿入し終えたら解く。決まりはdocs/vision.mdの「タイムラインの動き」にある。
     private var keepsPositionAfterResume = false
     private var hasStartedFillAfterResume = false
     private var fillWaiters: [CheckedContinuation<Void, Never>] = []
-    /// 走っている補完が終わるのを待っている、引っぱった読み直しの数。テストで、待ち始めたことを時間を待たずに確かめる。
+    /// 走っている補完が終わるのを待っている、pull to refreshの数。テストで、待ち始めたことを時間を待たずに確かめる。
     public var fillWaiterCount: Int { fillWaiters.count }
 
     /// - Parameter backgroundTime: バックグラウンドで既読位置を保存し終えるまで、アプリを止めないよう頼む。頼んで、終えるときに呼ぶものを返す。OSが与えた時間が尽きたら、頼みを終えて`onExpire`を呼ぶ。
@@ -124,7 +124,7 @@ public final class FeedTimelineModel {
         tasks.onClose { [weak self] in self?.didStop() }
     }
 
-    /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    /// - Parameter purpose: 使う人が開いたり再試行を選択したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
     public func start(purpose: RequestPurpose) {
         guard !isStopped else { return }
         hasStarted = true
@@ -151,7 +151,7 @@ public final class FeedTimelineModel {
     }
     #endif
 
-    /// 設定で有効か無効かを切り替える。無効にしたら購読をやめ、有効に戻したら、読み込み済みならつなぎ直す。
+    /// 設定で有効か無効かを切り替える。無効にしたら購読をやめ、有効に戻したら、読み込み済みなら再接続する。
     public func setEnabled(_ isEnabled: Bool) {
         guard isDisabledInSettings == isEnabled else { return }
         isDisabledInSettings = !isEnabled
@@ -179,15 +179,15 @@ public final class FeedTimelineModel {
         setFooterState(.idle)
     }
 
-    /// 購読と、時間をおいた読み直しをやめる。
+    /// 購読と、時間をおいた再読み込みをやめる。
     private func stopReading() {
         stopStreaming()
-        // 作り直し中の読み直しも、使わないタイムラインへの通信なのでやめる。有効に戻したら、つないだところで補完する。
+        // 作り直し中の再読み込みも、使わないタイムラインへの通信なのでやめる。有効に戻したら、つないだところで補完する。
         cancelRegeneratingRetry()
         stopPolling()
     }
 
-    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いたタイムラインがナビゲーションから外されたときに呼ぶ。
+    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、プッシュしたタイムラインがナビゲーションから外されたときに呼ぶ。
     /// セッションを閉じたときは、呼ばなくても持ち主が閉じて止まる。
     public func stop() {
         tasks.close()
@@ -210,19 +210,19 @@ public final class FeedTimelineModel {
     public func enterBackground() {
         isInForeground = false
         stopStreaming()
-        // 戻ったときは、つなぎ直したところで補完する。
+        // 戻ったときは、再接続したところで補完する。
         cancelRegeneratingRetry()
         stopPolling()
         readPosition?.cancelWaiting()
         readPosition?.saveNow(inBackground: true)
     }
 
-    /// バックグラウンドから戻ったときに呼ぶ。つなぎ直して切れていた間の投稿を補い、他の端末で読み進めた位置を取り込む。
+    /// バックグラウンドから戻ったときに呼ぶ。再接続して切れていた間の投稿を補い、他の端末で読み進めた位置を取り込む。
     /// 最初の読み込みが済んでいなければ、済んだ時点でつなぐので何もしない。
     public func enterForeground() {
         isInForeground = true
         guard !isStopped else { return }
-        // バックグラウンドにいる間に電波が戻ったり、レート制限が明けたりしても、その知らせでは読み込まない。戻ったここでやり直す。
+        // バックグラウンドにいる間に電波が戻ったり、レート制限が明けたりしても、その通知では読み込まない。戻ったここでやり直す。
         retryFailedLoads()
         guard hasLoadedInitial else { return }
         keepsPositionAfterResume = true
@@ -236,11 +236,11 @@ public final class FeedTimelineModel {
         syncReadPosition()
     }
 
-    // MARK: - 前に出ている間の読み直し
+    // MARK: - 前に出ている間の再読み込み
 
     /// 画面に出たか、見えなくなったかを伝える。どのタイムラインで、何度呼んでもよい。
-    /// 読み直しが要るタイムライン（`TimelineFeed.readsWhileShown`。ユーザーのハッシュタグ）だけが、画面に出たら見ていなかった間の新着を読み、
-    /// 出ている間は間隔をおいて読み直し、見えなくなったらやめる。見ていない間は読まず、通信を前に出ている1つのタイムラインの分に抑える。
+    /// 再読み込みが要るタイムライン（`TimelineFeed.readsWhileShown`。ユーザーのハッシュタグ）だけが、画面に出たら見ていなかった間の新着を読み、
+    /// 出ている間は間隔をおいて再読み込み、見えなくなったらやめる。見ていない間は読まず、通信を前に出ている1つのタイムラインの分に抑える。
     /// ほかのタイムラインはストリーミングで新着を受け取るので、呼んでも読まない。
     public func setShown(_ isShown: Bool) {
         guard feed.readsWhileShown, self.isShown != isShown else { return }
@@ -288,7 +288,7 @@ public final class FeedTimelineModel {
     public func recover() {
         guard !isStopped, isInForeground else { return }
         autoLoadFailedGapIDs.removeAll()
-        // 切れていれば、セッションがつなぎ直させ、つながったところで切れていた間を補う。
+        // 切れていれば、セッションが再接続させ、つながったところで切れていた間を補う。
         if hasLoadedInitial, !isDisabled, streamingHub.isConnected {
             // つながったときの補完が、止められている間や電波のない間に失敗していることがある。
             fillFromLatestIfShownWhenNeeded()
@@ -308,7 +308,7 @@ public final class FeedTimelineModel {
         }
     }
 
-    /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。
+    /// ストリーミングの接続の状態を、pull to refreshで見せる表示へ伝える。
     public func showStreamingState(_ state: ConnectionDiagnostics.StreamingState?) {
         // 読めないタイムラインは購読しないので、つながっていても未接続と出す。
         streamingStatus?.setState(isUnavailable ? nil : state)
@@ -333,7 +333,7 @@ public final class FeedTimelineModel {
         logger.info("\(self.feed.name, privacy: .public) streaming unsubscribe")
         streamingSubscription.cancel()
         self.streamingSubscription = nil
-        // 購読をやめた後は知らせが届かないので、出していた表示を消す。
+        // 購読をやめた後はイベントが届かないので、出していた表示を消す。
         display?.setOutageNotice(false)
     }
 
@@ -357,7 +357,7 @@ public final class FeedTimelineModel {
         }
     }
 
-    /// タイムラインを引っぱって離したときに、最新の投稿を読んで上に足す。足すのは一番新しい投稿より新しいものだけで、読んでいる位置は動かさない。
+    /// タイムラインをpull to refreshしたときに、最新の投稿を読んで上に足す。足すのは一番新しい投稿より新しいものだけで、読んでいる位置は動かさない。
     /// 最初の読み込みに失敗したままなら、それをやり直す。溜めている新着は、間隔を待たずに入れる。
     public func refresh() async {
         guard !isStopped, hasStarted, !isDisabled else { return }
@@ -378,7 +378,7 @@ public final class FeedTimelineModel {
         insertPending()
     }
 
-    /// 失敗の表示の再試行が押されたときに呼ぶ。
+    /// 失敗の表示の再試行が選択されたときに呼ぶ。
     public func retry() {
         guard !isUnavailable else { return }
         if store.isEmpty {
@@ -474,7 +474,7 @@ public final class FeedTimelineModel {
     }
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の投稿を読む。1ページに収まらなければギャップを置く。
-    /// - Parameter purpose: 引っぱって読み込み直したときは`.action`。つながったときやポーリングは`.display`。
+    /// - Parameter purpose: pull to refreshしたときは`.action`。つながったときやポーリングは`.display`。
     private func fillFromLatest(purpose: RequestPurpose) {
         #if DEBUG
         // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
@@ -485,7 +485,7 @@ public final class FeedTimelineModel {
             return
         }
         #endif
-        // 読み始める前に数える。走り始める前に引っぱった読み直しが待ち始めても、この補完を待つため。
+        // 読み始める前に数える。走り始める前にpull to refreshが待ち始めても、この補完を待つため。
         activeFills += 1
         if keepsPositionAfterResume {
             hasStartedFillAfterResume = true
@@ -502,8 +502,8 @@ public final class FeedTimelineModel {
                 guard let added = try await model.store.fillFromLatest(maxPages: maxPages, progress: { count in
                     model.updateCatchUp { $0.progress(readCount: count) }
                 }), !model.isStopped else { return }
-                // 作り直し中かは、下の読み直しの予約と同じくストアの直近の読み込みで見る。補完が206を受けて残りを読んでいる間に、
-                // 末尾の読み込みが200で終わると、補完の結果は揃っていないのに作り直し中でないことになり、読み直しを予約せず、時刻も進む。
+                // 作り直し中かは、下の再読み込みの予約と同じくストアの直近の読み込みで見る。補完が206を受けて残りを読んでいる間に、
+                // 末尾の読み込みが200で終わると、補完の結果は揃っていないのに作り直し中でないことになり、再読み込みを予約せず、時刻も進む。
                 // 起きるのは、作り直し中に補完と末尾の読み込みが重なったときだけ。補完ごとの結果を返すようストアを変える必要があり、この表示の範囲を超えるので直していない。
                 // 表示を予約と食い違わせないよう、同じ値を使う。
                 model.updateCatchUp { $0.finish(at: model.now(), isRegenerating: model.store.isRegenerating) }
@@ -514,7 +514,7 @@ public final class FeedTimelineModel {
                 }
                 model.showFilledEntries(since: before)
             } catch {
-                // 失敗しても、次につながったときに同じ基準から読み直す。
+                // 失敗しても、次につながったときに同じ基準から再読み込みする。
                 model.updateCatchUp { $0.fail(error) }
                 model.showPauseAfterFill()
                 model.handle(error, during: "fill") { _ in }
@@ -522,7 +522,7 @@ public final class FeedTimelineModel {
                 if !model.isStopped {
                     model.showFilledEntries(since: before)
                 }
-                // 作り直し中の読み直しが失敗したら、つながったままでは次のきっかけが来ないので、読み直しを続ける。
+                // 作り直し中の再読み込みが失敗したら、つながったままでは次のきっかけが来ないので、再読み込みを続ける。
                 if model.store.isRegenerating {
                     model.scheduleRegeneratingRetry()
                 }
@@ -562,7 +562,7 @@ public final class FeedTimelineModel {
         waiters.forEach { $0.resume() }
     }
 
-    /// サーバーがホームを作り直している最中で結果が揃っていなかったので、時間をおいて補完を読み直す。
+    /// サーバーがホームを作り直している最中で結果が揃っていなかったので、時間をおいて補完を再読み込みする。
     /// つながりが安定していると、次に補完するきっかけが来ず、作り直しの後に揃った投稿が届かないため。
     private func scheduleRegeneratingRetry() {
         guard regeneratingRetryTask == nil, !isStopped, !isDisabled, isInForeground else { return }
@@ -611,7 +611,7 @@ public final class FeedTimelineModel {
             do {
                 let added = try await model.store.loadGap(id, from: direction)
                 guard !model.isStopped else { return }
-                // 再生成中の空の結果などでギャップが縮まなければ、描き直しの後にすぐ同じギャップを読み直してしまうため、
+                // 再生成中の空の結果などでギャップが縮まなければ、再描画の後にすぐ同じギャップを再読み込みしてしまうため、
                 // 失敗と同じくタップされるまで自動では読まない。
                 if isAutomatic, added?.isEmpty == true, model.store.gaps.contains(where: { $0 == gapBefore }) {
                     model.autoLoadFailedGapIDs.insert(id)
@@ -744,15 +744,15 @@ public final class FeedTimelineModel {
         }
     }
 
-    /// 投稿とそれをブーストした投稿の中身を変え、表示に関わる変化があれば描き直す。お気に入りなどの操作の結果を反映する。
+    /// 投稿とそれをブーストした投稿の中身を変え、表示に関わる変化があれば再描画する。お気に入りなどの操作の結果を反映する。
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
         guard !isStopped, store.updateStatus(id, transform) else { return }
         showEntries()
     }
 
-    /// 削除した投稿と、それをブーストした投稿を除く。ストリーミングの削除の知らせを待たずに消す。
-    /// 消える行は閉じる動きで消す。ストリーミングの削除の知らせがRESTの応答より先に届くと、そちらで動かさずに消え、ここでは何もしない。
-    /// Mastodonは削除の知らせを応答の後に別のジョブで配るので、まれな競合として、削除中の投稿を覚えて知らせを見分ける仕組みは足さない。
+    /// 削除した投稿と、それをブーストした投稿を除く。ストリーミングの削除のイベントを待たずに消す。
+    /// 消える行は閉じる動きで消す。ストリーミングの削除のイベントがRESTの応答より先に届くと、そちらで動かさずに消え、ここでは何もしない。
+    /// Mastodonは削除のイベントを応答の後に別のジョブで配るので、まれな競合として、削除中の投稿を覚えてイベントを見分ける仕組みは足さない。
     public func removeStatus(_ id: Status.ID) {
         guard !isStopped, store.removeStatus(id) else { return }
         showEntries(animatesRemoval: true)
@@ -873,7 +873,7 @@ extension FeedTimelineModel {
         handle(error, during: operation) { _ in }
     }
 
-    /// 最新の投稿を`count`件忘れてからつなぎ直し、実データで補完とギャップを起こす。
+    /// 最新の投稿を`count`件忘れてから再接続し、実データで補完とギャップを起こす。
     public func debugForgetNewestAndReconnect(_ count: Int) {
         logger.info("debug forget newest count=\(count, privacy: .public)")
         stopStreaming()

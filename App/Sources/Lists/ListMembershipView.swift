@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// ユーザーのメニューの「リストに追加」で開くシート。自分のリストを並べ、その人が入っているリストにチェックマークを付ける。
-/// 押すたびにその場で足したり外したりする。決まりはdocs/lists.mdの「リストに追加」にある。
+/// 選択するたびにその場で足したり外したりする。決まりはdocs/lists.mdの「リストに追加」にある。
 struct ListMembershipView: View {
     let model: ListMembershipModel
     let acct: String
@@ -68,7 +68,7 @@ struct ListMembershipView: View {
                     } label: {
                         Label(ListTexts.create, systemImage: "plus")
                     }
-                    // 押せないときに、UIKitのように灰色にならず黒い文字になるため、色を決める。
+                    // 無効のときに、UIKitのように灰色にならず黒い文字になるため、色を決める。
                     .foregroundStyle(model.isFollowing ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
                     .disabled(model.isFollowing)
                 } footer: {
@@ -99,7 +99,7 @@ struct ListMembershipView: View {
                 }
             }
         }
-        // 標準では文字が色付きになるので、通常の色にする。押せない行は、押せないことが分かるよう薄くする。
+        // 標準では文字が色付きになるので、通常の色にする。無効の行は、無効だと分かるよう薄くする。
         .foregroundStyle(isDisabled ? .secondary : .primary)
         .accessibilityAddTraits(isMember ? .isSelected : [])
         .disabled(isDisabled)

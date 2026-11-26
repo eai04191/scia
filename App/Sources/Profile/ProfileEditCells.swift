@@ -75,7 +75,7 @@ final class ProfileEditTextView: GlyphLanguageTextView, ProfileEditInput {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 文字を外から入れたときは、入力欄の知らせが来ないので、入れたあとに呼ぶ。
+    /// 文字を外から入れたときは、入力欄の変更のコールバックが来ないので、入れたあとに呼ぶ。
     func updatePlaceholder() {
         placeholderLabel.isHidden = !text.isEmpty
     }
@@ -306,7 +306,7 @@ final class ProfileEditFooter: UITableViewHeaderFooterView {
     }
 }
 
-/// ヘッダー画像とアイコンの行。プロフィール画面と同じく、ヘッダー画像の下端にアイコンを重ねる。押すと、選ぶ、削除、取り消しのメニューを出す。
+/// ヘッダー画像とアイコンの行。プロフィール画面と同じく、ヘッダー画像の下端にアイコンを重ねる。選択すると、選ぶ、削除、取り消しのメニューを出す。
 final class ProfileEditImagesCell: UITableViewCell {
     var onPick: (ProfileImage) -> Void = { _ in }
     var onRemove: (ProfileImage) -> Void = { _ in }
@@ -414,7 +414,7 @@ final class ProfileEditImagesCell: UITableViewCell {
         return min(max(image.size.height / image.size.width, wide), standard)
     }
 
-    /// 押せることを示す、鉛筆のアイコン。
+    /// 選択できることを示す、鉛筆のアイコン。
     private static func makeBadge() -> UIView {
         let badge = UIImageView(image: UIImage(systemName: "pencil.circle.fill"))
         badge.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 26).applying(UIImage.SymbolConfiguration(paletteColors: [.white, .tintColor]))
@@ -423,7 +423,7 @@ final class ProfileEditImagesCell: UITableViewCell {
         return badge
     }
 
-    /// 今の画像を読み込む。端末に読み込み済みの画像は、すぐ出す。同じ画像で呼び直したときは、読み直さない。
+    /// 今の画像を読み込む。端末に読み込み済みの画像は、すぐ出す。同じ画像で呼び直したときは、再読み込みしない。
     func apply(account: Account, mediaImages: MediaImageStore<UIImage>, avatarShape: AvatarShape) {
         self.avatarShape = avatarShape
         let scale = max(traitCollection.displayScale, 2)

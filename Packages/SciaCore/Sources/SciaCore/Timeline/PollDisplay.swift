@@ -28,7 +28,7 @@ public struct PollDisplay: Equatable, Sendable {
     /// 複数の選択肢を選べる。
     public let multiple: Bool
     public let options: [Option]
-    /// 投票のボタンを押せる。1つ以上選んでいて、送っている途中でない。
+    /// 投票のボタンが有効。1つ以上選んでいて、送っている途中でない。
     public let canSubmit: Bool
     /// 投票を送っている途中。
     public let isSubmitting: Bool
@@ -36,10 +36,10 @@ public struct PollDisplay: Equatable, Sendable {
     public let canRevealResults: Bool
     /// 結果の形から、投票する形に戻れる。結果を見ると選んだだけで、まだ投票していない。
     public let canReturnToVoting: Bool
-    /// 結果を読み直せる。サーバーが締め切ったと返した投票は結果が変わらないため、読み直さない。
+    /// 結果を再読み込みできる。サーバーが締め切ったと返した投票は結果が変わらないため、再読み込みしない。
     /// 締め切りの日時を過ぎただけで、サーバーからはまだ締め切る前の結果しか読んでいない投票は、最終結果を読めるよう残す。
     public let canRefresh: Bool
-    /// 結果を読み直している途中。
+    /// 結果を再読み込みしている途中。
     public let isRefreshing: Bool
     /// 選択肢の下に出す、人数か票数と、締め切り。
     public let summary: String
@@ -178,7 +178,7 @@ public struct PollChoices: Equatable, Sendable {
         submitting.insert(pollID)
     }
 
-    /// 送り終えた。投票できたら、選んでいた選択肢はもう使わないため忘れる。失敗したら、選び直さずに押し直せるよう残す。
+    /// 送り終えた。投票できたら、選んでいた選択肢はもう使わないため忘れる。失敗したら、選び直さずに選択し直せるよう残す。
     public mutating func endSubmitting(_ pollID: Poll.ID, succeeded: Bool) {
         submitting.remove(pollID)
         if succeeded {

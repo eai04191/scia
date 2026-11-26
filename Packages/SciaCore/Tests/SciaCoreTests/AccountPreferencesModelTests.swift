@@ -5,7 +5,7 @@ import Testing
 
 @MainActor
 struct AccountPreferencesModelTests {
-    /// アプリに戻って読み直したら、その前に始めた読み込みが遅れて古い値を返しても、読み直した値を出す。
+    /// アプリに戻って再読み込みしたら、その前に始めた読み込みが遅れて古い値を返しても、再読み込みした値を出す。
     /// 先の読み込みは取り消しに応じない通信として、門が開くまで待ってから古い値を返す。
     @Test func laterReloadWinsOverEarlierSlowLoad() async throws {
         let gate = Gate()

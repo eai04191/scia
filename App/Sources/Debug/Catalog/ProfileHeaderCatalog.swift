@@ -3,7 +3,7 @@ import SciaCore
 import UIKit
 
 /// プロフィールの頭に置く、アカウントの情報とタイムラインの切り替え（`ProfileHeaderView`）の状態。
-/// フォローの操作は、押すと次の状態へ進めるだけにし、サーバーには送らない。
+/// フォローの操作は、選択すると次の状態へ進めるだけにし、サーバーには送らない。
 enum ProfileHeaderCatalog {
     private typealias Fixtures = CatalogFixtures
 
@@ -94,7 +94,7 @@ enum ProfileHeaderCatalog {
         )
     }
 
-    /// 3行に収まらない自己紹介。「さらに表示」を押すと、その場で全文に広がる。
+    /// 3行に収まらない自己紹介。「さらに表示」を選択すると、その場で全文に広がる。
     private static let featuredTags: [FeaturedTag] = [
         FeaturedTag(id: "1", name: "nowplaying", statusesCount: 1_234),
         FeaturedTag(id: "2", name: "猫写真", statusesCount: 312),
@@ -407,7 +407,7 @@ enum ProfileHeaderCatalog {
             content = content.replacing(followState: nextFollowState(after: content.followState, locked: account.locked))
             header?.apply(content)
         }
-        // 再試行を押したら読み込み直す途中にし、少し待って読めたことにする。
+        // 再試行を選択したら読み込み直す途中にし、少し待って読めたことにする。
         header.onRetryRelationship = { [weak header] in
             content = content.replacing(isReloadingRelationship: true)
             header?.apply(content)
@@ -428,7 +428,7 @@ enum ProfileHeaderCatalog {
         return header
     }
 
-    /// フォローのボタンを押したときに進める先。承認制なら承認待ちを挟み、外したら承認制のまま戻す。
+    /// フォローのボタンを選択したときに進める先。承認制なら承認待ちを挟み、外したら承認制のまま戻す。
     private static func nextFollowState(after state: FollowState, locked: Bool) -> FollowState {
         switch state {
         case .notFollowing(locked: true): .requested

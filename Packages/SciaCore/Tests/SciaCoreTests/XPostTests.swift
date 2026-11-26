@@ -149,7 +149,7 @@ struct XPostTests {
         #expect(links.map(\.1) == [.url(try url("https://x.com/DeepSeekHarness"))])
     }
 
-    /// 引用元は中身を出さず、押して開く先のURLだけを持つ。引用していない投稿ではnil。
+    /// 引用元は中身を出さず、選択して開く先のURLだけを持つ。引用していない投稿ではnil。
     @Test(.requestPurpose(.action)) func decodesQuote() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_quote"), try .fixture("fxtwitter_photo")])
         let client = XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock()))
@@ -179,7 +179,7 @@ struct XPostTests {
         #expect(XPost(tweet).quote == expected)
     }
 
-    /// fxtwitterの応答もサーバーから来る値なので、押して開く先はhttpとhttpsだけを受け付ける。ほかのスキームの投稿のURLは、Xの投稿として読めないものにする。
+    /// fxtwitterの応答もサーバーから来る値なので、選択して開く先はhttpとhttpsだけを受け付ける。ほかのスキームの投稿のURLは、Xの投稿として読めないものにする。
     @Test(arguments: ["tel:0123456789", "file:///etc/passwd", "sms:0123456789"])
     func rejectsPostWithOtherSchemeURL(_ postURL: String) throws {
         let json = """
@@ -298,8 +298,8 @@ struct XPostTests {
 
     private static let retryPolicy: @MainActor () -> RetrySchedule.Policy = { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }
 
-    /// fxtwitterが混んでいるときの429や5xx、通信の失敗は、待てば読めるため、行を描き直したときに間隔をおいて読み直す。
-    /// 再開の時刻が示されていれば、それより前には読み直さない。起動中ずっとサーバーのカードのままにしない。
+    /// fxtwitterが混んでいるときの429や5xx、通信の失敗は、待てば読めるため、行を再描画したときに間隔をおいて再読み込みする。
+    /// 再開の時刻が示されていれば、それより前には再読み込みしない。起動中ずっとサーバーのカードのままにしない。
     @MainActor @Test(arguments: [
         HTTPStatusError(statusCode: 429, retryAfter: .seconds(30)) as any Error & Sendable,
         HTTPStatusError(statusCode: 503),
@@ -322,7 +322,7 @@ struct XPostTests {
         try await waitUntil { store.hasFailed(id: "1") }
         clock.advance(by: wait - .seconds(1))
         store.request(id: "1")
-        // 読み直すなら、あとから頼んだ投稿より先に読み始める。あとから頼んだ投稿を読み始めるまで待ってから、読み直していないことを確かめる。
+        // 再読み込みするなら、あとから頼んだ投稿より先に読み始める。あとから頼んだ投稿を読み始めるまで待ってから、再読み込みしていないことを確かめる。
         store.request(id: "2")
         try await waitUntil { await counter.count("2") == 1 }
         #expect(await counter.count("1") == 1, "間隔の前に読み直しました")
@@ -333,8 +333,8 @@ struct XPostTests {
         #expect(await counter.count("1") == 2)
     }
 
-    /// 読み直してよくなった時刻に知らせ、まだその投稿を描いている行が描き直して読み直す。行の描き直しを待たない。
-    /// 描き直されない画面で、間隔が過ぎてもサーバーのカードのまま残らないため（docs/network.md）。
+    /// 再読み込みしてよくなった時刻に知らせ、まだその投稿を描いている行が再描画して再読み込みする。行の再描画を待たない。
+    /// 再描画されない画面で、間隔が過ぎてもサーバーのカードのまま残らないため（docs/network.md）。
     @MainActor @Test func storeAsksToRedrawWhenRetryIsAllowed() async throws {
         let counter = FetchCounter()
         let clock = TestClock()
@@ -344,7 +344,7 @@ struct XPostTests {
             if await counter.count(id) == 1 { throw HTTPStatusError(statusCode: 503) }
             return post
         }
-        // 投稿を描いている行は、知らせを受けたら描き直し、描き直しで投稿を求める。
+        // 投稿を描いている行は、コールバックを受けたら再描画し、再描画で投稿を求める。
         store.onChange = { store.request(id: $0) }
 
         store.request(id: "1")
@@ -354,7 +354,7 @@ struct XPostTests {
         #expect(await counter.count("1") == 2)
     }
 
-    /// 知らせを受けても描き直す行がなければ（画面から外れた、隠れているなど）、読み直さない。待っても読めない失敗は、知らせを待たない。
+    /// コールバックを受けても再描画する行がなければ（画面から外れた、隠れているなど）、再読み込みしない。待っても読めない失敗は、コールバックを待たない。
     @MainActor @Test func storeDoesNotRetryWithoutRedraw() async throws {
         let counter = FetchCounter()
         let clock = TestClock()
@@ -375,7 +375,7 @@ struct XPostTests {
         #expect(await counter.count("2") == 1)
     }
 
-    /// 取り消しのように失敗として覚えないものは、読み直してよくなった知らせを送らない。送ると、描き直した行がすぐ読み、また取り消されて、待たずに繰り返すため。
+    /// 取り消しのように失敗として覚えないものは、再読み込みしてよくなったコールバックを呼ばない。呼ぶと、再描画した行がすぐ読み、また取り消されて、待たずに繰り返すため。
     @MainActor @Test func storeDoesNotAskToRedrawAfterCancellation() async throws {
         let counter = FetchCounter()
         let clock = TestClock()
@@ -388,15 +388,15 @@ struct XPostTests {
 
         store.request(id: "1")
         try await waitUntil { store.hasFailed(id: "1") }
-        // 知らせるなら、あとから頼んだ投稿より先に読み直す。あとから頼んだ投稿が失敗するまで待ってから、読み直していないことを確かめる。
+        // 知らせるなら、あとから頼んだ投稿より先に再読み込みする。あとから頼んだ投稿が失敗するまで待ってから、再読み込みしていないことを確かめる。
         store.request(id: "2")
         try await waitUntil { store.hasFailed(id: "2") }
         #expect(await counter.count("1") == 1)
         #expect(clock.sleeperCount == 0)
     }
 
-    /// 設定で展開をオフにしたら、読み込み中の通信を取り消し、読み直しの待ちもやめる。オフのあいだはfxtwitterに通信しないため（docs/link-card.md）。
-    /// 取り消した投稿は読んでいないものに戻すので、オンに戻して描き直せば読み直す。
+    /// 設定で展開をオフにしたら、読み込み中の通信を取り消し、再読み込みの待ちもやめる。オフのあいだはfxtwitterに通信しないため（docs/link-card.md）。
+    /// 取り消した投稿は読んでいないものに戻すので、オンに戻して再描画すれば再読み込みする。
     @MainActor @Test func cancelAllStopsLoadsAndRetries() async throws {
         let counter = FetchCounter()
         let clock = TestClock()
@@ -439,7 +439,7 @@ struct XPostTests {
         #expect(await origins.values == [.display])
     }
 
-    /// 同じ投稿を並べた行が続けて求めても、読むのは1回。読み終えたら知らせる。待っても読めない失敗（404など）の投稿は読み直さない。
+    /// 同じ投稿を並べた行が続けて求めても、読むのは1回。読み終えたら知らせる。待っても読めない失敗（404など）の投稿は再読み込みしない。
     @MainActor @Test func storeFetchesOncePerPost() async throws {
         let counter = FetchCounter()
         let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
@@ -460,7 +460,7 @@ struct XPostTests {
             try await waitUntil { await counter.count("2") == 1 && store.post(id: "1") != nil }
         }
         store.request(id: "2")
-        // 読み直すなら、あとから頼んだ投稿より先に読み始める。あとから頼んだ投稿を読み始めるまで待ってから、読み直していないことを確かめる。
+        // 再読み込みするなら、あとから頼んだ投稿より先に読み始める。あとから頼んだ投稿を読み始めるまで待ってから、再読み込みしていないことを確かめる。
         store.request(id: "3")
         try await waitUntil { await counter.count("3") == 1 }
 

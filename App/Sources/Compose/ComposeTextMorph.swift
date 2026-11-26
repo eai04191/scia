@@ -14,7 +14,7 @@ import UIKit
 /// 本文の後半がその下の行の上を通らないようにするため。入れ物の見える範囲は、Aではカプセルの行、Bでは入力欄の枠にする。
 ///
 /// 返信の宛先や返信先のラベルのように、Bで本文より上や左にあるものは、動く本文が空けた場所にだけ見せる。本文はカプセルの行（ラベルの来る場所）から
-/// 下へ動くので、その場で浮かび上がらせるだけでは、動く本文が浮かび上がる途中の文字の上を通るため。上にあるものは、いちばん上で動く本文の上端より上、
+/// 下へ動くので、その場でフェードインさせるだけでは、動く本文がフェードインする途中の文字の上を通るため。上にあるものは、いちばん上で動く本文の上端より上、
 /// 同じ行の左にあるものは、その行で動く本文の左端より左だけに見せ、境目は薄くぼかす。境目は本文と同じスプリングで動かす。
 @MainActor
 final class ComposeTextMorph {
@@ -24,7 +24,7 @@ final class ComposeTextMorph {
     }
 
     /// 片方にしかない文字を入れ替える間合い。どちらも動きの長さに対する割合。出ていく文字を`outEnd`までに消し切り、
-    /// 入ってくる文字を`outEnd`から`inEnd`までで浮かび上がらせる。
+    /// 入ってくる文字を`outEnd`から`inEnd`まででフェードインさせる。
     struct Swap {
         let outEnd: Double
         let inEnd: Double
@@ -77,7 +77,7 @@ final class ComposeTextMorph {
     }
 
     private let container: UIView
-    /// 動かすかたまりの入れ物。見える範囲を縦に区切る入れ物と、その中で横に区切る入れ物で、角は縦と横の薄くし方を掛け合わせた濃さになる。
+    /// 動かすかたまりの入れ物。見える範囲を縦に区切る入れ物と、その中で横に区切る入れ物で、角は縦と横の薄くし方を掛け合わせた不透明度になる。
     private let flightStage = FadeStage()
     /// その場で出し入れするかたまりの入れ物。入力欄の枠に重ねる。
     private let fieldStage = FadeStage()
@@ -232,7 +232,7 @@ final class ComposeTextMorph {
             holder.alpha = 1
             Self.handOver(from: holder.line(at: source.end), to: holder.line(at: end), duration: duration, swap: swap)
         }
-        // カプセルにしかない文字があれば、それを先に消し切り、書いているときにしかない文字はそのあとで浮かび上がらせる（閉じるときは逆）。
+        // カプセルにしかない文字があれば、それを先に消し切り、書いているときにしかない文字はそのあとでフェードインさせる（閉じるときは逆）。
         // 同じ場所に出入りするので、同時に薄くしたり濃くしたりすると重なって見えるため。
         // 行末と同じ文字も、行末と入れ替わりに出入りさせる。
         let staged = !plan.departures.isEmpty
@@ -258,7 +258,7 @@ final class ComposeTextMorph {
         for tail in plan.tails {
             guard let holder = tails[tail.key] else { continue }
             Self.place(holder.line, at: Self.origin(of: tail, at: end, plan: plan))
-            // 行末は、同じ文字が入力欄の次の行に浮かび上がるので、開くときは先に消し切り、閉じるときはあとで浮かび上がらせる。
+            // 行末は、同じ文字が入力欄の次の行にフェードインするので、開くときは先に消し切り、閉じるときはあとでフェードインさせる。
             // 両方が半分ずつ見えて、同じ文字が2か所に見えないようにするため。
             Self.stage(true, appearing: end == .a, duration: duration, swap: swap) { shown in
                 holder.line.alpha = shown ? 1 : 0
@@ -338,7 +338,7 @@ final class ComposeTextMorph {
         } + plan.departures.compactMap { departure -> (view: UIView, move: () -> Void)? in
             departures[departure.key].map { holder in (holder.line, { Self.place(holder.line, at: departure.originInA) }) }
         }
-        // 位置と大きさだけを止める。濃さの動き（浮かび上がらせる、行末を薄くするなど）は、止めずにそのまま続ける。
+        // 位置と大きさだけを止める。不透明度の動き（フェードインさせる、行末を薄くするなど）は、止めずにそのまま続ける。
         for move in moves {
             Self.freezePosition(move.view)
         }
@@ -431,11 +431,11 @@ final class ComposeTextMorph {
         view.bounds = CGRect(origin: .zero, size: view.intrinsicContentSize)
     }
 
-    /// `staged`なら、出入りを`swap`の間合いに寄せる。消すときは`outEnd`までに消し切り、浮かび上がらせるときは`outEnd`から`inEnd`まで。
+    /// `staged`なら、出入りを`swap`の間合いに寄せる。消すときは`outEnd`までに消し切り、フェードインさせるときは`outEnd`から`inEnd`まで。
     /// そうでなければ、そのときのアニメーションの中で行う。
-    /// 浮かび上がらせるときも、`outEnd`まではまず消し切る。途中で向きを変えて、薄くなりかけのものを浮かび上がらせ直すとき、
-    /// そのままの濃さで残って、先に消し切るはずのものと同時に見えないようにするため。
-    /// 欄の形の動きはスプリングで始めのほうに寄るので、消し切る時点を4割、浮かび上がり始める時点を6割にしていたときは、欄が開き切ってから中身が出るまで空の欄が見えた。
+    /// フェードインさせるときも、`outEnd`まではまず消し切る。途中で向きを変えて、薄くなりかけのものをもう一度フェードインさせるとき、
+    /// そのままの不透明度で残って、先に消し切るはずのものと同時に見えないようにするため。
+    /// 欄の形の動きはスプリングで始めのほうに寄るので、消し切る時点を4割、フェードインし始める時点を6割にしていたときは、欄が開き切ってから中身が出るまで空の欄が見えた。
     private static func stage(_ staged: Bool, appearing: Bool, duration: TimeInterval, swap: Swap, _ set: @escaping (Bool) -> Void) {
         guard staged else {
             set(appearing)
@@ -456,7 +456,7 @@ final class ComposeTextMorph {
     }
 
     /// 動かすかたまりの2つの行を、出発の端に合わせて描く行から、行き先の端に合わせて描く行へ入れ替える。間合いは片方にしかない文字の入れ替えと同じ。
-    /// 先に行き先の行を出発の行の下で濃くし、そのあとで出発の行を薄くする。同時に入れ替えると、両方が半分ずつの濃さになり、途中で文字が薄く見えるため。
+    /// 先に行き先の行を出発の行の下で不透明度を上げ、そのあとで出発の行を薄くする。同時に入れ替えると、両方が半分ずつの不透明度になり、途中で文字が薄く見えるため。
     private static func handOver(from: TextLineView, to: TextLineView, duration: TimeInterval, swap: Swap) {
         from.superview?.bringSubviewToFront(from)
         let outEnd = min(max(swap.outEnd, 0), 1)
@@ -600,10 +600,10 @@ final class ComposeTextMorph {
 
     private static let everywhere = CGRect(x: -5000, y: -5000, width: 10000, height: 10000)
 
-    /// 動かしている途中のビューの位置と大きさを、そのとき見えている形で止める。`includingSubviews`なら、子のビューとマスクも止める。濃さの動きは残す。
-    /// 大きさは、`bounds`の原点を写さずに大きさだけを写す。どのビューも原点を動かさないが、大きさが0から伸びる動き（返信の宛先だけを書いた下書きを開くときの、
+    /// 動かしている途中のビューの位置と大きさを、そのとき見えている形で止める。`includingSubviews`なら、子のビューとマスクも止める。不透明度の動きは残す。
+    /// 大きさは、`bounds`の原点をコピーせずに大きさだけをコピーする。どのビューも原点を動かさないが、大きさが0から伸びる動き（返信の宛先だけを書いた下書きを開くときの、
     /// その場で出し入れするかたまりの入れ物）を始めた直後に止めると、表示の層の`bounds`の原点がずれた値（欄の高さの分だけ負）で返り、
-    /// 写すと中のかたまりがその分だけ下に描かれたため。
+    /// コピーすると中のかたまりがその分だけ下に描かれたため。
     static func freezePosition(_ view: UIView, includingSubviews: Bool = true) {
         if let presentation = view.layer.presentation() {
             view.layer.position = presentation.position
@@ -623,7 +623,7 @@ final class ComposeTextMorph {
     static func freeze(_ view: UIView) {
         guard let presentation = view.layer.presentation() else { return }
         view.layer.position = presentation.position
-        // `freezePosition`と同じく、原点は写さない。
+        // `freezePosition`と同じく、原点はコピーしない。
         view.layer.bounds.size = presentation.bounds.size
         view.layer.opacity = presentation.opacity
         view.layer.removeAllAnimations()

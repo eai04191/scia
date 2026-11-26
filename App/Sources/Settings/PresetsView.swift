@@ -5,7 +5,7 @@ import UIKit
 /// 「プリセット」の画面。アプリとアカウントごとに使うプリセットを選ぶだけにし、作る・直すは「プリセットを管理」に分ける。決まりはdocs/preset.mdの「選ぶ」にある。
 struct PresetsView: View {
     let settings: AppSettings
-    /// ログインしているアカウントのハンドル。アカウントの切り替えのメニューと同じ順。1つだけなら、アカウントの節を出さない。
+    /// ログインしているアカウントのハンドル。アカウントの切り替えのメニューと同じ順。1つだけなら、アカウントのセクションを出さない。
     let accounts: [String]
 
     private var library: PresetLibrary { settings.store.observedLibrary }
@@ -53,7 +53,7 @@ struct PresetsView: View {
     }
 }
 
-/// 「プリセットを管理」の画面。プリセットを並べ、押すとそのプリセットの画面を開く。押しても使うものは替わらない。決まりはdocs/preset.mdの「作る・直す」にある。
+/// 「プリセットを管理」の画面。プリセットを並べ、選択するとそのプリセットの画面を開く。選択しても使うものは替わらない。決まりはdocs/preset.mdの「作る・直す」にある。
 struct PresetManagementView: View {
     let settings: AppSettings
     /// プリセットの画面を開く。
@@ -61,7 +61,7 @@ struct PresetManagementView: View {
     /// 2つのプリセットを比べる画面を開く。
     let openComparison: () -> Void
     @State private var deleting: PresetID?
-    /// この画面を出している窓。名前を聞くアラートを、操作した窓に出すために読む。
+    /// この画面を出しているウィンドウ。名前を聞くアラートを、操作したウィンドウに出すために読む。
     @State private var anchor = WindowAnchor()
 
     private var library: PresetLibrary { settings.store.observedLibrary }
@@ -170,7 +170,7 @@ struct PresetEditorView: View {
     let preset: PresetID
     /// 複製したプリセットの画面に替える。
     let openPreset: (PresetID) -> Void
-    /// 入力欄で書き換えた名前。書き換えるまではnilで、欄にはプリセットの今の名前を出す。ほかの窓で名前を変えたとき、書き換えていない欄が前の名前で上書きしないため。
+    /// 入力欄で書き換えた名前。書き換えるまではnilで、欄にはプリセットの今の名前を出す。ほかのウィンドウで名前を変えたとき、書き換えていない欄が前の名前で上書きしないため。
     @State private var editedName: String?
     @State private var isNameTaken = false
     @State private var isDeleting = false
@@ -343,7 +343,7 @@ extension PresetLibrary {
 /// 入力欄は、ペーストした文字をコピーしたとおりに入れるよう、スマート挿入を切る（`GlyphLanguageTextView`と同じ）。
 @MainActor
 enum PresetNameInput {
-    /// - Parameter anchor: 操作した窓。聞き直すときも、同じ窓に出す。
+    /// - Parameter anchor: 操作したウィンドウ。聞き直すときも、同じウィンドウに出す。
     static func present(from anchor: WindowAnchor, title: String, actionTitle: String, text: String, message: String? = nil, submit: @escaping (String) throws(PresetError) -> Void) {
         guard let presenter = anchor.view?.window?.rootViewController else { return }
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
@@ -354,7 +354,7 @@ enum PresetNameInput {
             } catch .nameTaken {
                 present(from: anchor, title: title, actionTitle: actionTitle, text: name, message: SettingsTexts.Presets.nameTaken, submit: submit)
             } catch {
-                // もとのプリセットがほかの窓で消されたときなど。名前を変えても作れないので、聞き直さずに知らせて終える。
+                // もとのプリセットがほかのウィンドウで消されたときなど。名前を変えても作れないので、聞き直さずに知らせて終える。
                 let failure = UIAlertController(title: PresetTexts.presetNotFound, message: nil, preferredStyle: .alert)
                 failure.addAction(UIAlertAction(title: SettingsTexts.Presets.ok, style: .default))
                 presenter.presentOnFrontmost(failure)
@@ -377,7 +377,7 @@ enum PresetNameInput {
     }
 }
 
-/// SwiftUIの画面を出している窓を読むための、UIKitのビューへの弱い参照。
+/// SwiftUIの画面を出しているウィンドウを読むための、UIKitのビューへの弱い参照。
 @MainActor
 final class WindowAnchor {
     weak var view: UIView?
@@ -440,7 +440,7 @@ struct AccountPresetView: View {
     }
 }
 
-/// 組み込みのプリセットとマイプリセットを、見出しを付けた節に分けて、選ぶ行で並べる。鍵のアイコンは付けない。選べないように見えるため（docs/preset.md）。
+/// 組み込みのプリセットとマイプリセットを、見出しを付けたセクションに分けて、選ぶ行で並べる。鍵のアイコンは付けない。選べないように見えるため（docs/preset.md）。
 private struct PresetChoiceSections: View {
     let library: PresetLibrary
     let selected: PresetID?

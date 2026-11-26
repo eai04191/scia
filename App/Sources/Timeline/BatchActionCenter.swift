@@ -4,7 +4,7 @@ import UIKit
 /// タイムラインで選んだ投稿に、まとめてブーストや共有をする。選んだタイムラインを離れても続くよう、セッションで持つ。決まりはdocs/batch-actions.mdにある。
 @MainActor
 final class BatchActionCenter {
-    /// 同じ操作の結果を待っている投稿だったので送らなかった。押した操作の結果を待ってから続きを送れば済む。
+    /// 同じ操作の結果を待っている投稿だったので送らなかった。選択した操作の結果を待ってから続きを送れば済む。
     private struct Busy: LocalizedError {
         var errorDescription: String? { BatchActionTexts.busy }
     }
@@ -65,7 +65,7 @@ final class BatchActionCenter {
 
     /// `run`の残りを送る。失敗したあとの「続きからブースト」でも呼ぶ。新しいまとめてブーストに替わっていたら何もしない。
     private func resumeReblog(_ run: BatchReblog) {
-        // 失敗のチップを続けて押しても、走っている続きに重ねない。
+        // 失敗のチップを続けて選択しても、走っている続きに重ねない。
         guard reblog === run, !run.isRunning else { return }
         showReblogProgress()
         tasks.run(.action) { [weak self] in
@@ -101,7 +101,7 @@ final class BatchActionCenter {
         reblogStopConfirmation = nil
     }
 
-    /// 失敗したところで止め、数秒で消えるチップで知らせる。押すと理由と「続きからブースト」を出す。
+    /// 失敗したところで止め、数秒で消えるチップで知らせる。選択すると理由と「続きからブースト」を出す。
     /// 理由を待つ間に新しいまとめてブーストを始めていたら、失敗は残すが、チップは出さない。続きを送る先がもうないため。
     private func reblogDidFail(_ run: BatchReblog, at index: Int, _ error: any Error) async {
         let title = Notice.batchReblogFailureTitle(index: index)
@@ -136,7 +136,7 @@ final class BatchActionCenter {
     // MARK: 共有
 
     /// 選んだ順の本文とメディアを、共有のシートに1回で渡す。メディアは落としてから渡す。前のまとめて共有が落としている途中なら止める。
-    /// 共有のシートは、いちばん手前の画面から出す。選び終えるとツールバーは消え、落としている間に画面を移ることもあるため。
+    /// 共有のシートは、いちばん手前の画面から出す。選び終えるとツールバーは消え、落としている間に画面遷移することもあるため。
     func share(_ statuses: [Status]) {
         let payload = BatchSharePayload(statuses: statuses)
         stopSharing()

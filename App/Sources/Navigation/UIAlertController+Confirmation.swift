@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 extension UIAlertController {
-    /// SciaCoreの確認を、アラートかアクションシートに描く。押されたボタンが選んだものを`onChoice`に渡す。キャンセルでは呼ばない。
+    /// SciaCoreの確認を、アラートかアクションシートに描く。選択されたボタンが選んだものを`onChoice`に渡す。キャンセルでは呼ばない。
     /// `onClose`は、キャンセルを含めてどのボタンで閉じても、`onChoice`より先に呼ぶ。
     convenience init<Choice>(_ confirmation: Confirmation<Choice>, preferredStyle: Style, onClose: @escaping () -> Void = {}, onChoice: @escaping (Choice) -> Void) {
         self.init(title: confirmation.title, message: confirmation.message, preferredStyle: preferredStyle)

@@ -56,8 +56,8 @@ struct RateLimitTests {
         #expect(date == Self.now.addingTimeInterval(RateLimitGate.longestPause))
     }
 
-    /// 429のほかの応答では、X-RateLimit-Resetを再開の時刻として読まない。Mastodonは制限の対象のAPIの応答すべてに、いまの窓が終わる時刻としてこのヘッダーを付けるため、
-    /// 制限と関係のない503（ほかのサーバーの情報を取れなかったなど）で読むと、窓が終わるまで自動の通信を止めてしまう。Retry-Afterは読む。
+    /// 429のほかの応答では、X-RateLimit-Resetを再開の時刻として読まない。Mastodonは制限の対象のAPIの応答すべてに、いまの制限のウィンドウが終わる時刻としてこのヘッダーを付けるため、
+    /// 制限と関係のない503（ほかのサーバーの情報を取れなかったなど）で読むと、制限のウィンドウが終わるまで自動の通信を止めてしまう。Retry-Afterは読む。
     @Test func resumeDateIgnoresRateLimitResetUnlessTooManyRequests() throws {
         let url = try #require(URL(string: "https://example.social"))
         func unavailable(_ headers: [String: String]) throws -> HTTPURLResponse {
@@ -142,7 +142,7 @@ struct RateLimitTests {
     }
 
     /// 過ぎた時刻（`Retry-After: 0`や、時計のずれた`X-RateLimit-Reset`）では止めない。
-    /// 止めるとすぐ再開を知らせ、読み込み直しが同じ応答を受けて、送り直しの上限を超えて繰り返すため。
+    /// 止めるとすぐ再開を知らせ、再読み込みが同じ応答を受けて、再送の上限を超えて繰り返すため。
     @Test(arguments: [["Retry-After": "0"], ["X-RateLimit-Reset": "2027-01-15T07:59:00.000Z"]])
     func pastResumeDateDoesNotPause(headers: [String: String]) async throws {
         let gate = RateLimitGate(now: { Self.now })

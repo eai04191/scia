@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 extension HapticStyle {
-    /// 触覚を鳴らす。`intensity`が0なら鳴らさない。`selection`は強さを選べないので、`intensity`は鳴らすかどうかだけに使う。
+    /// ハプティクスを鳴らす。`intensity`が0なら鳴らさない。`selection`は強さを選べないので、`intensity`は鳴らすかどうかだけに使う。
     @MainActor
     func play(intensity: Double, in view: UIView, at location: CGPoint) {
         guard intensity > 0 else { return }

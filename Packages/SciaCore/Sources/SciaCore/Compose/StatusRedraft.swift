@@ -16,7 +16,7 @@ public struct StatusRedraft: Sendable, Equatable {
     public enum Deletion: Sendable, Equatable {
         /// まだ削除していない。書き直しをやめても、元の投稿は残る。
         case pending
-        /// 削除を送ったが、応答を受け取れず、届いたか分からない。送り直すときは削除から送り直す。
+        /// 削除を送ったが、応答を受け取れず、届いたか分からない。再送するときは削除から再送する。
         case uncertain
         /// 削除した（ほかの端末で消してあったときを含む）。中身はもう下書きにしか残っていない。
         case done

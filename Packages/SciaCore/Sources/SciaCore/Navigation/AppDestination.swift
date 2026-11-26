@@ -24,7 +24,7 @@ public enum AppDestination: Equatable, Sendable {
     case thread(statusID: String)
     /// `edit-history?id=<投稿のID>`。その投稿の編集履歴を開く。
     case editHistory(statusID: String)
-    /// `api-response?id=<投稿のID>`。その投稿をサーバーから読み直し、APIの応答のJSONを開く。
+    /// `api-response?id=<投稿のID>`。その投稿をサーバーから再読み込みし、APIの応答のJSONを開く。
     case apiResponse(statusID: String)
     /// `quotes?id=<投稿のID>`。選んでいるタブに、その投稿を引用した投稿のタイムラインを開く。
     case quotes(statusID: String)
@@ -63,7 +63,7 @@ public enum AppDestination: Equatable, Sendable {
     case announcements
     /// アカウントの画面。サーバーにあるものの入口を並べる。決まりはdocs/account-screen.mdにある。
     case account
-    /// `in-app-browser-height`。重ねた画面を閉じてホームのタブを出し、その上にアプリ内のSafariの高さを選ぶシートを出す。
+    /// `in-app-browser-height`。モーダルビューを閉じてホームのタブを出し、その上にアプリ内のSafariの高さを選ぶシートを出す。
     /// `?return=<SettingsPage.rawValue>`で、シートを閉じたときにその設定の画面を開き直す。
     case inAppBrowserHeight(returningTo: SettingsPage?)
     /// `note?acct=<ハンドル>`。その人のプロフィールに書く、自分にしか見えないメモの画面を開く。
@@ -129,7 +129,7 @@ public enum AppDestination: Equatable, Sendable {
         case crop(index: Int)
     }
 
-    /// タブを選ぶか、タブに積んで見せる行き先か。上に重ねた画面があると見えず、積むのもやめるので、重ねた画面を閉じてから開く。決まりはdocs/app-url.mdにある。
+    /// タブを選ぶか、タブにプッシュして見せる行き先か。上にモーダルビューがあると見えず、プッシュもやめるので、モーダルビューを閉じてから開く。決まりはdocs/app-url.mdにある。
     /// 手前に重ねる行き先は、下の画面を残して重ねる。ビューアのメニューから開いた設定を閉じると、ビューアに戻るため。
     /// 予約投稿は、タブを無効にしていれば手前に重ねるが、タブに並べていればタブを見せるので、こちらに入れる。
     public var showsTab: Bool {
@@ -415,7 +415,7 @@ public enum SettingsPage: String, CaseIterable, Hashable, Sendable {
     case storage
     /// ストレージの、メディアのキャッシュの表示済みの段。
     case viewedMediaCache = "storage-viewed"
-    /// ストレージの、メディアのキャッシュの先読みの段。
+    /// ストレージの、メディアのキャッシュのプリフェッチの段。
     case prefetchedMediaCache = "storage-prefetched"
     case licenses
     case acknowledgments

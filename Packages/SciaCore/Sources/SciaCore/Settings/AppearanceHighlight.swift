@@ -57,7 +57,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.namePartsSpacing, .firstOf([.horizontalGap(leading: [.namePrimary], trailing: [.nameSecondary]), .part(.nameRow)])),
             // 2段に分けていないと効かないので、分けていなければ名前の行を示す。
             (C.nameStackSpacing, .firstOf([.verticalGap(above: [.nameFirstLineGlyphs], below: [.nameSecondLineGlyphs]), .part(.nameRow)])),
-            // 時刻は右端に寄せるので、名前が短いと最小のすき間より広く空き、値を変えても見た目が変わらない。名前が時刻に詰まった投稿で示す。
+            // 時刻は右端に寄せるので、名前が短いと最小のgapより広く空き、値を変えても見た目が変わらない。名前が時刻に詰まった投稿で示す。
             (C.nameTimeSpacing, .firstOf([.part(.nameTimeMinGap), .horizontalGap(leading: [.nameSecondary, .namePrimary], trailing: [.time]), .part(.timeSlot)])),
             (C.visibilitySymbolSpacing, .firstOf([.part(.visibilitySymbolGap), .part(.visibilitySymbol)])),
             (C.editedMarkSpacing, .firstOf([.part(.editedMarkGap), .part(.editedMark)])),
@@ -88,13 +88,13 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.spoilerCornerRadius, .part(.spoilerCorners)),
             (C.spoilerBodySpacing, .verticalGap(above: [.spoiler], below: [.bodyGlyphs])),
 
-            // 本文の右に出すときは、本文とサムネイルの横のすき間になる。
+            // 本文の右に出すときは、本文とサムネイルの横のgapになる。
             (C.bodyMediaSpacing, .firstOf([.verticalGap(above: [.bodyGlyphs], below: [.media]), .horizontalGap(leading: [.bodyText], trailing: [.besideMedia])])),
             (C.mediaTileSpacing, .part(.mediaTileGaps)),
             (C.mediaTallestAspectRatio, .firstOf([.part(.singleTallMedia), .part(.singleMedia)])),
             (C.mediaWidestAspectRatio, .firstOf([.part(.singleWideMedia), .part(.singleMedia)])),
             // 本文の下に並べているときは効かないが、何の大きさかが分かるよう、並べた添付ファイルを示す。
-            // 引用とXの投稿だけを本文の右に出すときは、大きさの効く囲みの中のメディアを示す。
+            // 引用とXの投稿だけを本文の右に出すときは、大きさの効くカードの中のメディアを示す。
             (C.mediaBesideSide, .firstOf([.part(.besideMedia), .part(.xPostBesideMedia), .part(.media)])),
 
             (C.linkCardTitleText, .part(.cardTitle)),
@@ -196,7 +196,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
     public enum Style {
         /// 部品の少し外側に枠を引き、中の部品を隠さない。部品の大きさや文字を変える項目に使う。
         case enclose
-        /// その場所を塗る。すき間や余白のように、塗る場所に部品がない項目に使う。
+        /// その場所を塗る。gapや余白のように、塗る場所に部品がない項目に使う。
         case fill
     }
 
@@ -239,7 +239,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
         ]
     }
 
-    /// 枠の角の丸みが効く、四隅の正方形。
+    /// 枠のradiusが効く、四隅の正方形。
     public static func cornerSquares(of rect: CGRect, radius: CGFloat) -> [CGRect] {
         let side = min(radius, rect.width / 2, rect.height / 2)
         return [
@@ -250,7 +250,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
         ]
     }
 
-    /// 並んだ枠のうち、隣り合うもののあいだの帯。サムネイル同士や選択肢同士のすき間を示すのに使う。
+    /// 並んだ枠のうち、隣り合うもののあいだの帯。サムネイル同士や選択肢同士のgapを示すのに使う。
     /// 右か下にある枠のうち、いちばん近いものだけを隣とみなす。
     public static func gaps(between frames: [CGRect]) -> [CGRect] {
         var gaps: [CGRect] = []

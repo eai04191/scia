@@ -1,24 +1,24 @@
 public import Foundation
 import os
 
-/// `api/v1/custom_emojis`の応答を読んだあと、自分のサーバーの絵文字の画像を、先読み（`prefetch`）として裏で取得する
+/// `api/v1/custom_emojis`の応答を読んだあと、自分のサーバーの絵文字の画像を、プリフェッチ（`prefetch`）として裏で取得する
 /// （docs/animated-custom-emoji.mdの「自分のサーバーの絵文字のプリフェッチ」）。
 /// 初めて起動したあと、絵文字ピッカーを初めて流すときから、枠を空けないため。
 ///
 /// 取得するのは、元の画像がAにない絵文字のうち、次のもの。
-/// - 絵文字ピッカーの小さい静止画がないもの。取得した画像から小さい静止画を作る。
-/// - 小さい静止画はあるが、必須でない用途の空き容量が足りるもの。足りないときは、持たずに捨てる元の画像を応答を読むたびに取得し直さないよう、取得しない。
-/// 元の画像は、必須でない用途の空きが、残りの取得量の見積もりに足りるときだけAとして持ち、足りなければ小さい静止画を作ったあと捨てる。
+/// - 絵文字ピッカーのサムネイルがないもの。取得した画像からサムネイルを作る。
+/// - サムネイルはあるが、必須でない用途の空き容量が足りるもの。足りないときは、持たずに捨てる元の画像を応答を読むたびに取得し直さないよう、取得しない。
+/// 元の画像は、必須でない用途の空きが、残りの取得量の見積もりに足りるときだけAとして持ち、足りなければサムネイルを作ったあと捨てる。
 public struct EmojiPrefetch: Sendable {
     /// 取得する前に見積もる、画像1つの大きさ。fedibird.comの絵文字の元の画像の、150個の抜き取りの平均（約20KB）。取得したあとは、取得した画像の平均を使う。
     static let estimatedImageSize = 20 * 1_024
 
-    /// 先読みを送れない（回線、低データモード、レート制限）。残りは取得せずに終える。送らなかった分は、その絵文字を描くときに取得する。
+    /// プリフェッチを送れない（回線、低データモード、レート制限）。残りは取得せずに終える。送らなかった分は、その絵文字を描くときに取得する。
     public struct NotAllowed: Error, Sendable {
         public init() {}
     }
 
-    /// この画像は先読みしない（前に読めなかった、読み直しを待っている）。数えずに次へ進む。
+    /// この画像はプリフェッチしない（前に読めなかった、再読み込みを待っている）。数えずに次へ進む。
     public struct Skipped: Error, Sendable {
         public init() {}
     }
@@ -39,9 +39,9 @@ public struct EmojiPrefetch: Sendable {
     private let logger = SciaLog.logger(category: "emoji")
 
     /// - Parameters:
-    ///   - fetch: 先読みとして取得する。送れなければ`NotAllowed`か`AutomaticRequestsPaused`を、この画像を先読みしないなら`Skipped`を投げる。
-    ///   - hasThumbnail: 絵文字ピッカーの小さい静止画があるか。
-    ///   - makeThumbnail: 取得した画像から、小さい静止画を作って足す。
+    ///   - fetch: プリフェッチとして取得する。送れなければ`NotAllowed`か`AutomaticRequestsPaused`を、この画像をプリフェッチしないなら`Skipped`を投げる。
+    ///   - hasThumbnail: 絵文字ピッカーのサムネイルがあるか。
+    ///   - makeThumbnail: 取得した画像から、サムネイルを作って足す。
     public init(
         files: EmojiImageFiles,
         fetch: @escaping @Sendable (URL) async throws -> Data,
@@ -73,7 +73,7 @@ public struct EmojiPrefetch: Sendable {
         func remaining(_ count: Int) -> Int {
             count * (result.fetched > 0 ? fetchedBytes / result.fetched : Self.estimatedImageSize)
         }
-        // 空白を防ぐ小さい静止画のない分を先に取得する。
+        // 空白を防ぐサムネイルのない分を先に取得する。
         var keepsOriginals = await files.hasRoom(for: remaining(withoutThumbnail.count + withThumbnail.count), rereading: true)
         var queue = withoutThumbnail + (keepsOriginals ? withThumbnail : [])
         var index = 0
@@ -107,7 +107,7 @@ public struct EmojiPrefetch: Sendable {
                     if try await files.storeListed(data, named: url.lastPathComponent, for: url, remaining: remaining(queue.count - index + 1)) {
                         result.keptOriginals += 1
                     } else {
-                        // 足りなくなったら、それ以降の元の画像は持たない。小さい静止画があって、元の画像のためだけに取得するものは取得しない。
+                        // 足りなくなったら、それ以降の元の画像は持たない。サムネイルがあって、元の画像のためだけに取得するものは取得しない。
                         keepsOriginals = false
                         let rest = queue[index...].filter { !hasThumbnail($0) }
                         queue = Array(queue[..<index]) + rest

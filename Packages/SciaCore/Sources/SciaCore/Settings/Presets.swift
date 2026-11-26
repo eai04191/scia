@@ -15,7 +15,7 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
     }
 
     /// アプリの既定値から変える値。キーは`AppSettings`がプリセットに持つ値のキー（`AppSettings+Modified.swift`の行と画面からたどれることを、テストで確かめる）。
-    /// すき間の項目は個々に並べず、段の単位（`spacingUnit`）から決める。設定を読むたびに引くので、組み立てた辞書を持っておく。
+    /// gapの項目は個々に並べず、段の単位（`spacingUnit`）から決める。設定を読むたびに引くので、組み立てた辞書を持っておく。
     public var values: [String: PresetValue] {
         switch self {
         case .standard: Self.standardValues
@@ -23,7 +23,7 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    /// すき間の段ごとの長さ。nilなら既定の段（`SpacingScale.Level.value()`）のまま。
+    /// gapの段ごとの長さ。nilなら既定の段（`SpacingScale.Level.value()`）のまま。
     /// コンパクトは外側ほど強く詰め、部品の中は標準のまま詰めない。中まで詰めると、文字が縁や隣の文字に寄って読みにくくなるため。
     public var spacing: [SpacingScale.Level: Double]? {
         switch self {
@@ -44,7 +44,7 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
         "objectActions.status.longPress": .text("item:openThread"),
     ])
 
-    /// `values`に、すき間の項目を段の単位から求めた値を足す。
+    /// `values`に、gapの項目を段の単位から求めた値を足す。
     private func withSpacing(_ values: [String: PresetValue]) -> [String: PresetValue] {
         guard let spacing else { return values }
         var result = values

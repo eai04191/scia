@@ -42,7 +42,7 @@ struct SignedInAccountsModelTests {
         Account(id: id, username: "user\(id)", acct: "user\(id)", displayName: "User \(id)", avatar: nil)
     }
 
-    /// 401が返ったアカウントだけをログアウトされたとし、ログインし直してトークンが替わったら、読み直してログアウトされていないことにする。
+    /// 401が返ったアカウントだけをログアウトされたとし、ログインし直してトークンが替わったら、再読み込みしてログアウトされていないことにする。
     @Test func loggedOutUntilLoggedInAgain() async throws {
         let registry = try AccountRegistry(storage: MemoryStorage(), defaults: TestScratch.defaults("net.mizle.scia.tests"))
         try registry.add(try credential("1"))

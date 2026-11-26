@@ -10,7 +10,7 @@ extension UIView {
     /// `duration`が0以下なら動かさずにすぐ変え、完了もすぐ呼ぶ。チューニングで時間を0にすると、0秒のスプリングになるため。
     /// `initialVelocity`は、動く距離を1としたときの、始めの速さ（1秒あたり）。
     /// `beginsFromCurrentState`がfalseなら、動く前の値（直前に動きの外で入れた値を含む）から動かす。trueなら、画面に見えている値から動かす。
-    /// 直前に濃さを0にしてから濃くする動きでtrueにすると、まだ画面に出ていない0ではなく、画面に残っている前の濃さから始まる（アプリのテストで確かめた）。
+    /// 直前に不透明度を0にしてから上げる動きでtrueにすると、まだ画面に出ていない0ではなく、画面に残っている前の不透明度から始まる（アプリのテストで確かめた）。
     /// 動いている値を途中ですぐ変えるときは、`removeAnimations(of:in:)`か`stopFading(at:)`で動きを外してから入れる。
     static func animateSpring(
         duration: TimeInterval,
@@ -50,7 +50,7 @@ extension UIView {
         removeAnimations(of: keyPaths, from: outermostLayer(of: view), includingSublayers: true)
     }
 
-    /// 動かしている濃さを止め、すぐ`alpha`にする。
+    /// 動かしている不透明度を止め、すぐ`alpha`にする。
     func stopFading(at alpha: CGFloat) {
         UIView.removeAnimations(of: ["opacity"], from: layer, includingSublayers: false)
         UIView.performWithoutAnimation {

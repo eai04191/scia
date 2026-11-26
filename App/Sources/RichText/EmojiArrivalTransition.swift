@@ -4,29 +4,29 @@ import UIKit
 /// カスタム絵文字の画像が、読み込み中に空けていた場所に入るときの動き。
 ///
 /// 届いた画像の幅が空けていた正方形と違うと、同じ行のあとの文字が横へずれ、折り返しが変われば次の行へ移る。
-/// 新しい描画を1枚の画像にし、同じだけ動く文字のまとまりごとに切り出して、前の位置から新しい位置へ動かす。
+/// 新しい描画を1枚の画像にし、同じだけ動く文字のグループごとに切り出して、前の位置から新しい位置へ動かす。
 /// 次の行へ移る文字は、行をまたいで動く。新しく入った絵文字は、新しい位置で薄い状態から濃くする。
-/// 動かしている間は、ラベル自身の描画と動く絵文字の層を隠し、切り出した像だけを見せる。
+/// 動かしている間は、ラベル自身の描画と動く絵文字の層を隠し、切り出したスナップショットだけを見せる。
 ///
-/// 1つの文字列の絵文字は、少しずつずれて届く。動いている途中に次の絵文字が届いたら、いま見えている位置と濃さから、
+/// 1つの文字列の絵文字は、少しずつずれて届く。動いている途中に次の絵文字が届いたら、いま見えている位置と不透明度から、
 /// 次の並びの位置へ動かし直す。打ち切って最後の位置へ飛ばすと、届くたびに1コマで動いて見えるため。
 @MainActor
 final class EmojiArrivalTransition {
-    /// 文字が見えている位置と濃さ。
+    /// 文字が見えている位置と不透明度。
     struct Placement: Equatable {
         var frame: CGRect
         var opacity: Float
     }
 
-    /// 切り出して動かす1まとまり。
+    /// 切り出して動かす1グループ。
     struct Piece: Equatable {
-        /// まとまりに入る文字の、先頭のUTF-16の位置。
+        /// グループに入る文字の、先頭のUTF-16の位置。
         var indices: [Int]
         /// 新しい並びでの枠。ラベルの座標。
         var frame: CGRect
         /// 動き始める位置から新しい位置までの動き。
         var offset: CGPoint
-        /// 動き始めるときの濃さ。新しく入った絵文字は0から濃くする。
+        /// 動き始めるときの不透明度。新しく入った絵文字は0から濃くする。
         var startOpacity: Float
     }
 
@@ -37,7 +37,7 @@ final class EmojiArrivalTransition {
     private let duration: TimeInterval
     /// 動き始める見え方がない文字を、透明から濃くする。編集で新しく入った文字に使う。
     private let fadesInNewCharacters: Bool
-    /// 編集でなくなった文字。前の描画の像と、その大きさ、文字の枠（前の並びでの、ラベルの座標）。
+    /// 編集でなくなった文字。前の描画のスナップショットと、その大きさ、文字の枠（前の並びでの、ラベルの座標）。
     struct Leaving {
         let image: CGImage
         let size: CGSize
@@ -85,15 +85,15 @@ final class EmojiArrivalTransition {
     /// 動かしている途中。
     var isRunning: Bool { overlay != nil }
 
-    /// 前の文字列を`label`の幅で並べたときの、文字ごとの見え方。`filled`は、これから画像が入る、空けていた絵文字の位置で、濃さを0にする。
+    /// 前の文字列を`label`の幅で並べたときの、文字ごとの見え方。`filled`は、これから画像が入る、空けていた絵文字の位置で、不透明度を0にする。
     static func placements(of text: NSAttributedString, in label: EmojiLabel, filling filled: Set<Int>) -> [Int: Placement] {
         characterFrames(of: text, in: label).reduce(into: [:]) { result, entry in
             result[entry.key] = Placement(frame: entry.value, opacity: filled.contains(entry.key) ? 0 : 1)
         }
     }
 
-    /// 動いている途中の、いま見えている文字ごとの位置と濃さ。動いている途中に次の絵文字が届いたとき、そこから動かし直すのに使う。
-    /// `filled`は、これから画像が入る、空けていた絵文字の位置で、濃さを0にする。
+    /// 動いている途中の、いま見えている文字ごとの位置と不透明度。動いている途中に次の絵文字が届いたとき、そこから動かし直すのに使う。
+    /// `filled`は、これから画像が入る、空けていた絵文字の位置で、不透明度を0にする。
     func currentPlacements(filling filled: Set<Int>) -> [Int: Placement] {
         var result: [Int: Placement] = [:]
         for (piece, layer) in pieceLayers {
@@ -125,7 +125,7 @@ final class EmojiArrivalTransition {
         label.layer.displayIfNeeded()
         let bounds = label.bounds
         let format = UIGraphicsImageRendererFormat(for: label.traitCollection)
-        // 行末をぼかすラベル（`FadingLabel`）のマスクは、像に焼き込まない。像はラベルの層の中に置くので、マスクは表示のときに一度だけかかる。
+        // 行末をぼかすラベル（`FadingLabel`）のマスクは、スナップショットに焼き込まない。スナップショットはラベルの層の中に置くので、マスクは表示のときに一度だけかかる。
         let mask = label.layer.mask
         label.layer.mask = nil
         let image = UIGraphicsImageRenderer(bounds: bounds, format: format).image { context in
@@ -180,7 +180,7 @@ final class EmojiArrivalTransition {
                 layer.add(move, forKey: "move")
             }
         }
-        // 編集でなくなった文字は、前の描画の像から切り出して前の位置に置き、薄くして消す。
+        // 編集でなくなった文字は、前の描画のスナップショットから切り出して前の位置に置き、薄くして消す。
         if let leaving, leaving.size.width > 0, leaving.size.height > 0 {
             for run in Self.lineRuns(of: leaving.frames) {
                 let layer = CALayer()
@@ -203,8 +203,8 @@ final class EmojiArrivalTransition {
                 layer.add(fade, forKey: "fadeOut")
             }
         }
-        // 引用の縦線は、文字の枠の外（字下げの中）にあるので、文字とは別に切り出す。ラベル自身の描画を隠すため、切り出さないと動きの間だけ消える。
-        // 折り返しが変わって行数が変われば、線の長さも変わるので、文字と同じスプリングで前の枠から伸び縮みさせる。線は一色なので、像を伸ばしてよい。
+        // 引用の縦線は、文字の枠の外（インデントの中）にあるので、文字とは別に切り出す。ラベル自身の描画を隠すため、切り出さないと動きの間だけ消える。
+        // 折り返しが変わって行数が変われば、線の長さも変わるので、文字と同じスプリングで前の枠から伸び縮みさせる。線は一色なので、スナップショットを伸ばしてよい。
         let bars = label.quoteBarFrames()
         for (index, bar) in bars.enumerated() where !bar.isEmpty {
             let layer = CALayer()
@@ -225,8 +225,8 @@ final class EmojiArrivalTransition {
             layer.add(resize, forKey: "resize")
             layer.add(move, forKey: "move")
         }
-        // どのまとまりも同じ時間で動くので、時間を測るためだけの動きを足し、その終わりで外す。スプリングが止まるまで待つ。
-        // 外側の描き直しの中で始めるため、CATransactionの完了は動きの終わりを待たずに呼ばれる（シミュレーターで確かめた）。
+        // どのグループも同じ時間で動くので、時間を測るためだけの動きを足し、その終わりで外す。スプリングが止まるまで待つ。
+        // 外側の再描画の中で始めるため、CATransactionの完了は動きの終わりを待たずに呼ばれる（シミュレーターで確かめた）。
         let timer = CABasicAnimation(keyPath: "opacity")
         timer.fromValue = 1
         timer.toValue = 1
@@ -236,7 +236,7 @@ final class EmojiArrivalTransition {
             self.finish()
         }
         overlay.add(timer, forKey: "duration")
-        // ラベル自身の描画（文字の中の静止画を含む）と、動く絵文字の層を隠す。像に描き込んであるため。
+        // ラベル自身の描画（文字の中の静止画を含む）と、動く絵文字の層を隠す。スナップショットに描き込んであるため。
         label.layer.contentsRect = .zero
         label.layer.addSublayer(overlay)
         self.overlay = overlay
@@ -244,7 +244,7 @@ final class EmojiArrivalTransition {
         CATransaction.commit()
     }
 
-    /// ラベルの層の子のうち、像のほかを隠す。動いている途中に動く絵文字のアニメーション版が届くと、ラベルが並べ直して層を出し直すため、
+    /// ラベルの層の子のうち、スナップショットのほかを隠す。動いている途中に動く絵文字のアニメーション版が届くと、ラベルが並べ直して層を出し直すため、
     /// 並べ直すたびに呼ぶ。
     func hideLabelLayers() {
         guard let overlay, let label else { return }
@@ -286,8 +286,8 @@ final class EmojiArrivalTransition {
         }
     }
 
-    /// 文字を、同じ行に並び、同じだけ動き、同じ濃さから始まる、続いた文字のまとまりに分ける。動き始める見え方がない文字（並べた範囲の外）は動かさない。
-    /// - Parameter newOpacity: 動き始める見え方がない文字の、動き始めるときの濃さ。
+    /// 文字を、同じ行に並び、同じだけ動き、同じ不透明度から始まる、続いた文字のグループに分ける。動き始める見え方がない文字（並べた範囲の外）は動かさない。
+    /// - Parameter newOpacity: 動き始める見え方がない文字の、動き始めるときの不透明度。
     static func pieces(start: [Int: Placement], final: [Int: CGRect], newOpacity: Float = 1) -> [Piece] {
         var pieces: [Piece] = []
         var current: Piece?

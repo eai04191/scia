@@ -2,7 +2,7 @@ public import Foundation
 import Synchronization
 
 /// URLSessionで通信する。アプリでURLSessionを使うのは、このファイルだけにする（`make lint`の`url_session_outside_network_layer`で止める）。
-/// ほかの場所でURLSessionを直接使うと、`HTTPClient`の決まり（再開の時刻、送り直し、大きさの上限）を通らない経路ができるため。
+/// ほかの場所でURLSessionを直接使うと、`HTTPClient`の決まり（再開の時刻、再送、大きさの上限）を通らない経路ができるため。
 ///
 /// httpとhttps以外のURLは送らない。URLSessionは`file:`や`data:`も読めるため、サーバーが返したURLで端末のファイルを読みに行かないようにする。
 /// 別のホストへリダイレクトされたときは、URLSessionが`Authorization`を外して送る（macOSで、127.0.0.1からlocalhostへの302で確かめた）。
@@ -190,7 +190,7 @@ private final class ResponseReceiver: NSObject, URLSessionDataDelegate, Sendable
         uploadProgress(Double(totalBytesSent) / Double(totalBytesExpectedToSend))
     }
 
-    /// 終わりの知らせ（`didCompleteWithError`）より先に届く。リダイレクトをたどったときは、最後の応答で見る。
+    /// 終わりのコールバック（`didCompleteWithError`）より先に届く。リダイレクトをたどったときは、最後の応答で見る。
     func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
         guard let source, let fetchType = metrics.transactionMetrics.last?.resourceFetchType else { return }
         switch fetchType {

@@ -9,14 +9,14 @@
 /// 予約投稿の一覧（`ScheduledStatusesModel`）も`register(_:)`で登録する。
 /// 弱く持つので、外す必要はない。
 ///
-/// 引用元の囲みは、一覧が持つ投稿を書き換えずに、ここで覚えた変化（`quoteSources`）を出すときに当てる。
+/// 引用元のカードは、一覧が持つ投稿を書き換えずに、ここで覚えた変化（`quoteSources`）を出すときに当てる。
 @MainActor
 public final class SessionStatuses {
     private var lists: [WeakStatusList] = []
     private var scheduledLists: [WeakScheduledList] = []
-    /// 引用元の、受け取ったあとの編集、削除、ミュート、ブロック。どの一覧の囲みにも当て、開き直した画面にも引き継ぐ。
+    /// 引用元の、受け取ったあとの編集、削除、ミュート、ブロック。どの一覧のカードにも当て、開き直した画面にも引き継ぐ。
     public private(set) var quoteSources = QuoteSourceChanges()
-    /// 引用元の変化が変わったときに呼ぶ。開いている一覧の画面に、変わった囲みを描き直させる。
+    /// 引用元の変化が変わったときに呼ぶ。開いている一覧の画面に、変わったカードを再描画させる。
     public var onQuoteSourcesChange: (QuoteSourceChanges, QuoteSourceChange) -> Void = { _, _ in }
 
     public init() {}
@@ -31,7 +31,7 @@ public final class SessionStatuses {
         scheduledLists.append(WeakScheduledList(list: list))
     }
 
-    /// 投稿欄から今のアカウントで送れた結果（ウィンドウのアカウントの`ComposeAccount.onSubmitted`）を、ストリーミングの知らせを待たずに一覧へ反映する。
+    /// 投稿欄から今のアカウントで送れた結果（ウィンドウのアカウントの`ComposeAccount.onSubmitted`）を、ストリーミングのイベントを待たずに一覧へ反映する。
     /// ストリーミングで届くまで数秒かかることがあり、切れている間は届かないため。
     /// - 投稿したら、受け取る一覧（ホームと、返信先を開いているスレッド）に足す（`SessionStatusList.receivePosted(_:)`）
     /// - 予約したら、予約投稿の一覧に足す

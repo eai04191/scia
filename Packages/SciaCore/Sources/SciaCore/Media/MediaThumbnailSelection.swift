@@ -10,7 +10,7 @@ public struct MediaThumbnailRequest: Equatable, Sendable {
     public let source: Source
     /// 送るときの目的。元の画像や動画の最初のコマなら質を上げる通信、サーバーのプレビュー画像なら表示に要る通信。
     public let purpose: RequestPurpose
-    /// ビューアで開くのと同じ元の画像を読むか。読んだら、ビューアの先読みの置き場にも置く。
+    /// ビューアで開くのと同じ元の画像を読むか。読んだら、ビューアのプリフェッチの置き場にも置く。
     public let isOriginal: Bool
 
     public enum Source: Equatable, Sendable {
@@ -27,7 +27,7 @@ public struct MediaThumbnailRequest: Equatable, Sendable {
         self.isOriginal = isOriginal
     }
 
-    /// 同じものを、別の目的で読む。ぼかしている間に、外したときに備えて先読みするのに使う。
+    /// 同じものを、別の目的で読む。ぼかしている間に、外したときに備えてプリフェッチするのに使う。
     public func sent(as purpose: RequestPurpose) -> MediaThumbnailRequest {
         MediaThumbnailRequest(url: url, maxPixelSize: maxPixelSize, source: source, purpose: purpose, isOriginal: isOriginal)
     }
@@ -39,7 +39,7 @@ public struct MediaThumbnailPolicy: Equatable, Sendable {
     public var enhancement: RequestPurpose?
     /// サーバーが縮めたプレビュー画像（small）を、何倍まで引き伸ばして出してよいか。1なら、少しでも引き伸ばすことになれば元の画像を読む。
     public var upscaleTolerance: Double
-    /// ぼかしている間に、外したときに備えて先に読むときの目的。今の回線で先読みしないならnil（`NetworkUsePolicy.prefetch`）。
+    /// ぼかしている間に、外したときに備えて先に読むときの目的。今の回線でプリフェッチしないならnil（`NetworkUsePolicy.prefetch`）。
     public var prefetch: RequestPurpose?
 
     public init(enhancement: RequestPurpose?, upscaleTolerance: Double, prefetch: RequestPurpose? = nil) {
@@ -50,7 +50,7 @@ public struct MediaThumbnailPolicy: Equatable, Sendable {
 }
 
 extension MediaThumbnailPolicy {
-    /// タイムラインのサムネイルの条件。元の画像を読むかと先読みするかは今の回線と設定の決まり（`NetworkUsePolicy`）で、
+    /// タイムラインのサムネイルの条件。元の画像を読むかとプリフェッチするかは今の回線と設定の決まり（`NetworkUsePolicy`）で、
     /// プレビュー画像を引き伸ばしてよい倍率は`TuningCatalog.mediaThumbnailUpscaleTolerance`で決める。
     /// 回線の見張りがあれば、`NetworkConditionsMonitor.thumbnailPolicy(settings:tuning:)`で作れる。
     @MainActor
@@ -70,7 +70,7 @@ extension MediaThumbnailPolicy {
 /// 動画とGIFのプレビューは長い辺640ピクセルまでのため、足りなければ元の動画の先頭を読んで最初のフレームを作る（`VideoFirstFrame`）。
 /// https://github.com/mastodon/mastodon/blob/main/app/models/media_attachment.rb
 public enum MediaThumbnailSelection {
-    /// 展開する大きさを切り上げる刻み。枠の大きさが少し変わるたびに読み直さないようにする。
+    /// 展開する大きさを切り上げる刻み。枠の大きさが少し変わるたびに再読み込みしないようにする。
     static let pixelSizeStep = 256
     /// 展開する大きさの上限。ビューアで展開する大きさと揃える。
     static let maxPixelSizeLimit = 4_096
@@ -147,7 +147,7 @@ public enum MediaThumbnailSelection {
         if small.width * policy.upscaleTolerance >= required.width, small.height * policy.upscaleTolerance >= required.height {
             return false
         }
-        // 元の画像がプレビュー画像より大きくなければ、読み直しても細かくならない。
+        // 元の画像がプレビュー画像より大きくなければ、再読み込みしても細かくならない。
         if let original = pixelSize(of: attachment.meta?.original), original.width <= small.width, original.height <= small.height {
             return false
         }

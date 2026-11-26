@@ -4,7 +4,7 @@ import os
 /// ストリーミングAPIへWebSocketで接続する。購読するタイムラインは、つないだ後に`StreamingConnection.subscribe(_:)`で選ぶ。
 /// https://docs.joinmastodon.org/methods/streaming/#websocket
 ///
-/// REST APIと同じ決まりに従う（docs/network.md）。止められている間は、自動のつなぎ直しを送らない。
+/// REST APIと同じ決まりに従う（docs/network.md）。止められている間は、自動の再接続を送らない。
 /// つなぐときに429や503で断られたら、示された再開の時刻まで、REST APIと同じ門でアカウントの自動の通信を止める。
 public struct StreamingClient: Sendable {
     public let credential: Credential
@@ -135,10 +135,10 @@ public struct StreamingConnection: Sendable {
 
     /// 次のイベントを待つ。読めないイベントと、購読を断ったエラーはログに残して読み飛ばす。接続が切れたら投げる。
     /// MastodonもFedibirdも、WebSocketでエラーを返すのは購読と購読解除に失敗したときだけで、接続は開いたままにする（`streaming/index.js`）。
-    /// 切ってつなぎ直すと、断られた購読のためにほかの購読まで届かなくなる。Fedibirdはローカルの購読を断るため、ホームや通知まで止まっていた。
+    /// 切って再接続すると、断られた購読のためにほかの購読まで届かなくなる。Fedibirdはローカルの購読を断るため、ホームや通知まで止まっていた。
     /// エラーにはどの購読かが付かないので、断られた購読は分からず、届かないまま接続中と出る。
-    /// サーバーの一時的な失敗（5xx）は、つなぎ直して購読し直すため投げる。Mastodonは、断るときは400か401を、予期しない失敗は500を返す（`streaming/errors.js`）。
-    /// Fedibirdは状態コードを付けずに返すので、一時的な失敗でも読み飛ばし、その購読は次につなぎ直すまで届かない。断ったのか一時的な失敗かを文から見分けるには、サーバーごとの文に頼ることになるため、見分けない。
+    /// サーバーの一時的な失敗（5xx）は、再接続して購読し直すため投げる。Mastodonは、断るときは400か401を、予期しない失敗は500を返す（`streaming/errors.js`）。
+    /// Fedibirdは状態コードを付けずに返すので、一時的な失敗でも読み飛ばし、その購読は次に再接続するまで届かない。断ったのか一時的な失敗かを文から見分けるには、サーバーごとの文に頼ることになるため、見分けない。
     public func next() async throws -> StreamingMessage {
         while true {
             let text = try await translating { try await connection.receive() }

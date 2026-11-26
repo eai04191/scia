@@ -20,7 +20,7 @@ struct ReactionGlow: Equatable {
         var hdrExposure: CGFloat
         /// 使う人がHDRで光らせることを選んでいるか。オフなら、HDRで描ける画面でもSDRで描く。
         var allowsHDR: Bool
-        /// ライトモードでHDRで描くときの、照らされた側を重ねる濃さ。SDRで描くときは`lightOpacity`を使う。
+        /// ライトモードでHDRで描くときの、照らされた側を重ねる不透明度。SDRで描くときは`lightOpacity`を使う。
         var lightHDROpacity: CGFloat
         /// ライトモードでHDRで描くときの、にじみの強さ。照らす光の強さの何倍にするか。
         var lightBloomIntensityRatio: Double
@@ -46,7 +46,7 @@ struct ReactionGlow: Equatable {
         case none
         /// 下の端に、ブーストとお気に入りのアイコンを1つずつ置く。
         case atBottom
-        /// 下の端に、小さなアイコンを大きさと濃さを変えて散らす。本文と重ならないよう、下の余白の高さに収める。
+        /// 下の端に、小さなアイコンを大きさと不透明度を変えて散らす。本文と重ならないよう、下の余白の高さに収める。
         case scattered
 
         init(_ icons: ReactionGlowIcons) {
@@ -68,9 +68,9 @@ struct ReactionGlow: Equatable {
 }
 
 extension ReactionGlow.Style {
-    /// ライトでHDRを使わずに描くときの、光の高さと濃さの、HDRで描くときに対する割合。
+    /// ライトでHDRを使わずに描くときの、光の高さと不透明度の、HDRで描くときに対する割合。
     /// 白い背景に光の色を薄く重ねるだけなので、高く濃くすると汚れのように見える。設定ではHDRのときの値だけを選ばせ、これを掛ける。
-    /// 割合は、設定に移す前にチューニングで決めていた値（高さは64ptに対して38pt、濃さは0.95に対して0.3）から求めた。
+    /// 割合は、設定に移す前にチューニングで決めていた値（高さは64ptに対して38pt、不透明度は0.95に対して0.3）から求めた。
     static let lightSDRHeightRatio: CGFloat = 38.0 / 64.0
     static let lightSDROpacityRatio: CGFloat = 0.3 / 0.95
 
@@ -115,7 +115,7 @@ protocol ReactionGlowHosting {
 
 /// 行の中身の後ろに敷いて、下の端に置く。行の大きさには関わらない。
 ///
-/// 左から右への色と濃さは、1本のグラデーション（`ReactionGlowGradient`）を横長の画像に描いて、層の中身にする。縦に上へ薄くなる形は、それにマスクで付ける。
+/// 左から右への色と不透明度は、1本のグラデーション（`ReactionGlowGradient`）を横長の画像に描いて、層の中身にする。縦に上へ薄くなる形は、それにマスクで付ける。
 /// `CAGradientLayer`に白より明るい色を塗ると、白より明るく描けても、iOSは画面の明るさの余地を保たず、時間がたつと1.2倍ほどまで下げる。
 /// 明るさの余地のタグを付けた画像なら、余地を保つ（部品カタログの「HDRの余地を保てる描き方」で実機で確かめた）。
 final class ReactionGlowView: UIView {
@@ -276,11 +276,11 @@ final class ReactionGlowView: UIView {
             ticker.stop()
             levels = target
         } else if (fade?.to ?? levels) != target {
-            // 点けている途中に取り消されても、今の明るさから戻す。押したときの強調などで同じ状態がもう一度適用されたときは、進んでいる動きを残す。
+            // 点けている途中に取り消されても、今の明るさから戻す。押されている状態の強調などで同じ状態がもう一度適用されたときは、進んでいる動きを残す。
             let distance = max(abs(target.boost - levels.boost), abs(target.favourite - levels.favourite))
             var next = Fade(from: levels, to: target, duration: duration * distance)
-            // 散らしたアイコンが入れ替わる途中で、元の状態へ戻されたときは、今見えている位置と濃さから逆向きにたどる。
-            // 新しく始めると、沈みかけた記号が元の位置と濃さへぱっと戻るため。
+            // 散らしたアイコンが入れ替わる途中で、元の状態へ戻されたときは、今見えている位置と不透明度から逆向きにたどる。
+            // 新しく始めると、沈みかけた記号が元の位置と不透明度へぱっと戻るため。
             if let previous = fade, target == previous.iconFrom {
                 next.iconFrom = previous.iconTo
                 next.iconTo = previous.iconFrom
@@ -398,7 +398,7 @@ final class ReactionGlowView: UIView {
         for layer in [glow, bloom] {
             layer.preferredDynamicRange = dynamicRange
         }
-        // 光を足すときは、濃さは縦の形（falloff）と区切りの濃さだけで決める。重ねる濃さを下げると、足した光がそのぶん弱まるため。
+        // 光を足すときは、不透明度は縦の形（falloff）と区切りの不透明度だけで決める。重ねる不透明度を下げると、足した光がそのぶん弱まるため。
         glow.opacity = Float(isDark ? style.darkOpacity : addsLight ? style.lightHDROpacity : style.lightOpacity)
         bloom.opacity = Self.bloomOpacity
         let bloomHeight = min(Self.bloomHeight, bounds.height)
@@ -431,7 +431,7 @@ final class ReactionGlowView: UIView {
     }
 
     /// 両方なら、それぞれの半分の真ん中に置く。全幅に広げるときは、片方だけなら真ん中に置き、もう片方が点くのに合わせて半分の真ん中へ寄せる。
-    /// 視差効果を減らす設定では、アイコンを動かさずに行き先へ置き、濃さだけを変える。
+    /// 視差効果を減らす設定では、アイコンを動かさずに行き先へ置き、不透明度だけを変える。
     private func bottomPlacements(style: ReactionGlow.Style, boost: SRGBColor, favourite: SRGBColor) -> [IconPlacement] {
         let positionLevels = UIAccessibility.isReduceMotionEnabled ? fade?.to ?? levels : levels
         let boostX = style.fillsWidthWhenAlone ? 0.5 - 0.25 * positionLevels.favourite : 0.25
@@ -447,7 +447,7 @@ final class ReactionGlowView: UIView {
     /// 決まった並びで散らす。行ごとに並びを変えると、流れるタイムラインの中でちらついて見えるため。
     /// 置き場所ごとに、その位置で多くを占める色でどちらのアイコンかを決める。止まっているときは一方だけを出す。
     /// 点けたり消したりして入れ替わる置き場所は、動く前のアイコンから動いたあとのアイコンへ、動きの進み具合に合わせてクロスフェードする。
-    /// 今の明るさで決めると、置き場所ごとに別々の瞬間に絵がぱっと入れ替わってちらつき、割合で濃さを分け合うと、2色が混ざる真ん中で止まったあとも2つが重なって見えるため。
+    /// 今の明るさで決めると、置き場所ごとに別々の瞬間に絵がぱっと入れ替わってちらつき、割合で不透明度を分け合うと、2色が混ざる真ん中で止まったあとも2つが重なって見えるため。
     ///
     /// アイコンも光源に照らされているものとして描く。光源（下の端）に近いほど濃く、遠いほど薄くし、色はその位置を照らす光の色にする。
     /// 点けたり消したりする途中は、光源から遠いアイコンほど、明るさを遅れて立ち上げ、早く落とす。下から上へ光が広がり、消えるときは光源のそばが最後まで残る。
@@ -499,7 +499,7 @@ final class ReactionGlowView: UIView {
             let newOffset = sinkDepth * pow(1 - arriving, 2)
             let favourite = (share: toFavourite ? newShare : oldShare, offset: toFavourite ? newOffset : oldOffset)
             let boost = (share: toFavourite ? oldShare : newShare, offset: toFavourite ? oldOffset : newOffset)
-            // 並びの中の位置で、どちらのアイコンのビューかを決めておく。ビューが絵を描き直さずに済み、濃さだけが変わる。
+            // 並びの中の位置で、どちらのアイコンのビューかを決めておく。ビューが絵を再描画せずに済み、不透明度だけが変わる。
             return [(IconPlacement.Kind.boost, boost), (.favourite, favourite)].map { kind, state in
                 IconPlacement(
                     kind: kind,
@@ -529,13 +529,13 @@ final class ReactionGlowView: UIView {
         value - value.rounded(.down)
     }
 
-    /// 下の端のすぐ上に重ねる、いちばん明るいにじみの高さと濃さ。実機で見比べて決めた。
+    /// 下の端のすぐ上に重ねる、いちばん明るいにじみの高さと不透明度。実機で見比べて決めた。
     private static let bloomHeight: CGFloat = 1
     private static let bloomOpacity: Float = 1
 
-    /// アイコンと、その上の本文とのすき間。
+    /// アイコンと、その上の本文とのgap。
     private static let iconTextGap: CGFloat = 1
-    /// アイコンと、行の下の端とのすき間。
+    /// アイコンと、行の下の端とのgap。
     private static let iconBottomGap: CGFloat = 1
 
     /// - Parameter exposure: SDRの白の何倍の明るさにするか。1を超えると、明るさの余地（headroom）を使うHDRの色になる。
@@ -589,12 +589,12 @@ final class ReactionGlowView: UIView {
     /// iPadのアプリをそのまま動かすMac版では、SDRに固定する。Macでは画面の余地が、使える最大（`potentialEDRHeadroom`）は2倍でも、
     /// 明るさなどによって今使える余地（`currentEDRHeadroom`）が1倍になる。そのときにHDRで描くと、白より明るい光が白に丸められ、
     /// ライトでは白い背景に溶けて見えなくなる（スクリーンショットには丸める前の色が写るので、撮ったときだけ見える）。
-    /// 今使える余地で描き分けるには、余地が変わったときに描き直す必要があるが、UIKitには余地が変わったことを知らせる仕組みがない。
+    /// 今使える余地で描き分けるには、余地が変わったときに再描画する必要があるが、UIKitには余地が変わったことを知らせる仕組みがない。
     /// これはUIKitで動かすことによる制約で、Macで光をSDRにすると決めたものではない。AppKitでは、余地が変わると
     /// `NSApplicationDidChangeScreenParametersNotification`が届くので、AppKitで作るMac版では、今使える余地で描き分けることを考え直す。
     static let mayDrawInHDR = !ProcessInfo.processInfo.isiOSAppOnMac
 
-    /// 置かれた画面が、SDRの白より明るく描けるか。画面に置かれる前は分からないので、描けないものとして扱い、置かれたら描き直す。
+    /// 置かれた画面が、SDRの白より明るく描けるか。画面に置かれる前は分からないので、描けないものとして扱い、置かれたら再描画する。
     private var canDrawHDR: Bool {
         Self.mayDrawInHDR && (window?.windowScene?.screen.potentialEDRHeadroom ?? 1) > 1
     }
@@ -608,7 +608,7 @@ final class ReactionGlowView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        // 枠と、混ぜる幅（幅に対する割合で渡す）が変わるため、描き直す。
+        // 枠と、混ぜる幅（幅に対する割合で渡す）が変わるため、再描画する。
         render()
     }
 }

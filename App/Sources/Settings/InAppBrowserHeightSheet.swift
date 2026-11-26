@@ -11,9 +11,9 @@ import UIKit
 final class InAppBrowserHeightSheet: UIHostingController<InAppBrowserHeightChoices>, UISheetPresentationControllerDelegate {
     private let settings: AppSettings
     private let tuning: TuningStore
-    /// 出した窓。アプリ内のSafariと同じく、段を決めるたびに、この窓の安全領域の中の高さから決める。
+    /// 出したウィンドウ。アプリ内のSafariと同じく、段を決めるたびに、このウィンドウのセーフエリアの中の高さから決める。
     private weak var window: UIWindow?
-    /// 段に並べた上に空ける長さ。窓で決められる長さで、窓の大きさが変わったら並べ直す。
+    /// 段に並べた上に空ける長さ。ウィンドウで決められる長さで、ウィンドウの大きさが変わったら並べ直す。
     private var spaces: [Double] = []
     /// シートが画面の下から覆っている高さが変わったときに呼ぶ。出したとき、段を移したとき、閉じたとき（0）に呼ぶ。
     var onObscuredHeightChange: ((CGFloat) -> Void)? {
@@ -21,8 +21,8 @@ final class InAppBrowserHeightSheet: UIHostingController<InAppBrowserHeightChoic
     }
 
     /// - Parameters:
-    ///   - window: 出す窓。アプリ内のSafariと同じく、窓の安全領域の中の高さから段を決める。
-    ///   - onClose: 完了のボタンを押したときに呼ぶ。閉じるのは呼んだ側が行う。
+    ///   - window: 出すウィンドウ。アプリ内のSafariと同じく、ウィンドウのセーフエリアの中の高さから段を決める。
+    ///   - onClose: 完了のボタンを選択したときに呼ぶ。閉じるのは呼んだ側が行う。
     init(settings: AppSettings, tuning: TuningStore = AppDependencies.tuning, window: UIWindow, onClose: @escaping () -> Void) {
         self.settings = settings
         self.tuning = tuning
@@ -55,7 +55,7 @@ final class InAppBrowserHeightSheet: UIHostingController<InAppBrowserHeightChoic
         tuning.value(of: TuningCatalog.inAppBrowserCollapsedHeight)
     }
 
-    /// 窓で決められる長さごとに段を並べ、設定の高さの段を選ぶ。段は低い順に並べる決まりがあるため、上に空ける長さの長い順に並べる。
+    /// ウィンドウで決められる長さごとに段を並べ、設定の高さの段を選ぶ。段は低い順に並べる決まりがあるため、上に空ける長さの長い順に並べる。
     private func arrangeDetents(of sheet: UISheetPresentationController) {
         guard let window else { return }
         spaces = InAppBrowserHeight.selectableSpaces(available: Double(window.safeAreaHeight), minimum: minimum)
@@ -69,7 +69,7 @@ final class InAppBrowserHeightSheet: UIHostingController<InAppBrowserHeightChoic
         sheet.largestUndimmedDetentIdentifier = spaces.first.map(Self.identifier(of:))
     }
 
-    /// 段の高さ。並べ直すまでのあいだに窓の大きさが変わって、決められなくなった段はnilにして出さない。
+    /// 段の高さ。並べ直すまでのあいだにウィンドウの大きさが変わって、決められなくなった段はnilにして出さない。
     private func height(spaceAbove space: Double, in context: any UISheetPresentationControllerDetentResolutionContext) -> CGFloat? {
         guard let window else { return nil }
         let available = Double(window.safeAreaHeight)
@@ -77,13 +77,13 @@ final class InAppBrowserHeightSheet: UIHostingController<InAppBrowserHeightChoic
         return min(CGFloat(InAppBrowserHeight(spaceAbove: space).sheetHeight(available: available, minimum: minimum)), context.maximumDetentValue)
     }
 
-    /// 設定の高さを、この窓で決められる範囲に寄せたもの。ほかの端末で決めた長さが、この窓では引ききれないときに寄せる。
+    /// 設定の高さを、このウィンドウで決められる範囲に寄せたもの。ほかの端末で決めた長さが、このウィンドウでは引ききれないときに寄せる。
     private var selectableHeight: InAppBrowserHeight {
         guard let window else { return settings.inAppBrowserHeight }
         return settings.inAppBrowserHeight.clamped(available: Double(window.safeAreaHeight), minimum: minimum)
     }
 
-    /// 「標準に戻す」を押したら、その段へ動かす。
+    /// 「標準に戻す」を選択したら、その段へ動かす。
     private func followSelection() {
         withObservationTracking {
             _ = settings.inAppBrowserHeight
@@ -114,7 +114,7 @@ final class InAppBrowserHeightSheet: UIHostingController<InAppBrowserHeightChoic
         onObscuredHeightChange?(0)
     }
 
-    /// 窓の大きさが変わると決められる長さも変わるので、段を並べ直し、覆う高さを知らせ直す。
+    /// ウィンドウの大きさが変わると決められる長さも変わるので、段を並べ直し、覆う高さを知らせ直す。
     override func viewWillTransition(to size: CGSize, with coordinator: any UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in
@@ -124,7 +124,7 @@ final class InAppBrowserHeightSheet: UIHostingController<InAppBrowserHeightChoic
         }
     }
 
-    /// 段の高さは安全領域の中の高さなので、アプリ内のSafariと同じく、下の安全領域を足して知らせる。
+    /// 段の高さはセーフエリアの中の高さなので、アプリ内のSafariと同じく、下のセーフエリアを足して知らせる。
     private func reportObscuredHeight() {
         guard let window, !isBeingDismissed else { return }
         onObscuredHeightChange?(CGFloat(selectableHeight.sheetHeight(available: Double(window.safeAreaHeight), minimum: minimum)) + window.safeAreaInsets.bottom)

@@ -9,7 +9,7 @@ public enum NotificationAppearanceCatalog {
 
     /// まとめた通知で、誰が何をしたかの行の上に並べるアイコンの一辺。
     public static let groupAvatarSize = AppearanceValue(id: "notification.groupAvatarSize", title: "アイコンの大きさ", range: 0...200, step: 1, defaultValue: 28, role: .free)
-    /// まとめた通知で、並べるアイコン同士のすき間。
+    /// まとめた通知で、並べるアイコン同士のgap。
     public static let groupAvatarSpacing = AppearanceValue(id: "notification.groupAvatarSpacing", title: "アイコン同士のすき間", range: 0...100, step: 1, spacing: .s1)
     /// まとめた通知で、並べたアイコンと、誰が何をしたかの行のあいだ。
     public static let groupAvatarHeaderSpacing = AppearanceValue(id: "notification.groupAvatarHeaderSpacing", title: "誰が何をしたかの行とのあいだ", range: 0...100, step: 1, spacing: .s2)
@@ -20,7 +20,7 @@ public enum NotificationAppearanceCatalog {
     public static let headerText = AppearanceValue(id: "notification.text.header", title: "文字", range: -40...40, step: 1, defaultValue: 2, unit: .textOffset)
     /// 名前の前に差し込むアイコンの一辺。投稿の名前の上の行の、ブーストした人のアイコンと同じく、文字の大きさでは変えない。
     public static let headerAvatarSize = AppearanceValue(id: "notification.headerAvatarSize", title: "名前の前のアイコンの大きさ", range: 0...200, step: 1, defaultValue: 18, role: .free)
-    /// 名前の前に差し込むアイコンと、名前のすき間。
+    /// 名前の前に差し込むアイコンと、名前のgap。
     public static let headerAvatarNameSpacing = AppearanceValue(id: "notification.headerAvatarNameSpacing", title: "名前の前のアイコンと名前のすき間", range: 0...100, step: 1, spacing: .s1)
 
     // MARK: 種類の記号
@@ -50,10 +50,10 @@ public enum NotificationAppearanceCatalog {
     public static let quotedMediaSpacing = AppearanceValue(id: "notification.quotedMediaSpacing", title: "本文とサムネイルのあいだ", range: 0...100, step: 1, spacing: .s3)
     /// 再掲する投稿の添付ファイルを1列に並べるサムネイルの一辺。行の幅に収まらない分は横にスクロールして見せる。
     public static let quotedThumbnailSize = AppearanceValue(id: "notification.quotedThumbnailSize", title: "サムネイルの大きさ", range: 0...200, step: 1, defaultValue: 40, role: .free)
-    /// 1列に並べるサムネイル同士のすき間。
+    /// 1列に並べるサムネイル同士のgap。
     public static let quotedThumbnailSpacing = AppearanceValue(id: "notification.quotedThumbnailSpacing", title: "サムネイル同士のすき間", range: 0...100, step: 1, spacing: .s1)
     /// 再掲する本文と、結果の形で足す投票のあいだ。
-    /// 引用のある投稿を再掲するときに、囲みの代わりに一番下に置く1行の文字。
+    /// 引用のある投稿を再掲するときに、カードの代わりに一番下に置く1行の文字。
     public static let quotedNoteText = AppearanceValue(id: "notification.text.quotedNote", title: "引用のある投稿を示す行の文字", range: -40...40, step: 1, defaultValue: -2, unit: .textOffset)
     /// 本文などと、引用のある投稿を示す1行のあいだ。
     public static let quotedNoteSpacing = AppearanceValue(id: "notification.quotedNoteSpacing", title: "引用のある投稿を示す行とのあいだ", range: 0...100, step: 1, spacing: .s3)

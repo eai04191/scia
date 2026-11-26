@@ -80,15 +80,15 @@ public enum PostTexts {
         "ほか\(count.formatted())人"
     }
 
-    /// 引用元の囲みの中で、引用元に投票があることを示す1行。
+    /// 引用元のカードの中で、引用元に投票があることを示す1行。
     public static let quotedPollNote = "投票"
-    /// 引用元の囲みの中で、引用元がさらに引用していることを示す、押せる1行。
+    /// 引用元のカードの中で、引用元がさらに引用していることを示す、選択できる1行。
     public static let nestedQuoteNote = "引用した投稿があります"
     /// お気に入りやブーストの通知で再掲する投稿が、引用のある投稿であることを示す1行。
     public static let quoteNote = "引用した投稿"
-    /// ブロックかミュートしている人の引用元を、押して開けることを示す文言。理由の下に出す。
+    /// ブロックかミュートしている人の引用元を、選択して開けることを示す文言。理由の下に出す。
     public static let revealQuote = "引用元を表示"
-    /// 引用元がフィルターの「隠す」に一致したときに、囲みの代わりに出す1行。
+    /// 引用元がフィルターの「隠す」に一致したときに、カードの代わりに出す1行。
     public static let quoteFiltered = "フィルターで隠しました"
 
     /// アイコンや名前のタップで開くプロフィールを、VoiceOverで開く操作の名前。
@@ -114,7 +114,7 @@ public enum PostTexts {
         return text
     }
 
-    /// 添付ファイルの格子で、並べきれずに隠した数の読み上げ。
+    /// 添付ファイルのグリッドで、並べきれずに隠した数の読み上げ。
     public static func hiddenMediaCount(_ count: Int) -> String {
         "ほか\(count)件"
     }
@@ -132,12 +132,12 @@ public enum PostTexts {
     public static let revealSensitiveLinkImage = "閲覧注意の画像を表示"
     /// リンクカードの画像を、VoiceOverで開く操作の名前。
     public static let openLinkImage = "画像を開く"
-    /// Xの投稿の囲みを、VoiceOverで開く操作の名前。
+    /// Xの投稿のカードを、VoiceOverで開く操作の名前。
     public static let openXPost = "Xの投稿を開く"
-    /// 引用元の囲みを、VoiceOverで開く操作の名前。
+    /// 引用元のカードを、VoiceOverで開く操作の名前。
     public static let openQuotedPost = "引用元の投稿を開く"
 
-    /// アクションバーのまとまりの読み上げ。
+    /// アクションバーのグループの読み上げ。
     public static let actionBar = "アクションバー"
 
     /// アクションバーのボタンの、状態と数の読み上げ。どちらもなければ空。

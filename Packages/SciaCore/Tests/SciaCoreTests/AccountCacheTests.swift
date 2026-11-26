@@ -25,7 +25,7 @@ struct AccountCacheTests {
         func fetch(_ ids: [String]) async throws -> [Account] {
             let failing = state.withLock { $0.failing }
             if holds {
-                // 止めておく登録を済ませてから届いたことを知らせ、知らせを受けた側の`release()`に漏れなく拾わせる。
+                // 止めておく登録を済ませてから届いたことを知らせ、受けた側の`release()`に漏れなく拾わせる。
                 await withCheckedContinuation { continuation in
                     resumeWaiters(afterRecording: ids, holding: continuation)
                 }
@@ -117,7 +117,7 @@ struct AccountCacheTests {
         #expect(server.requests == [["1"], ["2"]])
     }
 
-    /// 見つからなかったアカウントと、失敗した読み込みのアカウントは返さず、次に求められたときに読み直す。
+    /// 見つからなかったアカウントと、失敗した読み込みのアカウントは返さず、次に求められたときに再読み込みする。
     @Test func retriesAccountsThatCouldNotBeLoaded() async {
         let server = Server()
         let cache = makeCache(server)
@@ -131,7 +131,7 @@ struct AccountCacheTests {
         #expect(server.requests == [["1"], ["missing-2"], ["1", "missing-2"]])
     }
 
-    /// 探して見つかったアカウントは、探した値ごとに覚え、次は探さずに返す。ハンドルは大文字と小文字を区別しない。
+    /// 探して見つかったアカウントは、探した値ごとにキャッシュし、次は探さずに返す。ハンドルは大文字と小文字を区別しない。
     /// 見つかったアカウントはIDでも引ける。
     @Test func resolvedAccountIsRememberedByLookup() async throws {
         let cache = makeCache(Server())
@@ -170,7 +170,7 @@ struct AccountCacheTests {
         #expect(searches.withLock { $0 } == 1)
     }
 
-    /// 見つからなかったときと、検索が失敗したときは覚えず、次に探し直す。
+    /// 見つからなかったときと、検索が失敗したときはキャッシュせず、次に探し直す。
     @Test func unresolvedLookupIsSearchedAgain() async throws {
         let cache = makeCache(Server())
         let searches = Mutex(0)
@@ -212,7 +212,7 @@ struct AccountCacheTests {
         }
     }
 
-    /// ほかの経路が同じハンドルで覚えた似た名前の人は、文字のままのハンドルからは受け取らない。
+    /// ほかの経路が同じハンドルでキャッシュした似た名前の人は、文字のままのハンドルからは受け取らない。
     @Test func handleLookupRejectsRememberedDifferentPerson() async throws {
         let cache = AccountCache { _ in [] }
         let other = Account(id: "9", username: "alice_backup", acct: "alice_backup@example.social", displayName: "", avatar: nil)
@@ -262,7 +262,7 @@ struct AccountCacheTests {
         #expect(received.account("3")?.displayName == "Three")
     }
 
-    /// 読み込むうちに上限を超えて消えた人も、覚えていた人も読めた人も返す。
+    /// 読み込むうちに上限を超えて消えた人も、キャッシュしていた人も読めた人も返す。
     @Test func loadReturnsAccountsForgottenWhileLoading() async {
         let received = ReceivedAccounts(limit: 1)
         let cache = AccountCache(received: received) { ids in try await Server().fetch(ids) }
@@ -275,7 +275,7 @@ struct AccountCacheTests {
         #expect(loaded["3"]?.id == "3")
     }
 
-    /// プロフィールを開くときに渡されたアカウントより、覚えているものを出す。覚えていなければ渡されたものを出す。
+    /// プロフィールを開くときに渡されたアカウントより、キャッシュしたものを出す。キャッシュになければ渡されたものを出す。
     @Test func latestPrefersRememberedAccount() {
         let received = ReceivedAccounts()
         let cache = AccountCache(received: received) { _ in [] }

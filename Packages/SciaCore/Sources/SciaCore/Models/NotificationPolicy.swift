@@ -110,7 +110,7 @@ public struct NotificationPolicy: Decodable, Hashable, Sendable {
     }
 }
 
-/// 保留中の通知を送った1人分のまとまり。
+/// 保留中の通知を送った1人分のグループ。
 /// https://docs.joinmastodon.org/entities/NotificationRequest/
 public struct NotificationRequest: Decodable, Hashable, Sendable, Identifiable {
     public let id: String
@@ -153,7 +153,7 @@ public struct NotificationRequest: Decodable, Hashable, Sendable, Identifiable {
         } else {
             notificationsCount = try container.decodeCount(forKey: .notificationsCount)
         }
-        // 投稿が読めなくても、その人のまとまりは並べる。抜粋が出ないだけで、受け入れや無視はできるため。
+        // 投稿が読めなくても、その人のグループは並べる。抜粋が出ないだけで、受け入れや無視はできるため。
         lastStatus = try? container.decodeIfPresent(Status.self, forKey: .lastStatus)
     }
 }

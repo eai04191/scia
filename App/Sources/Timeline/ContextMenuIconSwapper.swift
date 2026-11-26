@@ -6,7 +6,7 @@ import UIKit
 /// メニューを開いている間に届いたアイコンを、メニューを組み直さずに差し替える。
 ///
 /// UIKitには、表示中のメニューの項目のアイコンを替える手段がない。`updateVisibleMenu`でメニューを取り替えると、メニューのスクロール位置が先頭に戻り、
-/// 表示中の`UIAction`の`image`を書き換えても描き直されない。そこで、プレースホルダーのアイコンにそれだけの`UIImageAsset`を持たせ、
+/// 表示中の`UIAction`の`image`を書き換えても再描画されない。そこで、プレースホルダーのアイコンにそれだけの`UIImageAsset`を持たせ、
 /// メニューを描いている`UIImageView`のうち、そのアセットの画像を持つものの画像を直接替える。
 /// メニューの行はスクロールやサブメニューを開いたときに作り直されるため、開いている間は毎コマ探し直す。
 ///
@@ -93,7 +93,7 @@ final class ContextMenuIconSwapper: NSObject {
             if entry.hasArrived {
                 imageView.image = icon
             } else {
-                // 届いたときは、タイムラインのアイコン（`AvatarView`）と同じ長さで浮かび上がらせる。
+                // 届いたときは、タイムラインのアイコン（`AvatarView`）と同じ長さでフェードインさせる。
                 // 届いたあとにスクロールやサブメニューの開閉で作り直された行は、出てくるたびに揺らがないよう、すぐ替える。
                 UIView.transition(with: imageView, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                     imageView.image = icon
@@ -110,7 +110,7 @@ final class ContextMenuIconSwapper: NSObject {
         let asset: UIImageAsset
         /// 差し替える画像。まだ届いていなければnil。
         var icon: UIImage?
-        /// 届いてから1コマ以上たった。浮かび上がらせるのは、届いた次のコマに描いているアイコンだけにする。
+        /// 届いてから1コマ以上たった。フェードインさせるのは、届いた次のコマに描いているアイコンだけにする。
         var hasArrived = false
     }
 

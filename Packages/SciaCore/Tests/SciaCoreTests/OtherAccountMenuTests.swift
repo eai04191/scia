@@ -121,7 +121,7 @@ struct OtherAccountMenuTests {
     }
 
     /// 選んだアカウントのサーバーで、URIが同じ投稿を探し、そのアカウントから見た状態で項目を組む。
-    /// 押した操作は、そのサーバーでの投稿のIDで、そのアカウントとして行う。見つけた投稿は覚え、次はすぐ組む。
+    /// 選択した操作は、そのサーバーでの投稿のIDで、そのアカウントとして行う。見つけた投稿はキャッシュし、次はすぐ組む。
     @Test func buildsItemsFromStatusFoundOnOtherServer() async throws {
         let uri = uri
         let other = status(id: "7000", uri: uri, favourited: true)
@@ -190,7 +190,7 @@ struct OtherAccountMenuTests {
     }
 
     /// ブーストした人は、見つけた投稿に入っていないので、そのサーバーでプロフィールのURLで探し、そのサーバーでのIDで出す。
-    /// URLが違う人は使わない。見つけた人は覚え、次は探さない。見つからない人は出さず、次に開いたメニューでは待たない。
+    /// URLが違う人は使わない。見つけた人はキャッシュし、次は探さない。見つからない人は出さず、次に開いたメニューでは待たない。
     @Test func resolvesBoosterOnOtherServer() async throws {
         let carl = Account(id: "3", username: "carl", acct: "carl@third.example", displayName: "Carl", avatar: nil, url: URL(string: "https://third.example/@carl"))
         let dan = Account(id: "4", username: "dan", acct: "dan@third.example", displayName: "Dan", avatar: nil, url: URL(string: "https://third.example/@dan"))
@@ -211,12 +211,12 @@ struct OtherAccountMenuTests {
         #expect(reopened.menu(groups: .single(.otherAccounts), includesFollowRequest: false).otherAccountRelationIDs(found, bob) == ["600"])
 
         #expect(await loaded(try #require(node(tree(boost(of: status(uri: uri), by: dan), accounts: [bob], groups: groups))).children) == "")
-        // 見つからなかった人を待たずに、覚えている投稿ですぐ組む。
+        // 見つからなかった人を待たずに、キャッシュした投稿ですぐ組む。
         #expect(MenuNodeTests.describe(try #require(node(tree(boost(of: status(uri: uri), by: dan), accounts: [bob], groups: groups))).children) == "")
         #expect(queries.withLock { $0 } == [carl.url, dan.url].compactMap(\.self))
     }
 
-    /// 投稿を覚えていても、まだ探していない人がブーストしたものなら、開いてから探してその人を出す。
+    /// 投稿をキャッシュしていても、まだ探していない人がブーストしたものなら、開いてから探してその人を出す。
     @Test func resolvesNewBoosterOfKnownStatus() async throws {
         let carl = Account(id: "3", username: "carl", acct: "carl@third.example", displayName: "Carl", avatar: nil, url: URL(string: "https://third.example/@carl"))
         let otherCarl = Account(id: "600", username: "carl", acct: "carl@third.example", displayName: "Carl", avatar: nil, url: carl.url)
@@ -314,7 +314,7 @@ struct OtherAccountMenuTests {
         #expect(command.account === bob)
     }
 
-    /// 関係を読む人を集めるときは、ハッシュタグを組まず、ハッシュタグの読み直しを重ねて送らない。
+    /// 関係を読む人を集めるときは、ハッシュタグを組まず、ハッシュタグの再読み込みを重ねて送らない。
     @Test func collectingRelationIDsDoesNotRefreshHashtags() async throws {
         let found = Status(id: "7000", createdAt: Date(timeIntervalSince1970: 100), account: alice, content: "", spoilerText: "", uri: uri, url: nil, tags: [Tag(name: "swift", url: nil)])
         let bob = try account("bob", operations { _ in [found] })
@@ -337,7 +337,7 @@ struct OtherAccountMenuTests {
         #expect(refreshes.withLock { $0 } == before)
     }
 
-    /// 削除したら、覚えている投稿からも除き、次に開いたときは探し直す。
+    /// 削除したら、キャッシュした投稿からも除き、次に開いたときは探し直す。
     @Test func deleteForgetsStatus() async throws {
         let found = status(id: "7000", uri: uri)
         let deleted = Mutex<[String]>([])
@@ -351,7 +351,7 @@ struct OtherAccountMenuTests {
         #expect(bob.known(shown) == nil)
     }
 
-    /// 編集して返った投稿を覚え、編集の前に始めた検索の結果で戻さない。次の編集を、編集の前の添付で始めないため。
+    /// 編集して返った投稿をキャッシュし、編集の前に始めた検索の結果で戻さない。次の編集を、編集の前の添付で始めないため。
     @Test func editReplacesKnownStatus() async throws {
         let before = status(id: "7000", uri: uri)
         let refreshing = Gate()
@@ -377,7 +377,7 @@ struct OtherAccountMenuTests {
         #expect(bob.known(shown)?.content == "<p>編集した</p>")
     }
 
-    /// そのアカウントから見られない投稿と、探せなかったときは、押せない行で知らせる。URIのない投稿は探さない。
+    /// そのアカウントから見られない投稿と、探せなかったときは、無効の行で知らせる。URIのない投稿は探さない。
     @Test func reportsStatusesThatCannotBeFound() async throws {
         let calls = Mutex(0)
         let notFound = try account("bob", operations { _ in
@@ -436,7 +436,7 @@ struct OtherAccountMenuTests {
         #expect(bob.known(shown) == nil)
     }
 
-    /// 操作の結果は、そのアカウントで覚えている投稿に反映し、次に開いたメニューの名前に出る。
+    /// 操作の結果は、そのアカウントでキャッシュした投稿に反映し、次に開いたメニューの名前に出る。
     /// リアクションは、そのアカウントのサーバーが絵文字のリアクションに対応していると読めたときだけ出す。読めないうちと、読めなかったときは出さない。
     @Test func showsEmojiReactionOnlyWhenOtherServerSupportsIt() async throws {
         let found = status(id: "7000", uri: uri)
@@ -462,7 +462,7 @@ struct OtherAccountMenuTests {
     }
 
     /// 引用できるかと引用の送り方を決めるところは、Mastodonと同じ値のまま進まないよう、読めた値を使う。
-    /// 読んでいる途中なら終わるのを待って同じ結果を使い、一度読めたら読み直さない。
+    /// 読んでいる途中なら終わるのを待って同じ結果を使い、一度読めたら再読み込みしない。
     @Test func loadedCapabilitiesSharesRunningLoad() async throws {
         let calls = Mutex(0)
         let gate = Gate()
@@ -493,7 +493,7 @@ struct OtherAccountMenuTests {
         #expect(bob.capabilities.quotes == .fedibird)
     }
 
-    /// 読めなかったサーバーの対応は、次に呼ばれたときに読み直す。読めたら読み直さない。
+    /// 読めなかったサーバーの対応は、次に呼ばれたときに再読み込みする。読めたら再読み込みしない。
     @Test func reloadsCapabilitiesOnlyAfterFailure() async throws {
         let calls = Mutex(0)
         let bob = try account("bob", operations(search: { _ in [] }, capabilities: {
@@ -511,7 +511,7 @@ struct OtherAccountMenuTests {
         #expect(calls.withLock { $0 } == 2)
     }
 
-    /// リアクションは、そのアカウントとして、そのサーバーでの投稿のIDに付け、覚えている投稿にも入れる。すでに付けている絵文字なら、付けたままにする。
+    /// リアクションは、そのアカウントとして、そのサーバーでの投稿のIDに付け、キャッシュした投稿にも入れる。すでに付けている絵文字なら、付けたままにする。
     @Test func reactsAsOtherAccount() async throws {
         let found = status(id: "7000", uri: uri)
         let emoji = ReactionEmoji(name: "🤔")
@@ -585,7 +585,7 @@ struct OtherAccountMenuTests {
         #expect(bob.known(shown)?.favourited == true)
     }
 
-    /// 同じ投稿を探している間に探し直しても、検索を送り直さずに同じ結果を待つ。
+    /// 同じ投稿を探している間に探し直しても、検索を再送せずに同じ結果を待つ。
     @Test func sharesRunningSearch() async throws {
         let found = status(id: "7000", uri: uri)
         let responding = Gate()
@@ -609,7 +609,7 @@ struct OtherAccountMenuTests {
         #expect(searches.withLock { $0 } == 1)
     }
 
-    /// 前に見つけた投稿を探し直せなかったときは、覚えている投稿のまま使う。
+    /// 前に見つけた投稿を探し直せなかったときは、キャッシュした投稿のまま使う。
     @Test func keepsKnownStatusWhenRefreshFails() async throws {
         let found = status(id: "7000", uri: uri)
         let fails = Mutex(false)
@@ -688,7 +688,7 @@ struct OtherAccountMenuTests {
         #expect(known.relationship.following)
     }
 
-    /// ドメインのブロックを変えたら、そのアカウントで覚えている、そのドメインの人と見つけていない人の関係を忘れ、変えた相手の関係だけを覚える。
+    /// ドメインのブロックを変えたら、そのアカウントでキャッシュしている、そのドメインの人と見つけていない人の関係を忘れ、変えた相手の関係だけをキャッシュする。
     @Test func blockDomainForgetsRelationsOnDomain() async throws {
         let bob = try account("bob", operations(search: { _ in [] }, relationships: { ids in ids.map { Relationship(id: $0) } }, changeRelation: { _, id in
             Relationship(id: id, domainBlocking: true)
@@ -737,7 +737,7 @@ struct OtherAccountMenuTests {
         #expect(shown === bob)
     }
 
-    /// プロフィールを待つ呼び出しは、読んでいる途中の読み込みを待ち、送り直さない。読めなければnilを返し、次に呼ばれたときに読み直す。
+    /// プロフィールを待つ呼び出しは、読んでいる途中の読み込みを待ち、再送しない。読めなければnilを返し、次に呼ばれたときに再読み込みする。
     @Test func loadedProfileWaitsForRunningLoadAndRetriesAfterFailure() async throws {
         let me = Account(id: "50", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://other.example/bob.png"))
         let gate = Gate()

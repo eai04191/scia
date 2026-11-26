@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// 開発用。画面がSDRの白の何倍まで明るく描けるか（今の余地と最大の余地）と、お気に入りとブーストの光をHDRとSDRのどちらで描くかを、画面の隅に出し続ける。
-/// 今の余地は画面の明るさや周りの明るさで変わるが、変わったことを知らせる通知がないため、出している間は一定の間隔で読み直す。
+/// 今の余地は画面の明るさや周りの明るさで変わるが、変わったことを知らせる通知がないため、出している間は一定の間隔で再読み込みする。
 /// 晴れた屋外などで、余地がどこまで下がるか、HDRの内容がないと1に戻るかを、実機で確かめるために使う。
 @MainActor
 enum EDRHeadroomOverlay {
@@ -94,7 +94,7 @@ private final class EDRHeadroomOverlayView: UIView {
         label.text = ([String(format: "EDRの余地 今 %.2f / 最大 %.2f\n光 %@", current, potential, glow), windowRange] + Self.hdrDrawers(in: window)).joined(separator: "\n")
     }
 
-    /// 窓の中でHDRで描きうるものを、種類ごとに数えて並べる。余地を上げているものを探すため。
+    /// ウィンドウの中でHDRで描きうるものを、種類ごとに数えて並べる。余地を上げているものを探すため。
     /// HDRの画像を出している画像ビュー（実際の明るさの幅と画像ビューの指定）と、HDRを指定したレイヤーを数える。隠れているものと透明なものは数えない。
     private static func hdrDrawers(in window: UIWindow) -> [String] {
         var counts: [String: Int] = [:]
@@ -122,7 +122,7 @@ private final class EDRHeadroomOverlayView: UIView {
         return counts.sorted { $0.key < $1.key }.map { "\($0.value)× \($0.key)" }
     }
 
-    /// `view`から親をたどり、明るさの幅が親と違う最初のビューを返す。窓の値が途中で上書きされている場所を探すため。
+    /// `view`から親をたどり、明るさの幅が親と違う最初のビューを返す。ウィンドウの値が途中で上書きされている場所を探すため。
     private static func boundary(above view: UIView) -> String {
         var current = view
         while let parent = current.superview {

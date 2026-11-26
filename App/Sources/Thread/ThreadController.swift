@@ -2,9 +2,9 @@ import SciaCore
 import UIKit
 
 /// スレッドの画面を組み立て、読み込みとストリーミングを受け持つ`ThreadModel`とTimelineViewControllerをつなぐ。
-/// 画面を開く動きとの間合い（移り終わってから行を足す、開くために空けた余白を戻す、押した投稿を持ち上げる）は、ここで受け持つ。
+/// 画面を開く動きとの間合い（遷移し終わってから行を足す、開くために空けた余白を戻す、選択した投稿を持ち上げる）は、ここで受け持つ。
 ///
-/// 画面はナビゲーションに積まれて閉じられるまで生きるため、画面の方がこのコントローラーを持つ。
+/// 画面はナビゲーションにプッシュされて閉じられるまで生きるため、画面の方がこのコントローラーを持つ。
 @MainActor
 final class ThreadController {
     private(set) weak var viewController: TimelineViewController?
@@ -33,7 +33,7 @@ final class ThreadController {
         viewController.hidesReplyLabelBelowParent = true
         viewController.onRetry = { [weak model] in model?.retry() }
         model.afterTransition = { [weak viewController] work in
-            // 画面を移る動きの最中なら、移り終わってから行う。移る途中に行を足すと、メインスレッドが止まって動きが跳ぶため。
+            // 画面遷移の最中なら、遷移し終わってから行う。遷移の途中に行を足すと、メインスレッドが止まって動きが跳ぶため。
             guard let coordinator = viewController?.transitionCoordinator else {
                 work()
                 return
@@ -56,7 +56,7 @@ final class ThreadController {
 
     var loadTask: Task<Void, Never>? { model.loadTask }
 
-    /// 画面に積む前に呼ぶ。押した投稿だけを並べ、会話を読み始める。
+    /// 画面にプッシュする前に呼ぶ。選択した投稿だけを並べ、会話を読み始める。
     func start() {
         model.start()
     }

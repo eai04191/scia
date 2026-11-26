@@ -67,7 +67,7 @@ final class VideoControlsView: UIView {
     private let forwardSkipEffect = SkipEffect(forward: true)
     private lazy var barBottom = bar.bottomAnchor.constraint(equalTo: bottomAnchor)
 
-    /// 隠すときに薄くする部品。長押しで速く再生している知らせは、部品を隠していても出す。
+    /// 隠すときに薄くする部品。長押しで速く再生している表示は、部品を隠していても出す。
     private var controls: [UIView] { [backButton, playButton, forwardButton, muteButton, speedButton, bar] }
     /// 隠すときに薄くするもの。暗くする下地はタッチを受けないため、タッチを受ける部品とは分ける。
     private var fadingViews: [UIView] { controls + [dimmingView] }
@@ -137,8 +137,8 @@ final class VideoControlsView: UIView {
         fastForwardChip.setShown(isFastForwarding)
     }
 
-    /// 10秒戻ったか進んだことを、矢印を`duration`秒で1回転させて知らせる。ボタンを押したときも、ダブルタップしたときも呼ぶ。
-    /// 部品を出しているときは、そのボタンの矢印を回す。ボタンは押されたようには動かさない。指で押したときの反応は、ボタン自身に任せる。
+    /// 10秒戻ったか進んだことを、矢印を`duration`秒で1回転させて知らせる。ボタンを選択したときも、ダブルタップしたときも呼ぶ。
+    /// 部品を出しているときは、そのボタンの矢印を回す。ボタンは押下されたようには動かさない。指で押下したときの反応は、ボタン自身に任せる。
     /// 部品を隠しているときは、ほかの部品は出さず、同じ場所に10秒のボタンと同じ形の表示を`duration`秒だけ出して矢印を回す。
     func showSkipEffect(forward: Bool, duration: TimeInterval) {
         let button = forward ? forwardButton : backButton
@@ -161,7 +161,7 @@ final class VideoControlsView: UIView {
         updateBarPosition()
     }
 
-    /// 下の安全領域と、ほかの表示に覆われている高さのうち大きい方の上に、シークバーを置く。
+    /// 下のセーフエリアと、ほかの表示に覆われている高さのうち大きい方の上に、シークバーを置く。
     private func updateBarPosition() {
         barBottom.constant = -(max(coveredBottom, safeAreaInsets.bottom) + 8)
     }
@@ -486,7 +486,7 @@ private final class SkipGlyphView: UIView {
     /// 矢印を、戻るなら左回り、進むなら右回りに、`duration`秒で1回転させる。
     func spin(duration: TimeInterval) {
         // 出している間に回り終えて、消え始める前に止まって見えるようにする。
-        // SF Symbolsの回転の効果は速さを上げても1回転に約0.5秒かかり、短い知らせでは回りきらずに消えたため、矢印の絵を自分で回す。
+        // SF Symbolsの回転の効果は速さを上げても1回転に約0.5秒かかり、短い表示では回りきらずに消えたため、矢印の絵を自分で回す。
         // 素早く回り始めて、消える前にゆっくり止まるよう、ease-out-cubicにする。
         // より急なexpo-outでは最初の0.1秒足らずで回りきってしまい、回ったと分からなかった。
         // 続けて10秒動いたら、0度に戻さず今の角度から回し直し、元の向きで止める。
@@ -507,7 +507,7 @@ private final class SkipGlyphView: UIView {
 
 /// ダブルタップで10秒戻ったか進んだことを知らせる、短く出て消える丸い表示。10秒のボタンと同じ見た目にする。触れても下の操作を妨げないよう、タッチを受けない。
 private final class SkipEffect: UIView {
-    /// 10秒のボタンと同じガラスにするため、押せないボタンを下地に使う。
+    /// 10秒のボタンと同じガラスにするため、タッチを受けないボタンを下地に使う。
     private let background = UIButton(configuration: .clearGlass())
     private let glyph: SkipGlyphView
     private var hideTask: Task<Void, Never>?
@@ -568,7 +568,7 @@ private final class SkipEffect: UIView {
 /// 10秒の矢印を回す行き先の角度。
 enum SkipArrowSpin {
     /// 今の角度から、進むなら右回り、戻るなら左回りに、少なくとも半回転先にある元の向き（1回転の倍数）を返す。
-    /// 回っている途中で続けて押されたときに、今の角度に1回転を足すと、途中の角度のまま止まったため、止まる向きをそろえる。
+    /// 回っている途中で続けて選択されたときに、今の角度に1回転を足すと、途中の角度のまま止まったため、止まる向きをそろえる。
     static func target(from current: Double, forward: Bool) -> Double {
         let turn = 2 * Double.pi
         if forward {

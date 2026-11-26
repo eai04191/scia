@@ -18,12 +18,12 @@ final class SheetKeyboardExperiment: UIViewController {
     /// 画面の下端からの、検索の段のシートの上端までの高さ。キーボードの高さが届いたら決め直す。
     private static var searchHeight: CGFloat = 336 + 200
 
-    /// - Parameter lowHeight: 低いときのシートの高さ。画面の下の安全領域は含まない。
+    /// - Parameter lowHeight: 低いときのシートの高さ。画面の下のセーフエリアは含まない。
     static func present(from host: UIViewController, lowHeight: CGFloat) {
         let controller = SheetKeyboardExperiment()
         if let sheet = controller.sheetPresentationController {
             let low = UISheetPresentationController.Detent.custom(identifier: lowDetent) { _ in lowHeight }
-            // 段の高さは下の安全領域を含まないので、その分を引く。
+            // 段の高さは下のセーフエリアを含まないので、その分を引く。
             let search = UISheetPresentationController.Detent.custom(identifier: searchDetent) { _ in
                 searchHeight - (host.view.window?.safeAreaInsets.bottom ?? 0)
             }

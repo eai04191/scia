@@ -2,15 +2,15 @@ import os
 
 /// リクエストを、使う人がそれを待っているかで分けた目的（docs/network.md）。
 ///
-/// レート制限で止められている間は、操作のほかの通信（自動の通信）を控える。質を上げると先読みの通信は、回線でも控える。
+/// レート制限で止められている間は、操作のほかの通信（自動の通信）を控える。質を上げるとプリフェッチの通信は、回線でも控える。
 /// task-localなので、`RequestPurpose.$current.withValue(.display) { ... }`の中で作ったTaskにも引き継がれる。
 /// 名乗らずに送れる既定値は持たない。セッションの持ち主（`TaskScope`）で始める処理は始めるときに名乗らせ、
 /// それ以外の経路で名乗らずに送ろうとした通信は、送らずに`UndeclaredRequestPurpose`で失敗させる。
-/// 質を上げると先読みの目的は、回線と設定から`NetworkUsePolicy`が作る。呼び出し側で直接作らない。
+/// 質を上げるとプリフェッチの目的は、回線と設定から`NetworkUsePolicy`が作る。呼び出し側で直接作らない。
 public enum RequestPurpose: Equatable, Sendable {
-    /// 使う人の操作。投稿、ビューアを開く、共有と保存、引っぱって読み込み直すなど。
+    /// 使う人の操作。投稿、ビューアを開く、共有と保存、pull to refreshなど。
     case action
-    /// 行を描くのに要るか、タイムラインを新しく保つための通信。つなぎ直し、ポーリング、補完、既読位置の保存、行に描く画像など。
+    /// 行を描くのに要るか、タイムラインを新しく保つための通信。再接続、ポーリング、補完、既読位置の保存、行に描く画像など。
     case display
     /// 安い代わりがあり、送らなくても表示が欠けない通信。タイムラインのサムネイルの元の画像や、動画の最初のコマ。
     /// - Parameter onExpensiveNetwork: モバイル通信などでも送るか。
@@ -67,7 +67,7 @@ public struct NetworkAccess: Hashable, Sendable {
     public let constrained: Bool
 }
 
-/// 通信を送らない処理の印。`Task(.withoutRequests) { ... }`と書き、名乗らずに始める処理と見分ける。
+/// 通信を送らない処理に付けるマーカー。`Task(.withoutRequests) { ... }`と書き、名乗らずに始める処理と見分ける。
 public enum WithoutRequests: Sendable {
     case withoutRequests
 }
@@ -84,7 +84,7 @@ extension Task where Failure == Never {
     }
 
     /// 通信を送らない`operation`を始める。始めたところで名乗っていた目的も引き継がない。中で通信を送ると、名乗っていない通信として失敗する。
-    /// - Parameter priority: 裏で済ませる処理（絵文字ピッカーの小さい静止画を作るなど）は、`.background`を渡す。
+    /// - Parameter priority: 裏で済ませる処理（絵文字ピッカーのサムネイルを作るなど）は、`.background`を渡す。
     @discardableResult
     public init(_: WithoutRequests, priority: TaskPriority? = nil, operation: @escaping @MainActor () async -> Success) {
         self.init(priority: priority) { @MainActor in

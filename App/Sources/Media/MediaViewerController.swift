@@ -41,7 +41,7 @@ final class MediaViewerController: UIViewController {
     private var draftNotice: Notice?
     /// チップの列から見た、開いている度合い。0で下の画面の位置、1でメニューボタンの行のすぐ下に列を置く。
     private var noticePresence: CGFloat = 0
-    /// この画面だけのチップの濃さ。開閉では開いている度合いに、スワイプして閉じる途中はボタン類と同じく背景に合わせる。
+    /// この画面だけのチップの不透明度。開閉では開いている度合いに、スワイプして閉じる途中はボタン類と同じく背景に合わせる。
     private var noticeScreenAlpha: CGFloat = 0
     /// 共有や保存のために落とす処理。ビューアを閉じても保存を続けるため、セッションで持つ。nilなら共有と保存を出さない（投稿欄から開いたとき）。
     private let transfers: MediaTransferCenter?
@@ -52,7 +52,7 @@ final class MediaViewerController: UIViewController {
     private var isChromeHidden = false
     private let dragToDismiss: DragToDismiss
     private lazy var dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
-    /// 閉じる操作を始めたときに押していた位置。`view`の座標。画像をこの点を中心に縮め、指の下に同じ場所が来るようにする。
+    /// 閉じる操作を始めたときに触れていた位置。`view`の座標。画像をこの点を中心に縮め、指の下に同じ場所が来るようにする。
     private var dismissPanAnchor: CGPoint = .zero
     /// 閉じ終わったときに呼ぶ。複製がサムネイルへ戻る動きは、このあとも続く。
     var onDismiss: (() -> Void)?
@@ -75,9 +75,9 @@ final class MediaViewerController: UIViewController {
     private let morphShadow = MorphShadowView()
     /// 複製に載せる、サムネイルに重ねた表示（ALT、GIF、残りの枚数）の複製。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
     private var morphDecoration: UIView?
-    /// 複製のさらに手前に置く、サムネイルに重なっているビューの複製。重ねた表示と同じ濃さで出し入れする。
+    /// 複製のさらに手前に置く、サムネイルに重なっているビューの複製。重ねた表示と同じ不透明度で出し入れする。
     private var morphOverlap: MediaSourceOverlap?
-    /// 複製に敷く、サムネイルの背景の色。重ねた表示と同じ濃さで出し入れし、透明な部分のある画像でサムネイルとの見え方をそろえる。
+    /// 複製に敷く、サムネイルの背景の色。重ねた表示と同じ不透明度で出し入れし、透明な部分のある画像でサムネイルとの見え方をそろえる。
     private var morphPlaceholderColor: UIColor?
     /// 複製の画像を、ページが描いている画像に合わせ続けるか。元の画像が届いたら、動いている途中でも差し替える。
     private var morphFollowsPage = false
@@ -151,7 +151,7 @@ final class MediaViewerController: UIViewController {
         let menuElements: @MainActor (String) -> [UIMenuElement]
         /// 代替テキストを書き終えた。書き直していなくても呼ぶ。
         let commitDescription: @MainActor (String, String) -> Void
-        /// 失敗の表示を押した。理由と、送り直すか外すかを、渡したビューアの上に出す。
+        /// 失敗の表示を選択した。理由と、再送するか外すかを、渡したビューアの上に出す。
         let showFailure: @MainActor (String, UIViewController) -> Void
         /// いま代替テキストを書き換えられる。投稿を送っている間と、準備を待っている間は書き換えられない。
         var canEditDescription: @MainActor () -> Bool = { true }
@@ -249,7 +249,7 @@ final class MediaViewerController: UIViewController {
     override var prefersStatusBarHidden: Bool { isChromeHidden }
     override var prefersHomeIndicatorAutoHidden: Bool { isChromeHidden }
 
-    /// キーボードのEscを受けるため、表示されたら最初の応答者になる。
+    /// キーボードのEscを受けるため、表示されたらファーストレスポンダーになる。
     override var canBecomeFirstResponder: Bool { true }
 
     /// 画面に入った最初のフレームから、サムネイルの位置に複製を置いて開き始める。
@@ -257,7 +257,7 @@ final class MediaViewerController: UIViewController {
         super.viewIsAppearing(animated)
         if isBeingPresented {
             transfers?.viewerDidOpen(self)
-            // チップの列は根の画面のすぐ上にあり、重ねて出したビューアに隠れるため、ビューアの上へ出す。
+            // チップの列はルートの画面のすぐ上にあり、重ねて出したビューアに隠れるため、ビューアの上へ出す。
             overlay?.bringToFront()
             overlay?.update()
             beginOpening()
@@ -282,7 +282,7 @@ final class MediaViewerController: UIViewController {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed {
-            // 閉じる動きを通らずに閉じられたら、ここでチップの列を根の画面のすぐ上に戻す。動きを通るときは、動きを終えてから戻す。
+            // 閉じる動きを通らずに閉じられたら、ここでチップの列をルートの画面のすぐ上に戻す。動きを通るときは、動きを終えてから戻す。
             if case .closing = motion {} else {
                 presentingViewController?.noticeOverlay?.returnBelowPresentations()
             }
@@ -319,7 +319,7 @@ final class MediaViewerController: UIViewController {
         morph.paperColor
     }
 
-    /// 右上のメニューボタンの濃さ。ボタン類は同じ濃さで出し入れする。
+    /// 右上のメニューボタンの不透明度。ボタン類は同じ不透明度で出し入れする。
     var chromeAlpha: CGFloat {
         menuButton.alpha
     }
@@ -329,12 +329,12 @@ final class MediaViewerController: UIViewController {
         morphOverlap != nil
     }
 
-    /// 複製の角度（ラジアン）、回転を戻したときの枠（複製を載せている層の座標。閉じる動きではウィンドウと同じ）、白いフチの幅、中身の濃さ、暗さ。
+    /// 複製の角度（ラジアン）、回転を戻したときの枠（複製を載せている層の座標。閉じる動きではウィンドウと同じ）、白いフチの幅、中身の不透明度、暗さ。
     var morphPlacement: (rotation: CGFloat, unrotatedFrame: CGRect, border: CGFloat, contentOpacity: CGFloat, dimming: CGFloat, shadowOpacity: Float) {
         (morph.transformRotation, morph.unrotatedFrame, morph.paperBorder, morph.contentOpacity, morph.dimming, morphShadow.isHidden ? 0 : morphShadow.opacity * Float(morphShadow.alpha))
     }
 
-    /// 複製の見えている画像の明るさの幅。ほぼ見えない（濃さが1%未満の）ものは除く。
+    /// 複製の見えている画像の明るさの幅。ほぼ見えない（不透明度が1%未満の）ものは除く。
     var morphDynamicRanges: Set<Int> {
         Set(morph.visibleDynamicRanges.filter { $0.alpha >= 0.01 }.map(\.range.rawValue))
     }
@@ -489,17 +489,17 @@ final class MediaViewerController: UIViewController {
 
     private var chromeViews: [UIView] { [menuButton, counterLabel, captionView] }
 
-    /// 閉じる操作と閉じる動きを始めたときに、ページの中の部品（動画の操作の部品と暗くする下地）を描き写したもの。
+    /// 閉じる操作と閉じる動きを始めたときに、ページの中の部品（動画の操作の部品と暗くする下地）のスナップショット。
     /// 動かしている間はページを空のマスクで隠すため、描き写さないと、つかんだ瞬間に部品が1コマで消える。
-    /// 部品は動く画像と位置が合わなくなるため、ボタン類のように指の位置で濃さを決めず、始めたところから薄くして消す。
+    /// 部品は動く画像と位置が合わなくなるため、ボタン類のように指の位置で不透明度を決めず、始めたところから薄くして消す。
     private var pageOverlayCopy: UIView?
 
-    /// 開く途中で左右にめくったときに、止めた動きの途中の見え方を描き写した像。薄くし終えたらnil。
+    /// 開く途中で左右にめくったときに、止めた動きの途中の見え方のスナップショット。薄くし終えたらnil。
     private(set) var interruptedMotionCopy: UIView?
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // 回転で画面の大きさが変わったときに、ページを並べ直す前に避ける領域を読み直す。
+        // 回転で画面の大きさが変わったときに、ページを並べ直す前に避ける領域を取得し直す。
         reservedRegionsView.frame = view.bounds
         reservedRegionsView.refresh()
         layOutPages()
@@ -589,7 +589,7 @@ final class MediaViewerController: UIViewController {
     private var captionGeneration = 0
 
     /// 説明を薄くして出し入れし、出たままなら文をクロスフェードで差し替える。`isHidden`はアニメーションしないため、
-    /// 消すときは薄くし終えてから隠す。消える途中にまた出すときは、見えている濃さから戻す。
+    /// 消すときは薄くし終えてから隠す。消える途中にまた出すときは、見えている不透明度から戻す。
     private func transitionCaption(to description: String, shows: Bool) {
         let wasShown = captionShown
         captionShown = shows
@@ -622,7 +622,7 @@ final class MediaViewerController: UIViewController {
             guard generation == self.captionGeneration, !self.captionShown else { return }
             self.captionView.isHidden = true
             self.captionView.text = description
-            // 隠したあとの濃さは、ほかのボタン類と揃える。閉じる操作を取り消したあとに透明のまま残らないようにする。
+            // 隠したあとの不透明度は、ほかのボタン類と揃える。閉じる操作を取り消したあとに透明のまま残らないようにする。
             self.captionView.alpha = self.isChromeHidden ? 0 : 1
             self.view.setNeedsLayout()
         }
@@ -748,7 +748,7 @@ final class MediaViewerController: UIViewController {
         }
     }
 
-    /// いま見ている添付ファイルの、共有や保存で落とすファイルのURL。落としている途中の知らせを、いま見ているものとほかとに分けるために使う。
+    /// いま見ている添付ファイルの、共有や保存で落とすファイルのURL。落としている途中のチップを、いま見ているものとほかとに分けるために使う。
     var currentTransferURL: URL? {
         currentFileURL
     }
@@ -900,7 +900,7 @@ final class MediaViewerController: UIViewController {
         isEditingDescription = true
         descriptionEditor.limit = editing.descriptionLimit
         descriptionEditor.text = currentItem.description ?? ""
-        // 小さい文字の帯を薄くして消し、大きい文字の入力欄を0から浮かび上がらせる。1コマで入れ替えると、文字の大きさと位置が飛んで見える。
+        // 小さい文字の帯を薄くして消し、大きい文字の入力欄を0からフェードインさせる。1コマで入れ替えると、文字の大きさと位置が飛んで見える。
         transitionDescriptionEditor(shows: true)
         updateChrome(animatingCaption: true)
         view.layoutIfNeeded()
@@ -910,7 +910,7 @@ final class MediaViewerController: UIViewController {
     /// 代替テキストの入力欄を出し始めた回数。消す途中にまた出したら、前の動きの完了で隠さない。
     private var descriptionEditorGeneration = 0
 
-    /// 入力欄を薄くして出し入れする。消すときは、薄くし終えてから隠す。消える途中にまた出すときは、見えている濃さから戻す。
+    /// 入力欄を薄くして出し入れする。消すときは、薄くし終えてから隠す。消える途中にまた出すときは、見えている不透明度から戻す。
     private func transitionDescriptionEditor(shows: Bool) {
         descriptionEditorGeneration += 1
         let generation = descriptionEditorGeneration
@@ -931,7 +931,7 @@ final class MediaViewerController: UIViewController {
             }
             return
         }
-        // 薄くしている間に触れても、書き始めないようにする。書き直すときは帯を押す。
+        // 薄くしている間に触れても、書き始めないようにする。書き直すときは帯を選択する。
         descriptionEditor.isUserInteractionEnabled = false
         UIView.animateSpring(duration: duration, in: descriptionEditor) {
             self.descriptionEditor.alpha = 0
@@ -949,7 +949,7 @@ final class MediaViewerController: UIViewController {
         if descriptionEditor.isEditing {
             descriptionEditor.endEditing()
         } else {
-            // キーボードを出せていなければ書き終えた知らせが来ないため、ここで書き終える。
+            // キーボードを出せていなければ書き終えたコールバックが来ないため、ここで書き終える。
             descriptionEditingDidEnd(descriptionEditor.text)
         }
     }
@@ -964,7 +964,7 @@ final class MediaViewerController: UIViewController {
         items[currentIndex].description = text.isEmpty ? nil : text
         draftEditing?.commitDescription(id, text)
         updateChrome(animatingCaption: true)
-        // キーボードのEscで閉じられるよう、最初の応答者に戻る。
+        // キーボードのEscで閉じられるよう、ファーストレスポンダーに戻る。
         if case .idle = motion {
             becomeFirstResponder()
         }
@@ -1108,8 +1108,8 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
         let backgroundAlpha = visibility * dragAlpha
         backdrop.alpha = backgroundAlpha
         // ボタンと説明は、背景が半分透けたところで消えきるようにする。この画面だけのチップは、ボタン類を隠していても残るものがあるため、隠したかによらず薄くする。
-        // アプリ全体のチップは消さず、背景の濃さに合わせて下の画面の位置へ近づける。
-        // 開く途中や戻す途中でつかんだときは、つかんだときの濃さから薄くする。背景の濃さから決めると、半分ほど開いたところでつかんだ瞬間に、ボタン類が一度に消える。
+        // アプリ全体のチップは消さず、背景の不透明度に合わせて下の画面の位置へ近づける。
+        // 開く途中や戻す途中でつかんだときは、つかんだときの不透明度から薄くする。背景の不透明度から決めると、半分ほど開いたところでつかんだ瞬間に、ボタン類が一度に消える。
         let fade = max(dragAlpha * 2 - 1, 0)
         for chrome in chromeViews {
             chrome.alpha = isChromeHidden ? 0 : chromeAlpha.buttons * fade
@@ -1117,7 +1117,7 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
         setNoticePresence(backgroundAlpha, screenAlpha: chromeAlpha.notices * fade)
     }
 
-    /// `rect`を`anchor`を中心に`scale`倍する。押した位置の下に、画像の同じ場所が来るようにするため。
+    /// `rect`を`anchor`を中心に`scale`倍する。触れた位置の下に、画像の同じ場所が来るようにするため。
     private static func scaled(_ rect: CGRect, by scale: CGFloat, around anchor: CGPoint) -> CGRect {
         CGRect(
             x: anchor.x + (rect.minX - anchor.x) * scale,
@@ -1137,7 +1137,7 @@ extension MediaViewerController {
         case idle
         case opening(SpringDriver)
         /// 指に追従している。`start`はつかんだときの複製の枠、`visibility`はそのときの開いている度合い、
-        /// `chromeAlpha`はそのときのボタン類と、この画面だけのチップの濃さ。
+        /// `chromeAlpha`はそのときのボタン類と、この画面だけのチップの不透明度。
         case dragging(start: CGRect, visibility: CGFloat, chromeAlpha: (buttons: CGFloat, notices: CGFloat))
         /// 閉じずに離したあと、ビューアの画像の枠へ戻している。
         case settling(UIViewPropertyAnimator)
@@ -1185,21 +1185,21 @@ extension MediaViewerController {
     }
 
     /// 複製を見せ、ページの画像とタイムラインのサムネイルを隠す。複製の画像は、ページが描いている画像か、まだ描いていなければサムネイルの画像。
-    /// どちらもなければ（アプリで表示できないファイルなど）、ページを描き写した画像を使う。
+    /// どちらもなければ（アプリで表示できないファイルなど）、ページのスナップショットを使う。
     /// 画像を描くページなら、最初に画像がなくても、届いた時点で複製を差し替える。
-    /// - Parameter decorationAlpha: サムネイルに重ねた表示の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
+    /// - Parameter decorationAlpha: サムネイルに重ねた表示の不透明度。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
     static let allCorners: CACornerMask = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
 
     /// - Parameters:
     ///   - rotation: 複製を回す角度（ラジアン）。回した起点から始めるときに、その角度を渡す。
     ///   - border: 複製の縁に描く白いフチの幅。フチの付いた起点から始めるときに、そのフチの幅を渡す。`frame`はフチを含めた枠。
-    /// - Parameter copiesPageOverlay: 開いたページの中の部品を描き写して残す。開き始めはページをまだ描いていないため、描き写さない。
+    /// - Parameter copiesPageOverlay: 開いたページの中の部品のスナップショットを残す。開き始めはページをまだ描いていないため、撮らない。
     private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat, rotation: CGFloat = 0, border: CGFloat = 0, copiesPageOverlay: Bool = false) {
         let page = pages[currentIndex]
         let tileImage = tile.flatMap { $0.showsAttachment(currentItem.id) ? $0.thumbnailImage : nil }
         morph.image = page?.transitionImage ?? tileImage ?? page.map(Self.snapshot)
         if let fading = page?.fadingTransitionImage, let image = morph.image {
-            // ページがぼかしから元の画像へ薄く入れ替えている途中なら、複製も同じ濃さから入れ替え続ける。元の画像だけを載せると、ぼかしが1コマで消える。
+            // ページがぼかしから元の画像へ薄く入れ替えている途中なら、複製も同じ不透明度から入れ替え続ける。元の画像だけを載せると、ぼかしが1コマで消える。
             morph.image = fading.image
             morph.setImage(image, crossfadeDuration: fading.remaining, from: fading.alpha)
         }
@@ -1219,7 +1219,7 @@ extension MediaViewerController {
         morph.contentOpacity = look.contentOpacity
         morph.dimming = look.dimming
         morph.place(unrotatedFrame: frame, rotation: rotation)
-        // 影は、起点の近くから始めるときだけ起点と同じ濃さから始める。ビューアの画像の位置から始めるときは描かず、閉じる動きが濃くしていく。
+        // 影は、起点の近くから始めるときだけ起点と同じ不透明度から始める。ビューアの画像の位置から始めるときは描かず、閉じる動きが濃くしていく。
         morphShadow.opacity = look.shadowOpacity
         attachDecoration(from: tile, alpha: decorationAlpha)
         morphFollowsPage = page?.drawsImage ?? false
@@ -1250,7 +1250,7 @@ extension MediaViewerController {
         }
     }
 
-    /// サムネイルに重ねた表示の複製を、複製に載せ直す。サムネイルを隠す前に描き写す必要がある。
+    /// サムネイルに重ねた表示の複製を、複製に載せ直す。サムネイルを隠す前にスナップショットを撮る必要がある。
     /// 切り抜く位置も、サムネイルの焦点に合わせ直す。
     /// 複製の大きさが変わっても角からの位置を保つよう、複製いっぱいに広げて自動で位置を合わせる。
     /// 起点が別の添付ファイルを描いていれば、その焦点、背景の色、重ねた表示は使わない。
@@ -1276,7 +1276,7 @@ extension MediaViewerController {
         setDecorationAlpha(alpha)
     }
 
-    /// サムネイルに重ねた表示と背景の濃さ。サムネイルの大きさで1、ビューアの画像の大きさで0。
+    /// サムネイルに重ねた表示と背景の不透明度。サムネイルの大きさで1、ビューアの画像の大きさで0。
     private func setDecorationAlpha(_ alpha: CGFloat) {
         morphDecoration?.alpha = alpha
         morphOverlap?.view.alpha = alpha
@@ -1299,7 +1299,7 @@ extension MediaViewerController {
         pageOverlayCopy?.removeFromSuperview()
         pageOverlayCopy = nil
         if let overlay = pages[currentIndex]?.transitionOverlay {
-            // 開き終えたときと、閉じずに戻し終えたときは、部品を薄い状態から浮かび上がらせる。
+            // 開き終えたときと、閉じずに戻し終えたときは、部品を薄い状態からフェードインさせる。
             overlay.alpha = 0
             UIView.animateSpring(duration: Self.chromeFadeDuration, in: overlay) {
                 overlay.alpha = 1
@@ -1313,7 +1313,7 @@ extension MediaViewerController {
     }
 
     /// 開いている途中や戻している途中なら、動きを終えて開ききった状態にする。左右の切り替えなど、ほかの操作を優先するため。
-    /// 途中の見え方（小さい複製と透けた背景）は、画面を描き写した像に残して薄くし、開ききった見え方へ移す。
+    /// 途中の見え方（小さい複製と透けた背景）は、画面のスナップショットに残して薄くし、開ききった見え方へ移す。
     /// 複製はページと一緒に動かせないため、複製を開ききった位置へ動かし続けることはしない。
     fileprivate func completeMotionImmediately() {
         switch motion {
@@ -1324,8 +1324,8 @@ extension MediaViewerController {
         case .idle, .dragging, .closing:
             return
         }
-        // 開く途中は、複製の一部をタイムラインの中にも描いているため、ビューアではなくウインドウごと描き写す。
-        // チップの列は、開ききった位置へ本物を動かすので、写し込まない。隠して描き直してから描き写す。
+        // 開く途中は、複製の一部をタイムラインの中にも描いているため、ビューアではなくウインドウごとスナップショットを撮る。
+        // チップの列は、開ききった位置へ本物を動かすので、スナップショットに含めない。隠して再描画してからスナップショットを撮る。
         let interrupted = view.window.flatMap { window in
             let column = overlay.flatMap { $0.superview === window && !$0.isHidden ? $0 : nil }
             column?.isHidden = true
@@ -1339,10 +1339,10 @@ extension MediaViewerController {
         }
     }
 
-    /// 止めた動きの途中の像を、開ききった見え方の手前に重ねて薄くする。ウインドウに載せるので、薄くしている間に閉じても、閉じる動きの奥で薄くし続ける。
+    /// 止めた動きの途中のスナップショットを、開ききった見え方の手前に重ねて薄くする。ウインドウに載せるので、薄くしている間に閉じても、閉じる動きの奥で薄くし続ける。
     private func fadeOutInterruptedMotion(_ copy: UIView, in window: UIWindow) {
         copy.frame = window.bounds
-        // めくり始めた指や、続けてつかむ指を、像の奥のページに通す。
+        // めくり始めた指や、続けてつかむ指を、スナップショットの奥のページに通す。
         copy.isUserInteractionEnabled = false
         // チップの列は手前に残す。
         if let overlay, overlay.superview === window {
@@ -1396,8 +1396,8 @@ extension MediaViewerController {
         view.layoutIfNeeded()
         let update: @MainActor (CGFloat) -> Void
         if movesImage, let tile = currentTile {
-            // 白いフチの付いた起点（タイムラインで重ねた写真）からは、フチを含めた写真の枠と角の丸みから始める。
-            // 縮めて置いた起点（タイムラインで傾けずに重ねた奥の写真）では、フチと角の丸みも同じ倍率で細くなっている。
+            // 白いフチの付いた起点（タイムラインで重ねた写真）からは、フチを含めた写真の枠とradiusから始める。
+            // 縮めて置いた起点（タイムラインで傾けずに重ねた奥の写真）では、フチとradiusも同じ倍率で細くなっている。
             let paper = tile.viewerLook.paperBorder
             let tileScale = tile.scale(in: view)
             let startBorder = (paper?.width ?? 0) * tileScale
@@ -1415,9 +1415,9 @@ extension MediaViewerController {
                 let paperProgress = min(min(max(progress, 0), 1) / CGFloat(max(self.timing.paperBorderPortion, 0.01)), 1)
                 // 影も、フチを細くしきるのと同じ区間で薄くしてなくす。
                 self.morphShadow.opacity = startShadow * Float(1 - paperProgress)
-                // 広がるのに合わせて、一覧の明るさからビューアの明るさへ移す。バーの奥の複製は並べ直しで写すので、その前に決める。
+                // 広がるのに合わせて、一覧の明るさからビューアの明るさへ移す。バーの奥の複製は並べ直しで作るので、その前に決める。
                 self.morph.blendDynamicRange(self.morph.blendedDynamicRange, amount: 1 - min(max(progress, 0), 1))
-                // 行き先は毎フレーム読み直す。開く途中に元の大きさの分からない画像が届くと、ページの画像が等倍へ縮み始めるため。
+                // 行き先は毎フレーム取得し直す。開く途中に元の大きさの分からない画像が届くと、ページの画像が等倍へ縮み始めるため。
                 self.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, border: startBorder, to: self.presentedContentFrame(in: self.view))
                 self.morph.contentOpacity = startAppearance + (1 - startAppearance) * paperProgress
                 self.morph.dimming = startDimming * (1 - paperProgress)
@@ -1492,7 +1492,7 @@ extension MediaViewerController {
         return layering
     }
 
-    /// 複製の今の位置で、バーの手前と奥の描き分けを描き直す。描き分けていなければ何もしない。
+    /// 複製の今の位置で、バーの手前と奥の描き分けを再描画する。描き分けていなければ何もしない。
     private func applyBarLayering() {
         guard let layering = barLayering, let window = view.window else { return }
         morph.alpha = 1 - barSwap.handoff
@@ -1569,11 +1569,11 @@ extension MediaViewerController {
     }
 
     /// 戻す動きを、見えている位置で止める。フチの太さはレイヤーのアニメーションで動かしているため、見えている太さで止め、そこから続けられるようにする。
-    /// 影も、見えている濃さで止める。
+    /// 影も、見えている不透明度で止める。
     private func stopSettling(_ animator: UIViewPropertyAnimator) {
         shadowSettling?.stop()
         shadowSettling = nil
-        // 明るさの入れ替えは濃さのアニメーションで戻しているので、止める前に見えている値を読み、閉じる動きへ引き継ぐ。
+        // 明るさの入れ替えは不透明度のアニメーションで戻しているので、止める前に見えている値を読み、閉じる動きへ引き継ぐ。
         let presentedBlend = morph.presentedDynamicRangeBlend
         animator.stopAnimation(true)
         morph.blendDynamicRange(morph.blendedDynamicRange, amount: presentedBlend)
@@ -1582,7 +1582,7 @@ extension MediaViewerController {
         morph.paperBorder = presentedBorder
     }
 
-    /// 戻す複製に影を付けたまま、濃さを0へ動かす。
+    /// 戻す複製に影を付けたまま、不透明度を0へ動かす。
     private func settleShadow(duration: TimeInterval) {
         shadowSettling?.stop()
         shadowSettling = nil
@@ -1609,7 +1609,7 @@ extension MediaViewerController {
         let animator = makeAnimator(duration: dragToDismiss.restoreDuration, bounce: 0)
         let target = contentFrame(in: view)
         // 開く途中でつかんでフチが残っていたら、細くしてなくす。縁取りの太さはUIKitのアニメーションでは動かないため、レイヤーのアニメーションで動かす。
-        // 開く途中でつかんで影が残っていたら、戻る複製に付けたまま薄くしてなくす。影の濃さと形はUIKitのアニメーションでは動かないため、
+        // 開く途中でつかんで影が残っていたら、戻る複製に付けたまま薄くしてなくす。影の不透明度と形はUIKitのアニメーションでは動かないため、
         // 同じ長さのスプリングを毎フレーム進め、複製のいま見えている位置に合わせる。
         settleShadow(duration: dragToDismiss.restoreDuration)
         if morph.paperBorder > 0 {
@@ -1658,7 +1658,7 @@ extension MediaViewerController {
         case .idle, .dragging:
             break
         }
-        // 開く途中から閉じるときは、バーと重なる部分をそのときの濃さから奥へ入れ替える。
+        // 開く途中から閉じるときは、バーと重なる部分をそのときの不透明度から奥へ入れ替える。
         // タイムラインのバーに隠れない範囲での受け渡しは、閉じる動きでは手前から始めるため、開き始めのごく短い間に閉じると、新着ボタンなどに重なる部分が手前に切り替わる。
         // Escやメニューから閉じたときに限られ、下へスワイプして閉じるときはつかんだ時点で手前へ寄せ始めているため受け入れる。
         let startOverlapOpacity = barLayering == nil ? 1 : barSwap.overlapOpacity
@@ -1681,7 +1681,7 @@ extension MediaViewerController {
         }
         let overlay = UIView(frame: window.bounds)
         overlay.isUserInteractionEnabled = false
-        // 複製の画像は明るさの幅のtraitに従うため、窓へ移しても、ビューアの明るさのまま閉じ始める。
+        // 複製の画像は明るさの幅のtraitに従うため、ウィンドウへ移しても、ビューアの明るさのまま閉じ始める。
         overlay.traitOverrides.mediaDynamicRange = traitCollection.mediaDynamicRange
         backdrop.frame = overlay.bounds
         overlay.addSubview(backdrop)
@@ -1697,7 +1697,7 @@ extension MediaViewerController {
         morphShadow.follow(morph, alpha: 1)
         morphOverlap?.move(to: overlay)
         if let copy = pageOverlayCopy {
-            // 薄くしている途中の部品の複製も、閉じる動きを描く層へ移し、見えている濃さから薄くし続ける。
+            // 薄くしている途中の部品の複製も、閉じる動きを描く層へ移し、見えている不透明度から薄くし続ける。
             let alpha = CGFloat(copy.layer.presentation()?.opacity ?? Float(copy.alpha))
             copy.layer.removeAllAnimations()
             copy.frame = view.convert(copy.frame, to: window)
@@ -1711,12 +1711,12 @@ extension MediaViewerController {
             }
         }
         window.addSubview(overlay)
-        // チップの列は、閉じる動きを描く層の手前に残す。閉じ終えたら、根の画面のすぐ上に戻す。
+        // チップの列は、閉じる動きを描く層の手前に残す。閉じ終えたら、ルートの画面のすぐ上に戻す。
         let noticeOverlay = self.overlay
         noticeOverlay?.bringToFront()
         let moves = movesImage && tile != nil
         // 複製をサムネイルへ戻すときは、戻り終えてから見せるため、ビューアを閉じたときには戻さない。
-        // 複製を動かさないときは、閉じる前に見せる。閉じると画面が描き直されるため、閉じてから見せると、その間サムネイルが消えて見える。
+        // 複製を動かさないときは、閉じる前に見せる。閉じると画面が再描画されるため、閉じてから見せると、その間サムネイルが消えて見える。
         if !moves {
             showHiddenTile()
         }
@@ -1918,7 +1918,7 @@ class MediaPageController: UIViewController {
     /// 画像を描くページ。開閉の複製を、このページの画像の更新に合わせて差し替える。
     var drawsImage: Bool { false }
 
-    /// 前の画像から薄く入れ替えている途中なら、前の画像と、いま見えている濃さと、入れ替え終えるまでの時間。
+    /// 前の画像から薄く入れ替えている途中なら、前の画像と、いま見えている不透明度と、入れ替え終えるまでの時間。
     var fadingTransitionImage: (image: UIImage, alpha: CGFloat, remaining: TimeInterval)? { nil }
 
     /// ページの中に出している部品。開閉と閉じる操作のあいだ、ビューアがボタン類と一緒に薄くする。出していなければnil。
@@ -2106,7 +2106,7 @@ final class ImagePageController: MediaPageController {
 
     override var drawsImage: Bool { true }
 
-    /// 濃さが減るほど残りの時間も減るとみなす。薄くする動きはスプリングなので、残りの時間とはずれるが、引き継ぐ複製の動きがわずかに速いか遅いだけになる。
+    /// 不透明度が減るほど残りの時間も減るとみなす。薄くする動きはスプリングなので、残りの時間とはずれるが、引き継ぐ複製の動きがわずかに速いか遅いだけになる。
     override var fadingTransitionImage: (image: UIImage, alpha: CGFloat, remaining: TimeInterval)? {
         zoomView.fadingImage.map { ($0.image, $0.alpha, placeholderFadeDuration * $0.alpha) }
     }
@@ -2225,7 +2225,7 @@ final class ImagePageController: MediaPageController {
         if !hasStartedLoading {
             load(hasPreview: preview != nil)
         } else if case .local(let file?, _) = item.source, file.url != loadedLocalURL {
-            // 投稿欄で縮めて作り直したら、投稿される中身を確かめられるよう読み直す。読み終えるまで、前の画像を出したままにする。
+            // 投稿欄で縮めて作り直したら、投稿される中身を確かめられるよう再読み込みする。読み終えるまで、前の画像を出したままにする。
             load(file, hasPreview: true)
         } else if case .local(nil, let thumbnail?) = item.source, thumbnail !== shownLocalThumbnail {
             // 投稿欄で切り抜いたら、送るファイルを作り終えるまで、切り抜いたサムネイルを出す。
@@ -2303,7 +2303,7 @@ final class ImagePageController: MediaPageController {
     }
 
     private func load(_ attachment: MediaAttachment, hasPreview: Bool) {
-        // 先読みしたファイルを使えるよう、先読みと同じURLを読む（docs/image-loading.md）。
+        // プリフェッチしたファイルを使えるよう、プリフェッチと同じURLを読む（docs/image-loading.md）。
         guard let url = MediaPrefetch.viewerImageURL(of: attachment) ?? attachment.previewUrl else {
             showFailure()
             return
@@ -2317,7 +2317,7 @@ final class ImagePageController: MediaPageController {
             self.originalURL = url
         }
         loadTask = Task(.action) { [weak self, store] in
-            // ビューアは使う人が開いたものなので、前に読めなかった画像も間隔を待たずに読み直す。
+            // ビューアは使う人が開いたものなので、前に読めなかった画像も間隔を待たずに再読み込みする。
             let image = try? await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, retriesNow: true, purpose: .action)
             guard let self, !Task.isCancelled else { return }
             if let image {
@@ -2942,7 +2942,7 @@ final class PlayerPageController: MediaPageController {
         pendingSeek ?? playerController.player?.currentItem?.currentTime().seconds
     }
 
-    /// 10秒戻る・進む。続けて押されたときも押した回数だけ動くよう、シークしている間は行き先から数える。
+    /// 10秒戻る・進む。続けて選択されたときも選択した回数だけ動くよう、シークしている間は行き先から数える。
     private func skip(by seconds: Double) {
         guard let player = playerController.player, let current = player.currentItem else { return }
         var target = max((displayedElapsed ?? 0) + seconds, 0)
@@ -3290,7 +3290,7 @@ final class CaptionView: UIView {
         accessibilityHint = isEditable ? MediaViewerTexts.AltText.editHint : MediaViewerTexts.AltText.showFullTextHint
     }
 
-    /// 文字の下端。安全領域に合わせるために使う。
+    /// 文字の下端。セーフエリアに合わせるために使う。
     var contentBottomAnchor: NSLayoutYAxisAnchor { contentGuide.bottomAnchor }
 
     init(settings: AppSettings) {

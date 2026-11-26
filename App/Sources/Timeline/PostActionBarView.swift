@@ -7,19 +7,19 @@ import UIKit
 struct PostActionBarContent: Equatable {
     var buttons: [PostActionBarButton]
     var iconSize: CGFloat
-    /// アイコンの上下の余白。ボタンの押せる高さは、アイコンにこの余白を足したものになる。
+    /// アイコンの上下の余白。ボタンのヒット領域の高さは、アイコンにこの余白を足したものになる。
     var padding: CGFloat
     var countFont: UIFont
     /// ライトモードで、したお気に入りを黄色で描く。オフなら橙。光と同じ色にする。
     var lightFavouriteIsYellow: Bool
-    /// ボタンの押せる範囲を、アイコンの左端から左（右から左へ書く言語では右）へ広げる長さ。左隣のボタンと重なる部分は、このボタンが受ける。
+    /// ボタンのヒット領域を、アイコンの左端から左（右から左へ書く言語では右）へ広げる長さ。左隣のボタンと重なる部分は、このボタンが受ける。
     var leadingHitReach: CGFloat
     /// ボタンを並べている投稿。同じ投稿のまま状態が変わったときだけ、記号を変形でつなぐ。
     var statusID: Status.ID?
 }
 
 final class PostActionBarView: UIView {
-    /// ボタンが押されたときに、その項目と、押したボタンを渡して呼ぶ。
+    /// ボタンが選択されたときに、その項目と、選択したボタンを渡して呼ぶ。
     var onPress: ((PostActionBarItem, UIView) -> Void)?
     /// ボタンを長押しして出すメニューの対象。長押しでメニューを出す項目（`PostActionBarItem.longPressItems`）でだけ呼ぶ。nilならメニューを出さない。
     var longPressTarget: ((PostActionBarItem) -> (any ObjectActionTarget)?)? {
@@ -29,7 +29,7 @@ final class PostActionBarView: UIView {
     private let stack = UIStackView()
     private var buttonViews: [PostActionBarButtonView] = []
     private(set) var content: PostActionBarContent?
-    /// バーの上と下にある、押せる範囲を広げてよい空きの高さ。
+    /// バーの上と下にある、ヒット領域を広げてよい空きの高さ。
     var hitSpace = PostActionBarButtonView.HitSpace() {
         didSet {
             for view in buttonViews {
@@ -70,7 +70,7 @@ final class PostActionBarView: UIView {
                 let start = AppDependencies.mediaTime()
                 onPress?(item, view)
                 let end = AppDependencies.mediaTime()
-                // 指を離してから押した処理が動くまでと、処理にかかった時間。押しても変わらないと感じたときに、メインスレッドが詰まっていたかを見る。
+                // 指を離してから選択の処理が動くまでと、処理にかかった時間。選択しても変わらないと感じたときに、メインスレッドが詰まっていたかを見る。
                 let sinceTouchUp = view.consumeTouchEnd().map { start - $0 } ?? -1
                 PostActionBarButtonView.logger.info("action bar press item=\(item.rawValue, privacy: .public) sinceTouchUp=\(sinceTouchUp, privacy: .public) work=\(end - start, privacy: .public)")
             }, for: .touchUpInside)
@@ -91,7 +91,7 @@ final class PostActionBarView: UIView {
         applyLongPressTargets()
     }
 
-    /// 長押しでメニューを出すボタンにだけ、その対象を付ける。ボタンは持ち上げず、押した位置にメニューだけを出す（docs/menus.mdの「持ち上げ方」）。
+    /// 長押しでメニューを出すボタンにだけ、その対象を付ける。ボタンは持ち上げず、長押しした位置にメニューだけを出す（docs/menus.mdの「持ち上げ方」）。
     private func applyLongPressTargets() {
         for view in buttonViews {
             guard let item = view.button?.item, !view.isHidden, !item.longPressItems.isEmpty, let target = longPressTarget?(item) else {
@@ -133,7 +133,7 @@ final class PostActionBarView: UIView {
     }
 
     /// バーの枠の外も含めて、`point`（`space`の座標）を受けるボタン。
-    /// バーの枠の外の点は、親からの`hitTest`がボタンまで降りてこないので、投稿の中身が空きを押されたときにこれで探す。
+    /// バーの枠の外の点は、親からの`hitTest`がボタンまで降りてこないので、投稿の中身の空きが選択されたときにこれで探す。
     func button(at point: CGPoint, in space: UIView, with event: UIEvent?) -> UIView? {
         // 左へ広げた範囲は左隣のボタンと重なる。親の`hitTest`と同じく、あとに並ぶボタンから探して、広げた側が受ける。
         shownButtons.reversed().lazy.compactMap { $0.hitTest(space.convert(point, to: $0), with: event) }.first
@@ -207,14 +207,14 @@ final class PostActionBarButtonView: UIControl {
     /// 件数の右端と、ボタンの右端のあいだ。
     private static let countTrailingInset: CGFloat = 4
 
-    /// VoiceOverで実行したときも、押したときと同じ処理を送る。自作の`UIControl`は、実行しても何も送らないため。
+    /// VoiceOverで実行したときも、選択したときと同じ処理を送る。自作の`UIControl`は、実行しても何も送らないため。
     override func accessibilityActivate() -> Bool {
         sendActions(for: .touchUpInside)
         return true
     }
 
     private var touchBeganAt: TimeInterval?
-    /// 指を離した時刻（`UITouch.timestamp`と同じ、起動からの秒）。押した処理が1回だけ読む。
+    /// 指を離した時刻（`UITouch.timestamp`と同じ、起動からの秒）。選択の処理が1回だけ読む。
     /// VoiceOverの実行はタッチを通らないので、前のタップの時刻を読まないよう、読んだら消す。
     private var touchEndedAt: TimeInterval?
 
@@ -224,20 +224,20 @@ final class PostActionBarButtonView: UIControl {
     }
     private var lastDeceleratingTouch: TimeInterval?
 
-    /// ボタンの上と下にある、押せる範囲を広げてよい空きの高さ。
+    /// ボタンの上と下にある、ヒット領域を広げてよい空きの高さ。
     struct HitSpace: Equatable {
         var above: CGFloat = 0
         var below: CGFloat = 0
     }
 
     var hitSpace = HitSpace()
-    /// 押せる高さの上限。HIGの最小のタップ領域に合わせる。
+    /// ヒット領域の高さの上限。HIGの最小のタップ領域に合わせる。
     private static let maximumHitHeight: CGFloat = 44
 
     /// 指を離した位置の判定にも使うので、`hitTest`だけでなくここで広げる。アイコンはボタンの上下の中央にあるので、中央から同じ長さまで広げる。
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         let reach = max(Self.maximumHitHeight - bounds.height, 0) / 2
-        // ボタンが多くて狭いときは、アイコンの横の空きの半分で止める。右隣のボタンも同じだけ広げてくるので、止めないとアイコンの右に押せる範囲が残らない。
+        // ボタンが多くて狭いときは、アイコンの横の空きの半分で止める。右隣のボタンも同じだけ広げてくるので、止めないとアイコンの右にヒット領域が残らない。
         let leadingReach = min(leadingHitReach, max(bounds.width - iconView.frame.width, 0) / 2)
         let isRightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
         return bounds
@@ -250,7 +250,7 @@ final class PostActionBarButtonView: UIControl {
             .contains(point)
     }
 
-    /// 慣性で流れているタイムラインに触れると、UIKitはスクロールを止めるだけで、ボタンにタッチを渡さないことがある。押しても何も起きなかったときに、このあとに押した記録が続くかで見分ける。
+    /// 慣性で流れているタイムラインに触れると、UIKitはスクロールを止めるだけで、ボタンにタッチを渡さないことがある。選択しても何も起きなかったときに、このあとに選択の記録が続くかで見分ける。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
         if hit === self, let event, event.type == .touches, event.timestamp != lastDeceleratingTouch, enclosingScrollView?.isDecelerating == true {
@@ -270,7 +270,7 @@ final class PostActionBarButtonView: UIControl {
         super.endTracking(touch, with: event)
     }
 
-    /// スクロールや長押しにタッチを取られると、指を離しても押したことにならない。どれに取られたかを残す。
+    /// スクロールや長押しにタッチを取られると、指を離しても選択したことにならない。どれに取られたかを残す。
     override func cancelTracking(with event: UIEvent?) {
         super.cancelTracking(with: event)
         let heldFor = touchBeganAt.map { AppDependencies.mediaTime() - $0 } ?? -1

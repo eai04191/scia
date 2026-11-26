@@ -79,7 +79,7 @@ struct AccountListStoreTests {
         #expect(store.accounts.map(\.id) == ["7", "6"])
     }
 
-    /// 読み直している間に外したり足したりした人は、その前に送り出した読み直しの応答で戻さない。
+    /// 再読み込みしている間に外したり足したりした人は、その前に送り出した再読み込みの応答で戻さない。
     @Test func changesDuringReloadSurviveTheOlderResponse() async throws {
         let gate = Gate()
         let store = AccountListStore(kind: .listMembers(listID: "1")) { _ in

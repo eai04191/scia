@@ -42,7 +42,7 @@ final class AppIconSelection {
         current = AppIconChoice.allCases.first { $0.alternateIconName == name } ?? .standard
     }
 
-    /// 押した行にすぐチェックが移るよう、先に選択を変え、切り替えに失敗したら戻す。
+    /// 選択した行にすぐチェックが移るよう、先に選択を変え、切り替えに失敗したら戻す。
     /// 切り替えの完了は、iOSが出す「アイコンを変更しました」を閉じるまで返ってこない。
     func select(_ choice: AppIconChoice) async throws {
         guard choice != current else { return }

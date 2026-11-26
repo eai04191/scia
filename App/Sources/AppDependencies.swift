@@ -103,7 +103,7 @@ enum AppDependencies {
     /// カスタム絵文字の画像を置く場所。端末に残した`api/v1/custom_emojis`の応答に載っているか（A）、いないか（B）で分けて置く。
     static var emojiImageFiles: EmojiImageFiles { images.emojiImageFiles }
 
-    /// 応答が変わったら、端末に置く絵文字の画像を分け直し、自分のサーバーの絵文字の画像を先読みする。
+    /// 応答が変わったら、端末に置く絵文字の画像を分け直し、自分のサーバーの絵文字の画像をプリフェッチする。
     static let emojiPrefetcher = EmojiPrefetcher()
 
     /// カスタム絵文字の画像と、それに付く記録を置くフォルダー。設定のストレージの画面は、ここを「カスタム絵文字」に数える。
@@ -112,10 +112,10 @@ enum AppDependencies {
     /// 大きすぎて動かせないと分かった元の画像の記録。
     static var oversizedEmojis: OversizedEmojiRecord { images.oversizedEmojis }
 
-    /// 絵文字のパレットで、静止画が届くまでの間に描く小さい静止画。
+    /// 絵文字のパレットで、静止画が届くまでの間に描くサムネイル。
     static var emojiThumbnails: EmojiThumbnails { images.emojiThumbnails }
 
-    /// 小さい静止画を、パレットを閉じている間に、端末に置いた画像から作る。
+    /// サムネイルを、パレットを閉じている間に、端末に置いた画像から作る。
     static let emojiThumbnailBuilder = EmojiThumbnailBuilder()
 
     static let emojiGlyphImages = EmojiGlyphImageStore()
@@ -165,7 +165,7 @@ enum AppDependencies {
 
     static let network = NetworkConditionsMonitor()
 
-    /// Macでは、ソフトウェアキーボードがなく、書き始めても投稿欄がその場で広がって押した位置にボタンが来るので、既定で畳まない。
+    /// Macでは、ソフトウェアキーボードがなく、書き始めても投稿欄がその場で広がって選択した位置にボタンが来るので、既定で折りたたまない。
     static let settings: AppSettings = {
         let keepsComposeBarOpen = ProcessInfo.processInfo.isiOSAppOnMac
         #if DEBUG
@@ -182,7 +182,7 @@ enum AppDependencies {
         directory: URL.documentsDirectory.appending(path: "DiscomfortReports")
     )
 
-    /// ログインしたアカウントのリスト。シーンをまたいで同じものを使う。Keychainを読めなかったときは、その失敗を返し、次に使うときに読み直す。
+    /// ログインしたアカウントのリスト。シーンをまたいで同じものを使う。Keychainを読めなかったときは、その失敗を返し、次に使うときに再読み込みする。
     static var accounts: Result<AccountRegistry, any Error> { accountsLoad.get() }
 
     private static let accountsLoad = LoadUntilSucceeded {

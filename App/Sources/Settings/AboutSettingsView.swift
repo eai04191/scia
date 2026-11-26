@@ -70,7 +70,7 @@ struct AboutSettingsView: View {
     }
 }
 
-/// 長押しで、押した位置に「コピー」と「すべてコピー」の編集メニューを出す。iPhoneの設定の「情報」の行と同じ出し方。
+/// 長押しで、長押しした位置に「コピー」と「すべてコピー」の編集メニューを出す。iPhoneの設定の「情報」の行と同じ出し方。
 private struct CopyMenuArea: UIViewRepresentable {
     let value: String
     let all: String

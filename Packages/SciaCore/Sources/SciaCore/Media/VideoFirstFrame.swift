@@ -107,7 +107,7 @@ public enum VideoFirstFrame {
         /// すべてのサンプルが同じ大きさなら、その大きさ。
         let uniformSize: Int
         let sizes: [Int]
-        /// チャンク（続けて置かれたサンプルのまとまり）ごとの、始まりのチャンクの番号（1から）と、1チャンクあたりのサンプルの数。
+        /// チャンク（続けて置かれたサンプルのグループ）ごとの、始まりのチャンクの番号（1から）と、1チャンクあたりのサンプルの数。
         let chunkRuns: [(firstChunk: Int, samplesPerChunk: Int)]
         let chunkOffsets: [Int]
 

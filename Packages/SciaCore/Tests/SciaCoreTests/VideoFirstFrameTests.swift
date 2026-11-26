@@ -90,7 +90,7 @@ struct VideoFirstFrameTests {
         #expect(server.requested.count == 1)
     }
 
-    /// 要る長さより前でファイルが終わっていれば、読み直し続けずに諦める。
+    /// 要る長さより前でファイルが終わっていれば、再読み込みし続けずに諦める。
     @Test func givesUpWhenTheFileEndsEarly() async throws {
         let data = box("ftyp", Data(count: 8)) + header("moov", size: 100_000) + Data(count: 100)
         let server = RangeServer(data)

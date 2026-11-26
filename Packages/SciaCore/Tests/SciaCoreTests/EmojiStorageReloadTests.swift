@@ -5,7 +5,7 @@ import Testing
 import SciaTesting
 @testable import SciaCore
 
-/// 読み直しの通信を送れないとき（低データモード）に、端末に置いた元の画像から、通信せずに描く高さで作り直す（docs/network.md）。
+/// 再読み込みの通信を送れないとき（低データモード）に、端末に置いた元の画像から、通信せずに描く高さで作り直す（docs/network.md）。
 @MainActor
 struct EmojiStorageReloadTests {
     private let url = URL(string: "https://example.com/emoji.png")!
@@ -18,7 +18,7 @@ struct EmojiStorageReloadTests {
         let writes = Mutex(0)
         let fetches = Mutex(0)
         let fetchedPurposes = Mutex<[RequestPurpose?]>([])
-        /// 読み直しの通信を送れるか。nilなら送れない回線（低データモード）。
+        /// 再読み込みの通信を送れるか。nilなら送れない回線（低データモード）。
         let upgradePurpose = Mutex<RequestPurpose?>(nil)
     }
 
@@ -48,7 +48,7 @@ struct EmojiStorageReloadTests {
         return store
     }
 
-    /// 端末になかったら覚え、描くたびに端末を読みに行かない。
+    /// 端末になかったらキャッシュし、描くたびに端末を読みに行かない。
     @Test func remembersMissWithoutRereading() async throws {
         let world = World()
         let store = try await loadedStore(try EmojiImageStoreTests.png(width: 400, height: 400), world: world)
@@ -63,7 +63,7 @@ struct EmojiStorageReloadTests {
         #expect(store.image(for: url, pixelHeight: 200)?.height == 96)
     }
 
-    /// なかったと覚えたあとに、先読みなど別の経路で端末に置かれたら、見直して作り直す。
+    /// なかったことをキャッシュしたあとに、プリフェッチなど別の経路で端末に置かれたら、見直して作り直す。
     @Test func rechecksAfterAnotherPathStores() async throws {
         let world = World()
         let data = try EmojiImageStoreTests.png(width: 400, height: 400)
@@ -92,7 +92,7 @@ struct EmojiStorageReloadTests {
         #expect(world.fetchedPurposes.withLock { $0 }.contains(.action))
     }
 
-    /// 端末の画像が壊れていて読めなければ、何か置かれるまで読み直さない。描き直しのたびに読み続けないため。
+    /// 端末の画像が壊れていて読めなければ、何か置かれるまで再読み込みしない。再描画のたびに読み続けないため。
     @Test func corruptStoredDataIsNotReadRepeatedly() async throws {
         let world = World()
         world.stored.withLock { $0 = Data("not an image".utf8) }

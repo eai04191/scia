@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 /// 自分のプロフィールの編集画面。シートで出す。
 ///
 /// 入力欄、補完、キー操作を持つので、UIKitの表で組む。補足情報の行は、表の編集の状態で消したり並べ替えたりする。
-/// 表示名、自己紹介、補足情報では、投稿欄と同じ補完と絵文字のシートでカスタム絵文字を入れられる。自己紹介と補足情報の内容では、サーバーがメンションとハッシュタグもリンクにするので、それも補完する。
+/// 表示名、自己紹介、補足情報では、投稿欄と同じ補完と絵文字ピッカーでカスタム絵文字を入れられる。自己紹介と補足情報の内容では、サーバーがメンションとハッシュタグもリンクにするので、それも補完する。
 @MainActor
 final class ProfileEditViewController: UIViewController {
     /// 保存や写真の読み込みに失敗したら、アラートの見出しと一緒に呼ぶ。書いたものはそのまま残る。
@@ -33,7 +33,7 @@ final class ProfileEditViewController: UIViewController {
     private var completionListTop: NSLayoutConstraint?
     private var completionListHeight: NSLayoutConstraint?
     private var isCompletionListShown = false
-    /// 絵文字のシートを出している間、表の下端をシートの上端に留める。
+    /// 絵文字ピッカーを出している間、表の下端をピッカーの上端に留める。
     private var tableAboveSheet: NSLayoutConstraint?
 
     private let displayNameField = ProfileEditTextField()
@@ -58,7 +58,7 @@ final class ProfileEditViewController: UIViewController {
     private lazy var noteCell = ProfileEditInputCell(input: noteView)
     /// 選んで切り抜いた画像。保存するまで、元の画像の代わりに見せる。
     private var replacedImages: [ProfileImage: UIImage] = [:]
-    /// 最後に書いていた入力欄。絵文字のシートで選んだ絵文字をここに入れ、閉じたらキーボードを戻す。
+    /// 最後に書いていた入力欄。絵文字ピッカーで選んだ絵文字をここに入れ、閉じたらキーボードを戻す。
     private weak var lastFocusedInput: (any UITextInput & UIView)?
     private lazy var emojiPalette: EmojiPaletteView = makeEmojiPalette()
     private var emojiSheet: EmojiPaletteSheet?
@@ -73,7 +73,7 @@ final class ProfileEditViewController: UIViewController {
     private var isTableLoaded = false
     /// 読み込み中の表示を薄くしながら、表を出している途中。
     private var isRevealingTable = false
-    /// 絵文字のシートが閉じ終わったら行う操作。シートを出している間は、編集画面に別の画面を重ねられず、閉じることもできないため。
+    /// 絵文字ピッカーが閉じ終わったら行う操作。ピッカーを出している間は、編集画面に別の画面を重ねられず、閉じることもできないため。
     private var afterEmojiSheetCloses: (() -> Void)?
     #if DEBUG
     /// `scia-debug://profile-edit?note=`で渡した、読み込んだあとに置き換える自己紹介。
@@ -299,7 +299,7 @@ final class ProfileEditViewController: UIViewController {
         updateFooters()
     }
 
-    /// 読み込み中の表示を薄くしながら、表を浮かび上がらせる。
+    /// 読み込み中の表示を薄くしながら、表をフェードインさせる。
     private func revealTable() {
         let duration = tuning.value(of: TuningCatalog.profileRevealDuration)
         guard duration > 0, view.window != nil else { return }
@@ -518,7 +518,7 @@ final class ProfileEditViewController: UIViewController {
         ])
     }
 
-    /// キーボードの上に、絵文字のシートを開くボタンを置く。
+    /// キーボードの上に、絵文字ピッカーを開くボタンを置く。
     private func makeInputAccessory() -> UIView {
         let toolbar = UIToolbar(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
         let emoji = UIBarButtonItem(image: UIImage(systemName: "face.smiling"), primaryAction: UIAction { [weak self] _ in self?.presentEmojiPalette() })
@@ -793,13 +793,13 @@ final class ProfileEditViewController: UIViewController {
         return cell
     }
 
-    /// 読めなかった区切りの行。押すと読み直す。
+    /// 読めなかった区切りの行。選択すると再読み込みする。
     private func sectionFailureCell(_ error: any Error) -> UITableViewCell {
         let cell = UITableViewCell()
         var content = UIListContentConfiguration.subtitleCell()
         content.text = ProfileEditTexts.SectionLoad.reload
         content.textProperties.color = .tintColor
-        // 行を押すと読み直すので、ボタンは並べられない。自分のプロフィールの読み込みなので、401ならログインし直しの段から行える。
+        // 行を選択すると再読み込みするので、ボタンは並べられない。自分のプロフィールの読み込みなので、401ならログインし直しの段から行える。
         content.secondaryText = ProfileEditTexts.SectionLoad.failure(reason: FailureText.withoutLogIn(ErrorPresentation(error)))
         content.secondaryTextProperties.color = .secondaryLabel
         content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
@@ -950,7 +950,7 @@ final class ProfileEditViewController: UIViewController {
         }
     }
 
-    /// 入力欄の文字を下書きに入れる。補完やパレットで入れたときは、入力欄の知らせが来ないため、ここで合わせる。
+    /// 入力欄の文字を下書きに入れる。補完やパレットで入れたときは、入力欄の変更のコールバックが来ないため、ここで合わせる。
     private func inputDidChange(_ input: any UITextInput) {
         if input === displayNameField {
             editor.draft?.displayName = displayNameField.text ?? ""
@@ -1022,7 +1022,7 @@ final class ProfileEditViewController: UIViewController {
         observeEmojiPalette()
         tableAboveSheet?.constant = -height
         tableAboveSheet?.isActive = true
-        // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
+        // 独自の高さはシートの下のセーフエリアを含まないので、その分を引く。
         let sheet = EmojiPaletteSheet(palette: emojiPalette, lowHeight: height - view.safeAreaInsets.bottom)
         sheet.lifecycle.onWillClose = { [weak input] in input?.becomeFirstResponder() }
         sheet.lifecycle.onDidClose = { [weak self] in self?.emojiPaletteDidClose() }
@@ -1041,8 +1041,8 @@ final class ProfileEditViewController: UIViewController {
         pending?()
     }
 
-    /// 絵文字のシートを出していなければtrueを返す。出していれば閉じ、閉じ終わってから`action`を行ってfalseを返す。
-    /// 絵文字のシートの低い段では、後ろの保存や取りやめのボタンも押せるが、シートを出したままでは確認を重ねたり画面を閉じたりできないため。
+    /// 絵文字ピッカーを出していなければtrueを返す。出していれば閉じ、閉じ終わってから`action`を行ってfalseを返す。
+    /// 絵文字ピッカーの低い段では、後ろの保存や取りやめのボタンも選択できるが、ピッカーを出したままでは確認を重ねたり画面を閉じたりできないため。
     private func closeEmojiSheet(then action: @escaping () -> Void) -> Bool {
         guard let emojiSheet else { return true }
         afterEmojiSheetCloses = action

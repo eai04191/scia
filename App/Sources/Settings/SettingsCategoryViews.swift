@@ -65,7 +65,7 @@ struct SettingsScreenForm: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    /// このiOSで出せない行と、今の設定で使わない行を除いた節。
+    /// このiOSで出せない行と、今の設定で使わない行を除いたセクション。
     private var sections: [SettingsSection] {
         (page.sections ?? []).compactMap { section in
             var section = section
@@ -84,7 +84,7 @@ struct SettingsScreenForm: View {
         return false
     }
 
-    /// 節の下の説明。iOSの版や機種で決まる説明は、ここで足す。
+    /// セクションの下の説明。iOSの版や機種で決まる説明は、ここで足す。
     private func footer(of section: SettingsSection) -> String? {
         if section.rows.contains(.item(.accentColor)), settings.accentColor.obscuresSelectedTab {
             return SettingsTexts.Display.accentColorObscuresSelectedTab
@@ -161,7 +161,7 @@ struct SettingsScreenForm: View {
     }
 }
 
-/// 見出しと説明があるときだけ、それを付ける節。説明は、文中のMarkdownのリンクを押せるリンクにする。
+/// 見出しと説明があるときだけ、それを付けるセクション。説明は、文中のMarkdownのリンクを選択できるリンクにする。
 struct SettingsFormSection<Content: View>: View {
     let header: String?
     let footer: String?
@@ -319,7 +319,7 @@ struct ModifiedLabel: View {
     }
 }
 
-/// プリセットに含めない設定の名前の横に置く情報ボタン。押すと、どのプリセットでも共通であることをポップオーバーで出す（docs/preset.md）。
+/// プリセットに含めない設定の名前の横に置く情報ボタン。選択すると、どのプリセットでも共通であることをポップオーバーで出す（docs/preset.md）。
 struct NotInPresetInfoButton: View {
     @State private var isShown = false
 

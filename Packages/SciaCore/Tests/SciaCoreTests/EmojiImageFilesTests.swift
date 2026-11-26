@@ -47,7 +47,7 @@ struct EmojiImageFilesTests {
     }
 
     /// 今の版でないフォルダーに残ったAの画像は、応答に載っていても読まず、分け直しで消す。
-    /// 先読みが別の絵文字の画像を置いたことがあり、残すと読み続けるため。版を付ける前のフォルダー（`Files`）も同じ。
+    /// プリフェッチが別の絵文字の画像を置いたことがあり、残すと読み続けるため。版を付ける前のフォルダー（`Files`）も同じ。
     @Test(arguments: ["Files", "Listed/\(EmojiImageFiles.listedVersion - 1)"])
     func removesListedImagesOfOtherVersions(folder: String) async throws {
         let url = try url("a.png")
@@ -177,7 +177,7 @@ struct EmojiImageFilesTests {
         #expect(files.isListed(try url("other")) == false)
     }
 
-    /// 先読みの画像は、空きが残りの取得量の見積もりに足りなければ、置かない。Bにも置かない。
+    /// プリフェッチの画像は、空きが残りの取得量の見積もりに足りなければ、置かない。Bにも置かない。
     @Test func storeListedRefusesWhenRemainingDoesNotFit() async throws {
         let capacity = Capacity()
         capacity.value.withLock { $0 = 1_000 }
@@ -190,7 +190,7 @@ struct EmojiImageFilesTests {
         #expect(await files.data(for: try url("b")) == nil)
     }
 
-    /// 空き容量は、画像1枚ごとには読まず、置いた量が10MBに届くたびに読み直す。値を1回読むのに、SE3で約9msかかるため。
+    /// 空き容量は、画像1枚ごとには読まず、置いた量が10MBに届くたびに再読み込みする。値を1回読むのに、SE3で約9msかかるため。
     @Test func rereadsCapacityEveryTenMegabytes() async throws {
         let capacity = Capacity()
         let files = makeFiles(capacity: capacity)

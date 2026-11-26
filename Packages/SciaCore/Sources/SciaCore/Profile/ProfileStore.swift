@@ -38,7 +38,7 @@ public enum FollowState: Equatable, Sendable {
 }
 
 /// プロフィールの読み込みで失敗したもの。読めたものはnil。
-/// 知らせ方が違うため分けて返す。関係はフォローのボタンの場所で知らせ、アカウントとヘッダーの棚（固定された投稿、注目のハッシュタグ、紹介しているユーザー）はログだけにする。
+/// 出し方が違うため分けて返す。関係はフォローのボタンの場所で知らせ、アカウントとヘッダーの棚（固定された投稿、注目のハッシュタグ、紹介しているユーザー）はログだけにする。
 public struct ProfileLoadFailures: Sendable {
     public var account: (any Error)?
     public var relationship: (any Error)?
@@ -139,9 +139,9 @@ public final class ProfileStore {
     public var isShelvesSettled: Bool {
         isPinnedSettled && isFeaturedSettled
     }
-    /// 関係を読めず、まだ読み直せていない。
+    /// 関係を読めず、まだ再読み込みできていない。
     public private(set) var relationshipFailed = false
-    /// 読めなかった関係を読み直している途中。
+    /// 読めなかった関係を再読み込みしている途中。
     public private(set) var isReloadingRelationship = false
     /// フォローやフォローの解除を送っている途中。
     public private(set) var isChangingFollow = false
@@ -150,14 +150,14 @@ public final class ProfileStore {
     /// 今のタイムライン。切り替えるたびに作り直す。
     @ObservationIgnored public private(set) var timeline: TimelineStore
 
-    /// フォローを変えた回数。前に読んだ関係から始めると、関係を読み直している途中でもフォローを送れるため、
-    /// フォローより前に頼んだ読み直しの応答が後から届いたら、古い関係として捨てる。
+    /// フォローを変えた回数。前に読んだ関係から始めると、関係を再読み込みしている途中でもフォローを送れるため、
+    /// フォローより前に頼んだ再読み込みの応答が後から届いたら、古い関係として捨てる。
     private var followChanges = 0
-    /// 固定された投稿を読み始めた回数。固定と解除を続けて押すと読み直しが重なるため、遅れて届いた古い応答を捨てる。
+    /// 固定された投稿を読み始めた回数。固定と解除を続けて選択すると再読み込みが重なるため、遅れて届いた古い応答を捨てる。
     private var pinnedLoads = 0
-    /// 注目のハッシュタグと紹介している人を読み始めた回数。プロフィールで紹介したり外したりして読み直しが重なったとき、遅れて届いた古い応答を捨てる。
+    /// 注目のハッシュタグと紹介している人を読み始めた回数。プロフィールで紹介したり外したりして再読み込みが重なったとき、遅れて届いた古い応答を捨てる。
     private var featuredLoads = 0
-    /// アカウントを読み始めたか、編集したものを反映した回数。フォローしたあとの読み直しや保存した編集より前に頼んだ読み込みが、
+    /// アカウントを読み始めたか、編集したものを反映した回数。フォローしたあとの再読み込みや保存した編集より前に頼んだ読み込みが、
     /// 遅れて届いても古い数や内容で戻さない。
     private var accountChanges = 0
     /// 削除した投稿のID。削除の前に読み始めた固定された投稿の応答で、戻さないようにする。
@@ -257,7 +257,7 @@ public final class ProfileStore {
                     self.relationship = relationship
                     relationshipFailed = false
                 case .success(.pinned(let pinned)):
-                    // あとから読み始めた読み直しがあれば、その結果に任せる。タイムラインを出すのは待たせない。
+                    // あとから読み始めた再読み込みがあれば、その結果に任せる。タイムラインを出すのは待たせない。
                     if pinnedLoad == pinnedLoads {
                         loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }
                     }
@@ -295,10 +295,10 @@ public final class ProfileStore {
         }
     }
 
-    /// 固定された投稿だけを読み直す。自分の投稿をプロフィールに固定したり外したりしたあとに呼ぶ。
-    /// 固定した順にどう並ぶかはサーバーが決めるため、手元で差し込まずに読み直す。
+    /// 固定された投稿だけを再読み込みする。自分の投稿をプロフィールに固定したり外したりしたあとに呼ぶ。
+    /// 固定した順にどう並ぶかはサーバーが決めるため、手元で差し込まずに再読み込みする。
     /// どの投稿をどの順に並べるかだけを応答に合わせ、前から並べていた投稿は手元のものを残す。待つ間に`updateStatus`で反映したお気に入りなどを、読み始めた時点の応答で戻さないため。
-    /// あとから読み始めた読み直しがあれば、この応答は捨てる。
+    /// あとから読み始めた再読み込みがあれば、この応答は捨てる。
     public func reloadPinned() async throws {
         pinnedLoads += 1
         let pinnedLoad = pinnedLoads
@@ -309,8 +309,8 @@ public final class ProfileStore {
         isPinnedSettled = true
     }
 
-    /// 注目のハッシュタグと紹介している人のうち、読む棚を読み直す。自分のプロフィールで、載せるものを変えたあとに呼ぶ。
-    /// 読めなかったものは前のまま残し、読めなかったものがあれば投げる。あとから読み始めた読み直しがあれば、この応答は捨てる。
+    /// 注目のハッシュタグと紹介している人のうち、読む棚を再読み込みする。自分のプロフィールで、載せるものを変えたあとに呼ぶ。
+    /// 読めなかったものは前のまま残し、読めなかったものがあれば投げる。あとから読み始めた再読み込みがあれば、この応答は捨てる。
     public func reloadFeatured() async throws {
         featuredLoads += 1
         let featuredLoad = featuredLoads
@@ -338,7 +338,7 @@ public final class ProfileStore {
         _ = try loadedPage?.get()
     }
 
-    /// 読む棚を変える。読んでいなかった棚を読むようにしたら、読む棚を読み直す。読めなかったものがあれば投げる。
+    /// 読む棚を変える。読んでいなかった棚を読むようにしたら、読む棚を再読み込みする。読めなかったものがあれば投げる。
     /// 読まなくした棚の中身は消さない。出すかどうかは、設定を読むUIが決める。
     public func setFeaturedShelves(_ shelves: FeaturedShelves) async throws {
         let adds = (shelves.tags && !featuredShelves.tags) || (shelves.endorsements && !featuredShelves.endorsements)
@@ -361,7 +361,7 @@ public final class ProfileStore {
     /// 紹介している人の棚に並べる数。続きは人のリストで読む。
     public static let endorsementsPageSize = 40
 
-    /// 読めなかった関係を読み直す。失敗したら、読めなかったままにして投げる。読み直している途中なら何もしない。
+    /// 読めなかった関係を再読み込みする。失敗したら、読めなかったままにして投げる。再読み込みしている途中なら何もしない。
     public func reloadRelationship() async throws {
         guard !isReloadingRelationship else { return }
         isReloadingRelationship = true
@@ -388,7 +388,7 @@ public final class ProfileStore {
     }
 
     /// フォローしていなければフォローし、フォロー中かリクエスト中なら外す。送っている途中なら何もしない。
-    /// 送ったらtrue。フォローのAPIは関係だけを返し、フォロワー数は古いままなので、送ったら`reloadAccount()`で読み直す。
+    /// 送ったらtrue。フォローのAPIは関係だけを返し、フォロワー数は古いままなので、送ったら`reloadAccount()`で再読み込みする。
     @discardableResult
     public func toggleFollow() async throws -> Bool {
         guard !isChangingFollow else { return false }
@@ -409,7 +409,7 @@ public final class ProfileStore {
         return true
     }
 
-    /// ユーザーのメニューなど、ほかの画面で変えた関係を反映する。前に頼んだ読み直しの応答が後から届いても、古い関係として捨てる。
+    /// ユーザーのメニューなど、ほかの画面で変えた関係を反映する。前に頼んだ再読み込みの応答が後から届いても、古い関係として捨てる。
     public func apply(_ relationship: Relationship) {
         guard relationship.id == account.id else { return }
         self.relationship = relationship
@@ -424,8 +424,8 @@ public final class ProfileStore {
         accountChanges += 1
     }
 
-    /// アカウントだけを読み直す。
-    /// あとから読み直しを頼んだか、編集したものを反映したら、この応答は捨てる。
+    /// アカウントだけを再読み込みする。
+    /// あとから再読み込みを頼んだか、編集したものを反映したら、この応答は捨てる。
     public func reloadAccount() async throws {
         accountChanges += 1
         let accountChange = accountChanges

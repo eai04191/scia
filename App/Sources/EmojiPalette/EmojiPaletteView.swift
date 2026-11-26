@@ -3,15 +3,15 @@ import UIKit
 
 /// 投稿欄のカスタム絵文字のパレット。シート（`EmojiPaletteSheet`）の中身にする。
 ///
-/// 上に検索欄、真ん中に絵文字、下の段にまとまりへ飛ぶボタンと削除キーを置く。下の段は、検索欄にキーボードを出している間だけキーボードに沿う枠に付け、キーボードの上に来る。
+/// 上に検索欄、真ん中に絵文字、下の段にグループへ飛ぶボタンと削除キーを置く。下の段は、検索欄にキーボードを出している間だけキーボードに沿う枠に付け、キーボードの上に来る。
 /// 絵文字のリストは検索欄と下の段の裏まで伸ばし、重なった上下の端をシステムにぼかさせる。
 /// キーボードを出していないときは、iOSのキーボードの地球儀の段と同じく、ホームインジケーターの場所まで下げる。
-/// 絵文字は、幅に入るだけの列に左から右、上から下へ並べて縦にスクロールし、まとまり（最近使ったもの、カテゴリー）ごとに見出しを付ける。
+/// 絵文字は、幅に入るだけの列に左から右、上から下へ並べて縦にスクロールし、グループ（最近使ったもの、カテゴリー）ごとに見出しを付ける。
 final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     /// カスタム絵文字のリストの状態。読み終えるまでと読めなかったときは、カスタム絵文字の場所にこの段を置き、Unicodeの絵文字はそのまま並べる。
     enum CustomEmojiStatus: Equatable {
         case loading
-        /// 理由の文言を持つ。押すと読み直す。
+        /// 理由の文言を持つ。選択すると再読み込みする。
         case failed(ErrorPresentation)
     }
 
@@ -38,11 +38,11 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     var onDefaultSkinToneChange: (EmojiSkinTone) -> Void = { _ in }
     /// 長押しした2人の絵文字の、選んでいる途中の肌の色。メニューを出している間だけ持つ。
     private var pairSelection: (emoji: StandardEmoji, first: EmojiSkinTone, second: EmojiSkinTone)?
-    /// 長押しで持ち上げて見せているUnicodeの絵文字。2人の絵文字で肌の色を選ぶたびに描き直す。
+    /// 長押しで持ち上げて見せているUnicodeの絵文字。2人の絵文字で肌の色を選ぶたびに再描画する。
     private weak var glyphPreview: EmojiGlyphPreviewController?
     /// 長押ししたカスタム絵文字を持ち上げて見せる絵の高さ。
     var previewHeight: CGFloat = TuningCatalog.composeEmojiPalettePreviewHeight.defaultValue
-    /// 長押しで持ち上げて見せているプレビュー。大きく読み直した画像が届いたら描き直す。
+    /// 長押しで持ち上げて見せているプレビュー。大きいサイズで再読み込みした画像が届いたら再描画する。
     private weak var preview: EmojiPalettePreviewController?
     /// 削除のボタンを出すか。入力欄に入れずに絵文字を選ぶだけのとき（お知らせのリアクション）は出さない。
     var showsDeleteButton = true {
@@ -59,7 +59,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         didSet { updateEdgeEffectStyle() }
     }
 
-    /// 下の段の高さ。HIGの勧める44ptに届かなくても、押せなくて困る操作ではないため、絵文字のリストの広さと見比べて決める。
+    /// 下の段の高さ。HIGの勧める44ptに届かなくても、選択しづらくても困る操作ではないため、絵文字のリストの広さと見比べて決める。
     var barHeight: CGFloat = 38 {
         didSet {
             guard barHeight != oldValue else { return }
@@ -70,7 +70,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     }
 
     /// 下の段と、シートの下端（キーボードを出していればキーボードの上端）との間。
-    /// 下げすぎると、まとまりのボタンを横にスワイプする指がホームインジケーターの操作に取られ、横にスクロールできなかった。
+    /// 下げすぎると、グループのボタンを横にスワイプする指がホームインジケーターの操作に取られ、横にスクロールできなかった。
     private let barBottomInset = CGFloat(SpacingScale.s3)
 
     var cellSize: CGFloat = 48 {
@@ -124,7 +124,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private let glyphImages: EmojiGlyphImageStore
     private let thumbnails: EmojiThumbnails
     private let glyphArchive: EmojiGlyphArchive
-    /// 画面に出ている間、小さい静止画を裏で作るのを止めさせる。部品カタログやテストのように、作らせなくてよいパレットではnil。
+    /// 画面に出ている間、サムネイルを裏で作るのを止めさせる。部品カタログやテストのように、作らせなくてよいパレットではnil。
     private let thumbnailBuilder: EmojiThumbnailBuilder?
     /// `thumbnailBuilder`に、画面に出ていると伝えたか。
     private var isCountedAsShown = false
@@ -149,7 +149,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private let deleteButton = UIButton(configuration: .plain())
     private lazy var sectionBarHeight = sectionBar.heightAnchor.constraint(equalToConstant: barHeight)
     private lazy var deleteButtonHeight = deleteButton.heightAnchor.constraint(equalToConstant: barHeight)
-    /// 角の丸みに合わせて左右を内側に寄せた枠。
+    /// radiusに合わせて左右を内側に寄せた枠。
     private lazy var cornerAdaptedGuide = layoutGuide(for: .safeArea(cornerAdaptation: .horizontal))
     private lazy var sectionBarBottom = sectionBar.bottomAnchor.constraint(equalTo: keyboardEdge.topAnchor, constant: -barBottomInset)
     /// 下の段と絵文字のリストの下端を付ける枠。ふだんはシートの下端に置き、検索欄にキーボードを出している間だけキーボードに沿わせる。
@@ -182,7 +182,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         self.thumbnails = thumbnails
         self.glyphArchive = glyphArchive
         self.thumbnailBuilder = thumbnailBuilder
-        // 小さい静止画をメモリに写す。写すだけで中身は読まないので、すぐ済む。
+        // サムネイルをメモリにマップする。マップするだけで中身は読まないので、すぐ済む。
         thumbnails.load()
         self.glyphImages = glyphImages
         super.init(frame: .zero)
@@ -206,7 +206,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 押したときに、システムのキーボードと同じクリック音を鳴らす。
+    /// 選択したときに、システムのキーボードと同じクリック音を鳴らす。
     var enableInputClicksWhenVisible: Bool { true }
 
     /// 絵文字のリストの上に、検索欄の分の余白を足す。いちばん上の見出しが検索欄の下から始まるようにするため。
@@ -224,7 +224,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         collectionView.verticalScrollIndicatorInsets.bottom = barHeight + barBottomInset
     }
 
-    /// 検索語を消して、まとまりごとの並びに戻す。
+    /// 検索語を消して、グループごとの並びに戻す。
     func clearQuery() {
         searchField.text = ""
     }
@@ -240,7 +240,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             self.customStatus = customStatus
             var sections = sections
             if customStatus != nil {
-                // 最近使ったものの下、カスタム絵文字のまとまりが来る場所に置く。
+                // 最近使ったものの下、カスタム絵文字のグループが来る場所に置く。
                 let index = sections.first?.kind == .recent ? 1 : 0
                 sections.insert(statusSection, at: index)
             }
@@ -256,7 +256,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         applySnapshot()
         reconfigureChangedPersonalEmojis(since: previousPersonal)
         rebuildSectionButtons()
-        // 打つたびに結果が変わるので、先頭に戻す。検索をやめてまとまりごとの並びに戻ったときも先頭から見せる。
+        // 打つたびに結果が変わるので、先頭に戻す。検索をやめてグループごとの並びに戻ったときも先頭から見せる。
         if case .searchResults = content {
             scrollToTop()
         } else if wasSearchResults {
@@ -307,7 +307,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }
     }
 
-    /// 最初のまとまりのボタンを、角の丸みに合わせて内側に寄せた位置に置く。左端にいるときは、余白が変わっても左端にとどめる。
+    /// 最初のグループのボタンを、radiusに合わせて内側に寄せた位置に置く。左端にいるときは、余白が変わっても左端にとどめる。
     private func updateSectionBarLeadingInset() {
         let inset = cornerAdaptedGuide.layoutFrame.minX + 8
         guard sectionBar.contentInset.left != inset else { return }
@@ -396,14 +396,14 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         // 検索をやめてキーボードが下がりきったら、シートの下端に戻す。下がる間はキーボードに付いて動かす。
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidHide(_:)), name: UIResponder.keyboardDidHideNotification, object: nil)
 
-        // キーボードを出していないとき、キーボードに沿う枠の上端を、下の安全領域の上ではなく下端にする。
-        // 安全領域の上に置くと、下の段の下にホームインジケーターの分（34pt）の空きができ、iOSのキーボードより高く見えたため。
+        // キーボードを出していないとき、キーボードに沿う枠の上端を、下のセーフエリアの上ではなく下端にする。
+        // セーフエリアの上に置くと、下の段の下にホームインジケーターの分（34pt）の空きができ、iOSのキーボードより高く見えたため。
         keyboardLayoutGuide.usesBottomSafeArea = false
         updateEdgeEffectStyle()
         collectionView.contentInset.top = Self.topContentInset
         collectionView.verticalScrollIndicatorInsets.top = Self.topContentInset
         updateBottomInset()
-        // 下の段はシートの角の丸みに近いので、角の丸みに合わせて左右を内側に寄せた枠に付ける。
+        // 下の段はシートのradiusに近いので、radiusに合わせて左右を内側に寄せた枠に付ける。
         let cornerAdapted = cornerAdaptedGuide
         // 検索欄と下の段の間。絵文字のリストの中身が見える場所で、空や見つからないことの文言をこの真ん中に置く。
         let visibleArea = UILayoutGuide()
@@ -429,15 +429,15 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             collectionView.topAnchor.constraint(equalTo: topAnchor),
             collectionView.leadingAnchor.constraint(equalTo: leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            // 絵文字のリストと下の段の間は空けない。空けると、どちらにも当たらずに押しても反応しない帯ができる。
+            // 絵文字のリストと下の段の間は空けない。空けると、どちらにも当たらずに選択しても反応しない帯ができる。
             // 絵文字のリストは下の段の裏まで伸ばす。下の段の分の余白を足し、いちばん下の絵文字も下の段より上まで送れるようにする。
             collectionView.bottomAnchor.constraint(equalTo: keyboardEdge.topAnchor),
             bottomBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: trailingAnchor),
             bottomBar.topAnchor.constraint(equalTo: sectionBar.topAnchor),
             bottomBar.bottomAnchor.constraint(equalTo: keyboardEdge.topAnchor),
-            // まとまりのボタンは、シートの左端からスクロールさせる。角の丸みに合わせた位置で切ると、送ったボタンがシートの端より手前でまっすぐ切れて見えたため。
-            // 最初のボタンの位置は、中身の前の余白で角の丸みに合わせる（`layoutSubviews`）。
+            // グループのボタンは、シートの左端からスクロールさせる。radiusに合わせた位置で切ると、送ったボタンがシートの端より手前でまっすぐ切れて見えたため。
+            // 最初のボタンの位置は、中身の前の余白でradiusに合わせる（`layoutSubviews`）。
             sectionBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             sectionBar.trailingAnchor.constraint(equalTo: deleteButton.leadingAnchor, constant: -4),
             // 検索欄にキーボードを出したら、その上に来る。出していなければ、iOSのキーボードの地球儀の段と同じく、ホームインジケーターの場所まで下げる。
@@ -463,7 +463,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         ])
     }
 
-    /// まとまりごとに、高さに入るだけの行に絵文字を縦に詰め、列を横に並べる。
+    /// グループごとに、高さに入るだけの行に絵文字を縦に詰め、列を横に並べる。
     private func makeLayout() -> UICollectionViewLayout {
         let configuration = UICollectionViewCompositionalLayoutConfiguration()
         configuration.interSectionSpacing = 8
@@ -529,7 +529,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         for section in sections {
             snapshot.appendSections([section.kind])
             if section.kind == .customEmojiStatus {
-                // 読み込み中と失敗でキーを変え、状態が変わったら描き直させる。
+                // 読み込み中と失敗でキーを変え、状態が変わったら再描画させる。
                 let key = switch customStatus { case .failed(let reason): "failed:\(FailureText.withoutLogIn(reason))"; case .loading, nil: "loading" }
                 snapshot.appendItems([Item(section: section.kind, key: key)], toSection: section.kind)
                 continue
@@ -539,7 +539,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         dataSource.apply(snapshot, animatingDifferences: false)
     }
 
-    /// まとまりの絵文字ごとに、横に使うマスの数。Unicodeの絵文字と、縦横比の分からないカスタム絵文字は1マス。
+    /// グループの絵文字ごとに、横に使うマスの数。Unicodeの絵文字と、縦横比の分からないカスタム絵文字は1マス。
     private func spans(inSection index: Int) -> [Int] {
         guard sections.indices.contains(index) else { return [] }
         return sections[index].emojis.map { emoji in
@@ -553,8 +553,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         return sections[indexPath.section].emojis[indexPath.item]
     }
 
-    /// すべての絵文字を描き直す。枠の大きさやUnicodeの絵文字の絵のように、組み立てたセルすべてに関わる設定を変えたときに使う。
-    /// 個人セットのまとまりの絵文字。
+    /// すべての絵文字を再描画する。枠の大きさやUnicodeの絵文字の絵のように、組み立てたセルすべてに関わる設定を変えたときに使う。
+    /// 個人セットのグループの絵文字。
     private static func personalEmojis(in sections: [EmojiPaletteSection]) -> [Item: PaletteEmoji] {
         var emojis: [Item: PaletteEmoji] = [:]
         for section in sections {
@@ -567,7 +567,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     }
 
     /// 個人セットは出している間に並べ直すので、同じ場所の絵文字の画像だけが変わることがある。項目はショートコードで見分けていて、
-    /// 並べ直しではそのセルを描き直さないので、ここで描き直す。
+    /// 並べ直しではそのセルを再描画しないので、ここで再描画する。
     private func reconfigureChangedPersonalEmojis(since previous: [Item: PaletteEmoji]) {
         guard !previous.isEmpty else { return }
         let changed = Self.personalEmojis(in: sections).filter { item, emoji in previous[item].map { $0 != emoji } ?? false }.map(\.key)
@@ -584,9 +584,9 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         updateSectionIcons(matching: nil)
     }
 
-    /// 届いた画像の絵文字のうち、見えているセルだけを描き直す。
-    /// 画面に入る前に組み立てたセルは、画面に入るときに描き直す（`willDisplay`）。組み立てたあとに画像が届いたセルを、空のまま画面に入れないため。
-    /// 差分（`reconfigureItems`）では描き直さない。差分の計算は絵文字の数（数千個のサーバーがある）に比例し、スクロール中は画像が1秒に数十回届くため。
+    /// 届いた画像の絵文字のうち、見えているセルだけを再描画する。
+    /// 画面に入る前に組み立てたセルは、画面に入るときに再描画する（`willDisplay`）。組み立てたあとに画像が届いたセルを、空のまま画面に入れないため。
+    /// 差分（`reconfigureItems`）では再描画しない。差分の計算は絵文字の数（数千個のサーバーがある）に比例し、スクロール中は画像が1秒に数十回届くため。
     private func reconfigureVisibleCells(showing urls: Set<URL>) {
         for indexPath in collectionView.indexPathsForVisibleItems {
             guard case .custom(let custom)? = emoji(at: indexPath), custom.hasImage(in: urls) else { continue }
@@ -611,9 +611,9 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }
     }
 
-    // MARK: - まとまりのボタン
+    // MARK: - グループのボタン
 
-    /// まとまりのボタン。最近使ったものは時計、検索の結果は虫めがね、カテゴリーはその先頭の絵文字の画像をアイコンにする。
+    /// グループのボタン。最近使ったものは時計、検索の結果は虫めがね、カテゴリーはその先頭の絵文字の画像をアイコンにする。
     /// 名前の文字にすると、絵文字のリストの端の効果（`.soft`）でぼけた絵文字の上に重なって読みにくかった。iOSの絵文字キーボードの下の段もアイコンで並べる。
     /// 名前は、VoiceOverと、長押しの拡大表示で出す。
     private func rebuildSectionButtons() {
@@ -638,9 +638,9 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         updateSelectedSection()
     }
 
-    /// まとまりのボタンの幅。アイコンの大きさにかかわらず揃える。
+    /// グループのボタンの幅。アイコンの大きさにかかわらず揃える。
     private static let sectionButtonWidth: CGFloat = 40
-    /// まとまりのボタンの絵文字のアイコンの大きさ。
+    /// グループのボタンの絵文字のアイコンの大きさ。
     private static let sectionIconSize: CGFloat = 22
 
     private func sectionIcon(for section: EmojiPaletteSection) -> UIImage? {
@@ -667,7 +667,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             guard case .custom(let emoji) = Self.iconEmoji(of: section), let image = emojiImages.image(for: EmojiPaletteCell.choice(of: emojiImages).url(of: emoji)) else { return nil }
             return Self.icon(from: image)
         case .standard(let title):
-            // Unicodeの絵文字のまとまりは、iOSの絵文字キーボードと同じく、記号のアイコンにする。時計や虫めがねと同じ色で並ぶ。
+            // Unicodeの絵文字のグループは、iOSの絵文字キーボードと同じく、記号のアイコンにする。時計や虫めがねと同じ色で並ぶ。
             return UIImage(systemName: StandardEmojiGroup.symbolName(forTitle: title) ?? "square.grid.2x2")
         }
     }
@@ -689,7 +689,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         return section.emojis.first
     }
 
-    /// 文字を、アイコンの大きさの枠の中央に描く。まとまりのボタンは、文字の大きさの設定によらず決まった大きさのアイコンを並べるので、
+    /// 文字を、アイコンの大きさの枠の中央に描く。グループのボタンは、Dynamic Typeによらず決まった大きさのアイコンを並べるので、
     /// `font`はその枠に合わせた大きさで渡す。
     /// - Parameter color: 絵文字の絵がなく文字で描かれる絵文字（Twemojiでの「©」など）の色。
     private static func icon(from string: String, font: UIFont, color: UIColor = .label) -> UIImage {
@@ -701,7 +701,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }.withRenderingMode(.alwaysOriginal)
     }
 
-    /// アイコンの画像が届いたまとまりのボタンに、アイコンを入れる。
+    /// アイコンの画像が届いたグループのボタンに、アイコンを入れる。
     private func updateSectionIcons(matching urls: Set<URL>?) {
         for (index, button) in sectionButtons.enumerated() where sections.indices.contains(index) {
             let section = sections[index]
@@ -724,7 +724,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         collectionView.setContentOffset(CGPoint(x: 0, y: -collectionView.adjustedContentInset.top), animated: false)
     }
 
-    /// まとまりの見出しが絵文字のリストの上端に来るまでスクロールする。下の端を越える分は、いちばん下までにする。
+    /// グループの見出しが絵文字のリストの上端に来るまでスクロールする。下の端を越える分は、いちばん下までにする。
     private func scrollToSection(_ index: Int) {
         guard sections.indices.contains(index), !sections[index].emojis.isEmpty || sections[index].kind == .customEmojiStatus else { return }
         UIDevice.current.playInputClick()
@@ -745,7 +745,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     }
 
     #if DEBUG
-    /// まとまりのボタンを押したのと同じく、`index`番目（負なら後ろから）のまとまりへ移り、移り終えたら落ちたフレームを渡す。動かなければすぐ空の結果を渡す。
+    /// グループのボタンを選択したのと同じく、`index`番目（負なら後ろから）のグループへ移り、移り終えたら落ちたフレームを渡す。動かなければすぐ空の結果を渡す。
     /// 並べ直し1回ごとの時間も、落ちなかったフレームの分まで渡す。
     func debugJump(toSection index: Int, completion: @escaping (HitchCounter.Summary, FrameWorkTally, (layouts: [Double], configures: [Double])) -> Void) {
         let resolved = index < 0 ? sections.count + index : index
@@ -763,7 +763,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     }
     #endif
 
-    /// 上端に見えているまとまりのボタンに色を付ける。
+    /// 上端に見えているグループのボタンに色を付ける。
     private func updateSelectedSection() {
         let probe = CGPoint(x: 16, y: collectionView.contentOffset.y + collectionView.adjustedContentInset.top + Self.headerHeight + cellSize / 2)
         let index = collectionView.indexPathForItem(at: probe)?.section
@@ -775,7 +775,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private func setSelectedSection(_ index: Int?) {
         guard index != selectedSectionIndex else { return }
         selectedSectionIndex = index
-        // 選んでいるまとまりは、アイコンの後ろを薄く塗って示す。絵文字のアイコンは色を変えられないため。
+        // 選んでいるグループは、アイコンの後ろを薄く塗って示す。絵文字のアイコンは色を変えられないため。
         for (buttonIndex, button) in sectionButtons.enumerated() {
             let selected = buttonIndex == index
             button.configuration?.baseForegroundColor = selected ? .tintColor : .secondaryLabel
@@ -790,7 +790,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
 extension EmojiPaletteView: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
-        // 同じ並べ直しの中で組み立てたばかりのセルは、組み立て直さない。遠くのまとまりへ移る間は毎フレーム見えているセルがすべて入れ替わり、組み立てが倍になるため。
+        // 同じ並べ直しの中で組み立てたばかりのセルは、組み立て直さない。遠くのグループへ移る間は毎フレーム見えているセルがすべて入れ替わり、組み立てが倍になるため。
         if let cell = cell as? EmojiPaletteCell, let emoji = emoji(at: indexPath), cell.isShowingFinalImage(of: emoji) { return }
         configureCell(at: indexPath, cell)
     }
@@ -883,7 +883,7 @@ extension EmojiPaletteView: UICollectionViewDelegate {
 
     /// スクロールの記録に書く画面の名前。
     static let scrollScreenName = "emojiPalette"
-    /// まとまりのボタンで移ったときの、スクロールの記録に書く画面の名前。指のスクロールと分けて読めるようにする。
+    /// グループのボタンで移ったときの、スクロールの記録に書く画面の名前。指のスクロールと分けて読めるようにする。
     static let sectionJumpScreenName = "emojiPaletteSectionJump"
 }
 
@@ -899,7 +899,7 @@ extension EmojiPaletteView {
         )).withRenderingMode(.alwaysOriginal)
     }
 
-    /// 既定の肌の色のボタン。今の既定の色の手の絵文字を出し、押すと6色から選ぶ。
+    /// 既定の肌の色のボタン。今の既定の色の手の絵文字を出し、選択すると6色から選ぶ。
     fileprivate func updateSkinToneButton() {
         let hand = StandardEmoji(emoji: "✋", name: "", keywords: [], version: "", skinTones: .single(["✋🏻", "✋🏼", "✋🏽", "✋🏾", "✋🏿"]))
         skinToneButton.configuration?.image = glyphIcon(hand.withSkinTone(defaultSkinTone).emoji, side: 24)
@@ -930,7 +930,7 @@ extension EmojiPaletteView {
         })
     }
 
-    /// 1人の絵文字。押した色の絵文字を、その1回だけ入れる。既定の色は変えない。
+    /// 1人の絵文字。選択した色の絵文字を、その1回だけ入れる。既定の色は変えない。
     private func singleSkinToneMenu(for emoji: StandardEmoji, current: EmojiSkinTone) -> UIMenu {
         Self.paletteMenu(EmojiSkinTone.allCases.map { tone in
             let toned = emoji.withSkinTone(tone)
@@ -940,7 +940,7 @@ extension EmojiPaletteView {
         })
     }
 
-    /// 2人の絵文字。2人それぞれの色を選んでから、入れる。色を押してもメニューは閉じず、持ち上げた絵を選んだ色に描き直す。
+    /// 2人の絵文字。2人それぞれの色を選んでから、入れる。色を選択してもメニューは閉じず、持ち上げた絵を選んだ色に再描画する。
     private func pairSkinToneMenu() -> UIMenu? {
         guard let selection = pairSelection else { return nil }
         func row(_ title: String, current: EmojiSkinTone, choose: @escaping (EmojiSkinTone) -> Void) -> UIMenu {
@@ -996,7 +996,7 @@ extension EmojiPaletteView {
         onSelect(.standard(emoji))
     }
 
-    /// 絵文字を入れたときと削除キーを押したときに、入力音を鳴らして触覚を返す。決まりはdocs/compose.mdの「入れ方」にある。
+    /// 絵文字を入れたときと削除キーを押したときに、入力音を鳴らしてハプティクスを返す。決まりはdocs/compose.mdの「入れ方」にある。
     private func playInputFeedback() {
         UIDevice.current.playInputClick()
         let intensity = AppDependencies.tuning.value(of: TuningCatalog.composeEmojiPaletteHapticIntensity)
@@ -1055,7 +1055,7 @@ final class EmojiGlyphPreviewController: UIViewController {
 final class EmojiPalettePreviewController: UIViewController {
     private let emoji: ServerEmoji
     private let store: EmojiImageStore<UIImage>
-    /// 大きく読み直し終えたことを知らせてもらう、ストアの知らせ先の持ち主。パレットが受けて、このプレビューに渡す（`imagesDidLoad`）。
+    /// 大きいサイズで再読み込みし終えたことを知らせてもらう、ストアのコールバック先の持ち主。パレットが受けて、このプレビューに渡す（`imagesDidLoad`）。
     private weak var requester: AnyObject?
     private let height: CGFloat
     private let maxWidth: CGFloat
@@ -1080,7 +1080,7 @@ final class EmojiPalettePreviewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .secondarySystemBackground
         view.addSubview(imageView)
-        // 使う人が長押しして開いたので、前に読めなかった画像も間隔を待たずに読み直す。
+        // 使う人が長押しして開いたので、前に読めなかった画像も間隔を待たずに再読み込みする。
         loadImages(retriesNow: true)
     }
 
@@ -1094,7 +1094,7 @@ final class EmojiPalettePreviewController: UIViewController {
         loadImages(retriesNow: false)
     }
 
-    /// 持っている画像で描き、描く高さに足りなければ読み直させる。届いたら`imagesDidLoad`で描き直す。
+    /// 持っている画像で描き、描く高さに足りなければ再読み込みさせる。届いたら`imagesDidLoad`で再描画する。
     private func loadImages(retriesNow: Bool) {
         let choice = EmojiPaletteCell.choice(of: store)
         let url = choice.url(of: emoji)
@@ -1139,7 +1139,7 @@ private final class EmojiPaletteCollectionView: UICollectionView {
     }
 }
 
-/// パレットの絵文字1つ。押している間は、システムの絵文字キーボードのように背景を付ける。
+/// パレットの絵文字1つ。押されている状態では、システムの絵文字キーボードのように背景を付ける。
 final class EmojiPaletteCell: UICollectionViewCell {
     static let reuseIdentifier = "EmojiPaletteCell"
     private let imageView = EmojiImageView(frame: .zero)
@@ -1186,7 +1186,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
         finalImage = nil
     }
 
-    /// `emoji`を今の枠の大きさで、描く画像がそろった状態で組み立て済みか。小さい静止画や読み込み中の画像で描いていれば、届いた画像で組み立て直すのでfalse。
+    /// `emoji`を今の枠の大きさで、描く画像がそろった状態で組み立て済みか。サムネイルや読み込み中の画像で描いていれば、届いた画像で組み立て直すのでfalse。
     func isShowingFinalImage(of emoji: PaletteEmoji) -> Bool {
         finalImage.map { $0.emoji == emoji && $0.size == bounds.size } ?? false
     }
@@ -1202,14 +1202,14 @@ final class EmojiPaletteCell: UICollectionViewCell {
     }
 
     /// パレットが読む画像。設定によらず動かすので、元の画像を読む。
-    /// 端末の設定が動く画像を許さないときも元の画像を読み、`EmojiImageView`が動かさずに描く。開いている間に端末の設定が変わったら、読み直さずに動かせる。
+    /// 端末の設定が動く画像を許さないときも元の画像を読み、`EmojiImageView`が動かさずに描く。開いている間に端末の設定が変わったら、再読み込みせずに動かせる。
     static func choice(of store: EmojiImageStore<UIImage>) -> EmojiImageChoice {
         store.choice(animates: true)
     }
 
     /// カスタム絵文字は、「カスタム絵文字のアニメーションを再生する」の設定によらず動かす。
-    /// 静止画がメモリになければ、届くまで小さい静止画で描き、届いたら差し替える（`reconfigureVisibleCells`）。
-    /// - Parameter requester: 大きく読み直し終えたことを知らせてもらう、ストアの知らせ先の持ち主（パレット）。
+    /// 静止画がメモリになければ、届くまでサムネイルで描き、届いたら差し替える（`reconfigureVisibleCells`）。
+    /// - Parameter requester: 大きいサイズで再読み込みし終えたことを知らせてもらう、ストアのコールバック先の持ち主（パレット）。
     func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, requester: AnyObject, thumbnails: EmojiThumbnails, glyphs: EmojiGlyphImageStore, glyphArchive: EmojiGlyphArchive, emojiStyle: EmojiStyle) {
         switch emoji {
         case .custom(let custom):
@@ -1217,7 +1217,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
             glyphView.image = nil
             glyphRequest = nil
             imageView.isHidden = false
-            // 枠を大きくしたときは、描く高さで読む。既定の枠（48pt）は既定の高さの1.1倍以内なので、読み直さない。
+            // 枠を大きくしたときは、描く高さで読む。既定の枠（48pt）は既定の高さの1.1倍以内なので、再読み込みしない。
             let pixelHeight = RichTextRenderer.pixelHeight(of: Self.imageSide(in: bounds.size), scale: traitCollection.displayScale)
             // 動かすので元の画像だけを読み、動かない絵文字もその最初のコマで描く。
             let choice = Self.choice(of: store)
@@ -1228,9 +1228,9 @@ final class EmojiPaletteCell: UICollectionViewCell {
             imageView.animation = animationURL.flatMap { store.animation(for: $0, pixelHeight: pixelHeight, requester: requester) }
             accessibilityLabel = custom.shortcode
             accessibilityValue = nil
-            // 高く読み直している途中の画像も、届いたら組み立て直すので、描く高さに足りているときだけそろったとみなす。
+            // 高く再読み込みしている途中の画像も、届いたら組み立て直すので、描く高さに足りているときだけそろったとみなす。
             let coversHeight = still.map { Double($0.size.height * $0.scale) * EmojiImageStore<UIImage>.upscaleTolerance >= Double(pixelHeight) } ?? false
-            // アニメーションも、描く高さに足りるコマか、動かさないと分かったときだけそろったとみなす。読めなかったときは、読み直しの知らせで組み立て直す。
+            // アニメーションも、描く高さに足りるコマか、動かさないと分かったときだけそろったとみなす。読めなかったときは、再読み込みのコールバックで組み立て直す。
             let animationIsFinal = animationURL.map { url in
                 imageView.animation.map { Double($0.image.frameHeight) * EmojiImageStore<UIImage>.upscaleTolerance >= Double(pixelHeight) } ?? store.isKnownStill(url)
             } ?? true
@@ -1266,7 +1266,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
     static func glyphGeometry(cellSize: CGSize, scale: CGFloat, style: EmojiStyle) -> EmojiGlyphArchive.Geometry {
         EmojiGlyphArchive.Geometry(
             // 絵文字の文字の大きさは、枠いっぱいの画像と同じくらいに見えるよう、枠の高さの少し下にする。
-            // 文字ではなく、カスタム絵文字の画像と並べる絵として描くため、端末の文字の大きさではなく枠の大きさで決める。
+            // 文字ではなく、カスタム絵文字の画像と並べる絵として描くため、Dynamic Typeではなく枠の大きさで決める。
             pointSize: max(cellSize.height, 32) * 0.58,
             width: cellSize.width - imageInset(in: cellSize) * 2,
             height: imageSide(in: cellSize),
@@ -1318,7 +1318,7 @@ extension EmojiPaletteView: UITextFieldDelegate {
 }
 
 /// パレットのUnicodeの絵文字の画像を、枠の中央に元の大きさで描く。テンプレートの画像は、今の外観の文字の色で塗る。
-/// `UIImageView`は画像を入れるたびに、ビューの特性に合わせた画像を作り直す（`imageWithConfiguration`）ので、まとまりのボタンで遠くへ移る間に毎フレーム50個ほど入れ替えると、
+/// `UIImageView`は画像を入れるたびに、ビューの特性に合わせた画像を作り直す（`imageWithConfiguration`）ので、グループのボタンで遠くへ移る間に毎フレーム50個ほど入れ替えると、
 /// それだけでSE3の1フレームの数msを使っていた。層に画像を直接置いて、作り直しを避ける。
 final class EmojiPaletteGlyphView: UIView {
     var image: UIImage? {
@@ -1360,7 +1360,7 @@ final class EmojiPaletteGlyphView: UIView {
     }
 }
 
-/// まとまりの見出し。
+/// グループの見出し。
 private final class EmojiPaletteHeader: UICollectionReusableView {
     static let reuseIdentifier = "EmojiPaletteHeader"
     let label = UILabel()
@@ -1393,7 +1393,7 @@ private final class EmojiPaletteHeader: UICollectionReusableView {
     }
 }
 
-/// カスタム絵文字のリストを読んでいる間か、読めなかったときに、カスタム絵文字の場所に置く段。読めなかったときは、文言の下に、押すと読み直すボタンを添える。
+/// カスタム絵文字のリストを読んでいる間か、読めなかったときに、カスタム絵文字の場所に置く段。読めなかったときは、文言の下に、選択すると再読み込みするボタンを添える。
 private final class EmojiPaletteStatusCell: UICollectionViewCell {
     static let reuseIdentifier = "EmojiPaletteStatusCell"
     private let spinner = UIActivityIndicatorView(style: .medium)
@@ -1410,7 +1410,7 @@ private final class EmojiPaletteStatusCell: UICollectionViewCell {
         label.textAlignment = .center
         retryButton.configuration?.title = EmojiPaletteTexts.retry
         retryButton.addAction(UIAction { [weak self] _ in self?.onRetry() }, for: .primaryActionTriggered)
-        // 読み込み中はインジケーターと文言を横に、失敗は文言の下に読み直すボタンを置く。カスタム絵文字の中身の代わりに出すので、タイムラインが空のときやタイムラインの失敗と同じく中央にそろえる。
+        // 読み込み中はインジケーターと文言を横に、失敗は文言の下に再読み込みするボタンを置く。カスタム絵文字の中身の代わりに出すので、タイムラインが空のときやタイムラインの失敗と同じく中央にそろえる。
         let message = UIStackView(arrangedSubviews: [spinner, label])
         message.alignment = .center
         message.spacing = 8

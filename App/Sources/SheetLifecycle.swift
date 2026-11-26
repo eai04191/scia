@@ -4,10 +4,10 @@ import UIKit
 
 /// シート（メディアを選ぶシート、絵文字のパレットのシート）が開いているか閉じたかを、シートの画面がウィンドウにあるかで決める。
 ///
-/// UIKitの開閉の知らせ（`presentationControllerWillDismiss`、`presentationControllerDidDismiss`、`dismiss`の完了）は、届かないことがある。
-/// 実機では、ピッカーの中身を読み込んでいる間に下へスワイプしたときと、閉じる途中に別のシートへ切り替えたときに、知らせのないままシートが消えた。
-/// 知らせだけで決めると、投稿欄はシートを出しているつもりのままになり、ボタンが何もしなくなる。知らせは閉じ始めを早く知るためだけに使い、
-/// 閉じ終わりは、知らせとウィンドウから外れたことのうち先に来たほうで、一度だけ知らせる。
+/// UIKitの開閉のコールバック（`presentationControllerWillDismiss`、`presentationControllerDidDismiss`、`dismiss`の完了）は、届かないことがある。
+/// 実機では、ピッカーの中身を読み込んでいる間に下へスワイプしたときと、閉じる途中に別のシートへ切り替えたときに、コールバックのないままシートが消えた。
+/// コールバックだけで決めると、投稿欄はシートを出しているつもりのままになり、ボタンが何もしなくなる。コールバックは閉じ始めを早く知るためだけに使い、
+/// 閉じ終わりは、コールバックとウィンドウから外れたことのうち先に来たほうで、一度だけ知らせる。
 @MainActor
 final class SheetLifecycle {
     /// 閉じることが決まった時点で呼ぶ。キーボードをシートが下がるのと同時に上げるために使う。`close(notifiesWillClose: false)`で閉じるときは呼ばない。
@@ -18,7 +18,7 @@ final class SheetLifecycle {
     var onDidAppear: () -> Void = {}
     /// 閉じることが決まったあと。
     private(set) var isClosing = false
-    /// 閉じた知らせが来ないまま消えた。キーボードを戻した直後に閉じ終わりを知らせるので、投稿欄はキーボードの高さの知らせを待ってからバーを外す。
+    /// 閉じたコールバックが来ないまま消えた。キーボードを戻した直後に閉じ終わりを知らせるので、投稿欄はキーボードの高さの通知を待ってからバーを外す。
     private(set) var disappearedWithoutDismissCallback = false
 
     private let controller: UIViewController
@@ -51,7 +51,7 @@ final class SheetLifecycle {
         host.present(controller, animated: true) { [weak self] in self?.presentationDidFinish() }
     }
 
-    /// プログラムから閉じる。`notifiesWillClose`なら、閉じることが決まった知らせ（キーボードを戻す）を出す。
+    /// プログラムから閉じる。`notifiesWillClose`なら、閉じることが決まったコールバック（キーボードを戻す）を出す。
     /// もう消えていれば、その場で閉じ終わりを知らせる。出し終えていなければ、出し終えたところで閉じる。
     func close(notifiesWillClose: Bool) {
         guard !hasClosed else { return }
@@ -59,7 +59,7 @@ final class SheetLifecycle {
             notifyWillClose()
         } else {
             isClosing = true
-            // キーボードを戻さずに閉じる（ほかのシートへ切り替えるなど）と決めたあとに、スワイプで閉じ始めた知らせが遅れて届いても、キーボードを戻さない。
+            // キーボードを戻さずに閉じる（ほかのシートへ切り替えるなど）と決めたあとに、スワイプで閉じ始めたコールバックが遅れて届いても、キーボードを戻さない。
             // 戻すと、入力欄が書き始めたことになって、待っている次のシートを取りやめるか、出した次のシートを閉じてしまう。
             hasNotifiedWillClose = true
         }
@@ -122,7 +122,7 @@ final class SheetLifecycle {
             hasAppeared = true
             return
         }
-        // 上に別の画面を重ねただけならまだ出しているので、出している画面がなくなったかを見て決める。
+        // 上に別のモーダルビューを出しただけならまだ出しているので、出している画面がなくなったかを見て決める。
         // 外れるのは閉じる動きを終える処理の中で、出している画面との関係が切れるのはその後なので、次の順番に回して見る。
         DispatchQueue.main.async { [weak self] in
             guard let self, !hasClosed, controller.presentingViewController == nil else { return }
@@ -168,7 +168,7 @@ extension TrackedSheet {
     /// 閉じることが決まったあと。
     var isClosing: Bool { lifecycle.isClosing }
 
-    /// プログラムから閉じる。`notifiesWillClose`なら、閉じることが決まった知らせ（キーボードを戻す）を出す。
+    /// プログラムから閉じる。`notifiesWillClose`なら、閉じることが決まったコールバック（キーボードを戻す）を出す。
     func close(notifiesWillClose: Bool) {
         lifecycle.close(notifiesWillClose: notifiesWillClose)
     }

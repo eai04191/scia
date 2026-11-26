@@ -40,7 +40,7 @@ struct MediaAttachmentTests {
         #expect(status.mediaAttachments[3].remoteUrl?.absoluteString == "https://remote.example/files/document.pdf")
     }
 
-    /// エンコードして読み直しても添付ファイルが残る。ストリーミングのテストで投稿をエンコードして流すため。
+    /// エンコードして再読み込みしても添付ファイルが残る。ストリーミングのテストで投稿をエンコードして流すため。
     @Test func roundTripsThroughEncoding() throws {
         let status = try decodeFixture()
         let encoder = JSONEncoder()
@@ -139,7 +139,7 @@ struct MediaGridLayoutTests {
         #expect(grid.hiddenCount == 2)
     }
 
-    /// すき間が並べる幅や高さより大きくても、タイルの大きさが負にならない。設定でアイコンとすき間を大きくすると起きる。
+    /// gapが並べる幅や高さより大きくても、タイルの大きさが負にならない。設定でアイコンとgapを大きくすると起きる。
     @Test(arguments: [2, 3, 4])
     func spacingLargerThanTilesKeepsSizesNonNegative(count: Int) {
         let layout = MediaGridLayout(aspectRatios: Array(repeating: 1, count: count), width: 168, spacing: 100, tallestAspectRatio: 0.75, widestAspectRatio: 3)

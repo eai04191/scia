@@ -13,7 +13,7 @@ struct PostingLanguageView: View {
     @Environment(\.locale) private var locale
 
     typealias Purpose = PostingLanguagePurpose
-    /// 「読み直す」で増やし、読み込みをやり直させる。読み込みはシートの`task`で走らせ、閉じたら止まるようにする。
+    /// 再試行で増やし、読み込みをやり直させる。読み込みはシートの`task`で走らせ、閉じたら止まるようにする。
     @State private var loadGeneration = 0
 
     var body: some View {
@@ -47,7 +47,7 @@ struct PostingLanguageView: View {
         }
     }
 
-    /// すべての言語のまとまりの、読み込み中と読めなかったときの表示。既定と最近選んだ言語は、読めなくても選べる。
+    /// すべての言語のグループの、読み込み中と読めなかったときの表示。既定と最近選んだ言語は、読めなくても選べる。
     @ViewBuilder
     private var allLanguagesStatus: some View {
         switch picker.languages {
@@ -115,8 +115,8 @@ struct PostingLanguageSource {
     static let unavailable = PostingLanguageSource(recent: nil) { throw CancellationError() }
 }
 
-/// サーバーが受け付ける言語を、読めたら覚えておく。言語のリストはサーバーの版でしか変わらないので、シートを開くたびに読み直さない。
-/// 読めなかったときは覚えず、次に開いたときに読み直す。
+/// サーバーが受け付ける言語を、読めたらキャッシュしておく。言語のリストはサーバーの版でしか変わらないので、シートを開くたびに再読み込みしない。
+/// 読めなかったときはキャッシュせず、次に開いたときに再読み込みする。
 @MainActor
 final class PostingLanguageCache {
     private let fetch: @Sendable () async throws -> [PostingLanguage]

@@ -5,9 +5,9 @@ import UIKit
 /// `ListEditor`が、セッションに頼むこと。
 @MainActor
 protocol ListEditorHost: AnyObject {
-    /// アラートやシートを出す画面。この上に重ねた画面があれば、いちばん手前の画面に出す。
+    /// アラートやシートを出す画面。この上にモーダルビューがあれば、いちばん手前のものに出す。
     var listPresenter: UIViewController { get }
-    /// 手元で覚えているリスト。読んでいなければnil。
+    /// 手元でキャッシュしているリスト。読んでいなければnil。
     func knownList(_ id: String) -> MastodonList?
     /// 作ったリストを、並びに有効にして足す。
     func listDidCreate(_ list: MastodonList)
@@ -17,7 +17,7 @@ protocol ListEditorHost: AnyObject {
     func listDidDelete(_ id: String)
     /// 失敗の理由。401なら、ログアウトされたとして、ログインし直しを促す文言にする。
     func listFailureReason(for error: any Error) async -> ErrorPresentation
-    /// 押し直せば済む失敗を、「操作の状況」に残してチップで知らせる。押すと理由が出る。
+    /// 選択し直せば済む失敗を、「操作の状況」に残してチップで知らせる。選択すると理由が出る。
     func reportListFailure(title: String, reason: ErrorPresentation)
 }
 
@@ -73,7 +73,7 @@ final class ListEditor {
         }
     }
 
-    /// 返信の表示かホームに出さないを変える。押し直せば済むので、失敗はチップで知らせる。
+    /// 返信の表示かホームに出さないを変える。選択し直せば済むので、失敗はチップで知らせる。
     func update(_ list: MastodonList, repliesPolicy: ListRepliesPolicy? = nil, exclusive: Bool? = nil) {
         let client = client
         let failureTitle = repliesPolicy != nil ? ListTexts.repliesPolicyFailure : ListTexts.exclusiveFailure
@@ -92,7 +92,7 @@ final class ListEditor {
         }
     }
 
-    /// 名前と設定の変更を、リストごとに順に送る。前の変更の応答を待ってから送るので、応答が前後して古い設定を覚えることもない。
+    /// 名前と設定の変更を、リストごとに順に送る。前の変更の応答を待ってから送るので、応答が前後して古い設定をキャッシュすることもない。
     private func enqueue(_ listID: String, _ send: @escaping @MainActor () async throws -> Void) async throws {
         let outcome = UpdateOutcome()
         let previous = updating[listID]
@@ -140,7 +140,7 @@ final class ListEditor {
 
     // MARK: - タイムラインの右上のメニュー
 
-    /// リストのタイムラインの右上に置くボタン。リストの設定は開いている間にも変わるので、メニューを開くたびに覚えているリストを見て中身を決める。
+    /// リストのタイムラインの右上に置くボタン。リストの設定は開いている間にも変わるので、メニューを開くたびにキャッシュしているリストを見て中身を決める。
     /// - Parameter openMembers: 「メンバー」で、メンバーの画面を開く。
     func barItem(listID: String, fallbackTitle: String, openMembers: @escaping @MainActor (_ title: String) -> Void) -> UIBarButtonItem {
         let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in

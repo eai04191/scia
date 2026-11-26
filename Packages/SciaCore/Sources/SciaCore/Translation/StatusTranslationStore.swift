@@ -109,7 +109,7 @@ public final class StatusTranslationStore {
     ///   - targetLanguage: 翻訳先の言語。
     ///   - strategy: 翻訳の方式。
     ///   - scope: 翻訳の処理の持ち主。
-    ///   - applyInterval: 訳文が届いてから画面へ知らせるまでの間。続けて届いた訳文を、まとめて描き直すため。
+    ///   - applyInterval: 訳文が届いてから画面へ知らせるまでの間。続けて届いた訳文を、まとめて再描画するため。
     public init(
         translator: any StatusTranslating,
         targetLanguage: String,
@@ -318,7 +318,7 @@ public final class StatusTranslationStore {
                     gloss = HashtagGloss.gloss(translated: text, name: name) ?? ""
                     newGlosses[name] = gloss
                 } catch let error where !(error is CancellationError) && error as? StatusTranslationError != .notInstalled {
-                    // ハッシュタグの訳だけが失敗しても、本文の訳は使う。覚えないので、次にこのハッシュタグが出たら訳し直す。
+                    // ハッシュタグの訳だけが失敗しても、本文の訳は使う。キャッシュしないので、次にこのハッシュタグが出たら訳し直す。
                     logger.error("hashtag gloss skipped id=\(source.logID, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
                 }
             }

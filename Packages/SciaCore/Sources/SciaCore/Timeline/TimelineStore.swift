@@ -19,7 +19,7 @@ public final class TimelineStore {
     /// これより古い投稿はない。
     public var reachedEnd: Bool { state.reachedEnd }
     public var isLoading: Bool { state.isLoading }
-    /// 直近の読み込みで、サーバーがホームを再生成中だった。結果が揃っていないため、時間をおいて読み直す。
+    /// 直近の読み込みで、サーバーがホームを再生成中だった。結果が揃っていないため、時間をおいて再読み込みする。
     public var isRegenerating: Bool { state.isRegenerating }
     /// ストリーミングで届き、まだ挿入していない投稿。届いた順。
     public var pending: [Status] { state.pending }
@@ -146,14 +146,14 @@ public final class TimelineStore {
         }
         let unique = Dictionary(loaded.flatMap(\.statuses).filter { !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         state.unreadableItems = Self.unique(loaded.flatMap(\.unreadable).filter { !state.deletedIDs.contains($0.id) })
-        // 読み直したタイムラインはIDの順に並べる。
+        // 再読み込みしたタイムラインはIDの順に並べる。
         state.lateArrivalPositions = [:]
         // 辞書の取り出し順は走らせるたびに変わるため、IDの順にしてから渡す。フィルターで出さない投稿は、渡した順のまま持つため。
         rebuild(statuses: unique.values.sorted { StatusID.isNewer($0.id, than: $1.id) }, gaps: loadedGaps)
         state.oldestLoadedID = Self.oldest(unique.keys.map(Optional.some) + state.unreadableItems.map(\.id))
         state.unloadedTailID = unloadedTailID
         state.olderArrivals = []
-        // 前のタイムラインで埋まらなかった基準は、読み直したタイムラインの範囲の外にあり、そこから読むと読み込み済みの区間にギャップを置いてしまう。
+        // 前のタイムラインで埋まらなかった基準は、再読み込みしたタイムラインの範囲の外にあり、そこから読むと読み込み済みの区間にギャップを置いてしまう。
         // 再生成中なら、最も新しい投稿より上は、そのあと新着が入っても、次の補完がその投稿から読む。1件も返らなければ最新のページから読む。
         state.unfilledSinceID = latest.isRegenerating ? Self.newestID(of: latest) : nil
         state.fillsFromLatestPage = latest.isRegenerating && latest.isEmpty
@@ -186,7 +186,7 @@ public final class TimelineStore {
     private func loadAroundMarker(_ markerID: String, below oldestLatest: String) async throws -> (pages: [TimelinePage], gaps: [TimelineGap], unloadedTailID: String?) {
         // 既読位置から古いページは、既読位置のすぐ上の値を`max_id`にして、すぐ後のページと並行に読む。起動してから表示するまでに、往復を順に待つ回数を減らすため。
         // すぐ後のページは既読位置のすぐ上から返るので、その一番古い投稿を`max_id`にして読んだときと、読む範囲は変わらない。
-        // ただし作り直し中のすぐ後のページは、既読位置の真上の投稿を抜かして返りうるので、並行に読んだ結果は使わず、その一番古い投稿から読み直す。
+        // ただし作り直し中のすぐ後のページは、既読位置の真上の投稿を抜かして返りうるので、並行に読んだ結果は使わず、その一番古い投稿から再読み込みする。
         // 数字のIDでなければその値を作れないので、すぐ後のページを読んでから、その一番古い投稿を`max_id`にして読む。
         // 呼んだところで要求を出すので、2つの要求は決まった順に出る。親のTaskとは別のTaskなので、すぐ後のページで読み込みを終えるときと、
         // 読み込みが取り消されたときは、ここで取り消す。
@@ -306,7 +306,7 @@ public final class TimelineStore {
     ///
     /// 補完の最中に呼ばれたら、そのときの基準を覚えてnilを返し、今の補完が終わった後に続けて読む。
     /// 同じ基準で並行して読むと、同じギャップが2つできるため。続けて読むときは、今の補完で読み終えた範囲より新しいところから読む。
-    /// 今の補完が再生成中で読めなかったら、読めなかった基準から読み直す。
+    /// 今の補完が再生成中で読めなかったら、読めなかった基準から再読み込みする。
     ///
     /// 満杯のページなら、手元の投稿とつながるまで`maxPages`ページまで続けて読み、ギャップを残さないようにする。
     /// 満杯でないページなら、`maxPages`によらずギャップを1回は読み、間が空なのを確かめて閉じる。
@@ -318,7 +318,7 @@ public final class TimelineStore {
             if state.fillsFromLatestPage {
                 state.refillsAfterLatestPage = true
             } else if let newest = fillBaseID ?? state.unfilledSinceID {
-                // 削除でタイムラインが空になっていれば、今の補完が読んでいる基準から読み直す。
+                // 削除でタイムラインが空になっていれば、今の補完が読んでいる基準から再読み込みする。
                 state.refillSinceID = state.refillSinceID.map { Self.older($0, newest) } ?? newest
             }
             return nil
@@ -364,10 +364,10 @@ public final class TimelineStore {
             next = state.refillSinceID.map { refillSinceID in
                 if let unfilledSinceID = state.unfilledSinceID {
                     // 再生成中だった。基準より古い側は、読み込み済みかギャップに含めてある。
-                    // これより新しいところから読み直すとその間を読み飛ばし、古いところから読み直すとギャップが重なるため。
+                    // これより新しいところから再読み込みするとその間を読み飛ばし、古いところから再読み込みするとギャップが重なるため。
                     unfilledSinceID
                 } else {
-                    // 読み終えた範囲を読み直すと、同じ範囲にギャップがもう1つできるため。
+                    // 読み終えた範囲を再読み込みすると、同じ範囲にギャップがもう1つできるため。
                     Self.newer(refillSinceID, Self.newestID(of: page) ?? sinceID)
                 }
             }
@@ -672,7 +672,7 @@ public final class TimelineStore {
     /// 読み込んだ末尾より古い投稿は、まだ並べずに取っておき、古い方を読んで末尾が下がったら並べる。
     /// 末尾に足すと、次に古いページを読むときの`max_id`がずれて、間の投稿を読み飛ばすため。
     /// 読めなかった投稿と同じIDの投稿は、末尾にあっても置き換え、上に積まずにその位置に入れる。読めなかった行を見て、そこにあると分かっているため。
-    /// 行を足すか除くだけで、並びに残る行の中身は変えない。画面は、残る行の中身を比べずに描き直す行を決める。
+    /// 行を足すか除くだけで、並びに残る行の中身は変えない。画面は、残る行の中身を比べずに再描画する行を決める。
     public func flushPending() -> [Status] {
         defer { state.pending.removeAll() }
         var arrivals = state.pending
@@ -780,7 +780,7 @@ public final class TimelineStore {
         let newestKept = remaining.first?.id
         state.unreadableItems.removeAll { item in newestKept.map { StatusID.isNewer(item.id, than: $0) } ?? true }
         let hiddenKept = state.hiddenStatuses.filter { status in newestKept.map { !StatusID.isNewer(status.id, than: $0) } ?? false }
-        // 新しい側の端の投稿を忘れたギャップは、補完で読み直す範囲に含まれるので消す。
+        // 新しい側の端の投稿を忘れたギャップは、補完で再読み込みする範囲に含まれるので消す。
         rebuild(statuses: remaining + hiddenKept, gaps: gaps.filter { gap in newestKept.map { !StatusID.isNewer(gap.newerID, than: $0) } ?? false })
     }
     #endif
@@ -979,8 +979,8 @@ public final class TimelineStore {
         return updatingQuoted(id, in: status, transform)
     }
 
-    /// 引用元が`id`なら、引用元に`transform`を当てる。引用の囲みから行ったお気に入りやブックマークの結果を、囲みにも出すため。
-    /// 当てないと、囲みは操作の前の状態のままになり、もう一度行うと取り消しではなく同じ操作をもう一度送る。
+    /// 引用元が`id`なら、引用元に`transform`を当てる。引用のカードから行ったお気に入りやブックマークの結果を、カードにも出すため。
+    /// 当てないと、カードは操作の前の状態のままになり、もう一度行うと取り消しではなく同じ操作をもう一度送る。
     /// 引用元の中の引用はIDだけで届くため、1段だけ見る。
     static func updatingQuoted(_ id: Status.ID, in status: Status, _ transform: (Status) -> Status) -> Status {
         guard let quote = status.quote, let quoted = quote.quotedStatus, quoted.id == id else { return status }

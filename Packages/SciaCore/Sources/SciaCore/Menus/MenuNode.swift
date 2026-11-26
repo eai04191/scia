@@ -1,26 +1,26 @@
 public import Foundation
 
-/// プラットフォームに依存しないメニューの木。メニューの項目の名前、アイコン、押せるか、押したときの操作を、UIKitやAppKitに頼らずに表す。
-/// 何をどの順に出すかはSciaCoreでこの木に組み、UIKit（`UIMenu`）やAppKit（`NSMenu`）はこの木を描くだけにする。押された項目の`Command`を受け取って、今の処理を呼ぶ。
+/// プラットフォームに依存しないメニューのツリー。メニューの項目の名前、アイコン、選択できるか、選択したときの操作を、UIKitやAppKitに頼らずに表す。
+/// 何をどの順に出すかはSciaCoreでこのツリーに組み、UIKit（`UIMenu`）やAppKit（`NSMenu`）はこのツリーを描くだけにする。選択された項目の`Command`を受け取って、今の処理を呼ぶ。
 /// 決まりはdocs/menus.mdにある。
 public struct MenuNode<Command> {
     /// 項目の中身。
     public enum Content {
-        /// 押すと`Command`を行う項目。押せない知らせの行のように、行う操作がなければnil。
+        /// 選択すると`Command`を行う項目。表示するだけの無効の行のように、行う操作がなければnil。
         case action(Command?)
         /// 名前の付いたサブメニュー。
         case submenu([MenuNode])
-        /// 区切り線で分けたまとまり。名前は出さない。`row`があれば、その大きさで横に並べる。
+        /// 区切り線で分けたグループ。名前は出さない。`row`があれば、その大きさで横に並べる。
         case group([MenuNode], row: MenuRowSize?)
         /// 開いてから中身を読む項目。読む間は読み込み中の行を出し、読み終えたら中身に差し替える。
         case deferred(@MainActor () async -> [MenuNode])
     }
 
     public var title: String
-    /// 名前の下に添える説明。押せない理由や、人数など。
+    /// 名前の下に添える説明。無効の理由や、人数など。
     public var subtitle: String?
     public var icon: MenuIcon?
-    /// 押せるか。押せない項目は、薄く出して押せないようにする。
+    /// 選択できるか。選択できない項目は、薄く出して無効にする。
     public var isEnabled: Bool
     /// 取り消せない操作（削除、ブロックなど）。赤く出す。
     public var isDestructive: Bool
@@ -38,7 +38,7 @@ public struct MenuNode<Command> {
         self.content = content
     }
 
-    /// 押すと`command`を行う項目。`command`がなければ押せない。
+    /// 選択すると`command`を行う項目。`command`がなければ無効。
     public static func action(
         _ title: String,
         subtitle: String? = nil,
@@ -73,7 +73,7 @@ public struct MenuNode<Command> {
         return title.prefix(Self.headingTitleLimit) + "…"
     }
 
-    /// サブメニューとまとまりの中身。項目と、開いてから読む項目では空。
+    /// サブメニューとグループの中身。項目と、開いてから読む項目では空。
     public var children: [MenuNode] {
         switch content {
         case .submenu(let children), .group(let children, _): children
@@ -81,12 +81,12 @@ public struct MenuNode<Command> {
         }
     }
 
-    /// 押したときの操作。項目でなければnil。
+    /// 選択したときの操作。項目でなければnil。
     public var command: Command? {
         if case .action(let command) = content { command } else { nil }
     }
 
-    /// 中身のまとまりを開いて並べた項目。サブメニューは開かない。
+    /// 中身のグループを開いて並べた項目。サブメニューは開かない。
     public var flattenedChildren: [MenuNode] {
         children.flatMap { child -> [MenuNode] in
             if case .group = child.content { return child.flattenedChildren }
@@ -113,7 +113,7 @@ extension MenuNode {
 
 @MainActor
 extension MenuNode {
-    /// ナビゲーションバーのボタンから出すメニューの根にする。中身を読む項目を含むサブメニューは、サブメニューの行そのものを読み込み中の行にし、中の項目を全部読み終えてから、中身のそろったサブメニューにして出す。決まりはdocs/menus.mdの「メニューの単位」にある。
+    /// ナビゲーションバーのボタンから出すメニューのルートにする。中身を読む項目を含むサブメニューは、サブメニューの行そのものを読み込み中の行にし、中の項目を全部読み終えてから、中身のそろったサブメニューにして出す。決まりはdocs/menus.mdの「メニューの単位」にある。
     /// UIKitの不具合を避けるため。iOS 27.2のアイランドのあるiPhoneでは、ナビゲーションバーのボタンから出したメニューで、サブメニューの中の読み込み中の行が中身に替わっても、メニューの高さが替わる直前の高さのままになり、収まらない項目が切れる。最初の段の読み込み中の行なら、替わると高さが合う。Appleには FB25483311 で報告してある。
     public func loadingSubmenusBeforeShowing() -> MenuNode {
         var root = self
@@ -157,7 +157,7 @@ extension MenuNode {
         }
     }
 
-    /// `nodes`の中の、サブメニューの中も含めた中身を読む項目を、すべて読んだ中身に置き換える。中身が空になったまとまりは除く。
+    /// `nodes`の中の、サブメニューの中も含めた中身を読む項目を、すべて読んだ中身に置き換える。中身が空になったグループは除く。
     /// 読む項目どうしは同時に読み、いちばん遅いものを待つ。ほかのアカウントごとに相手を探す通信のように、順に待つと、待つ時間が足し上がるため。
     private static func loaded(_ nodes: [MenuNode]) async -> [MenuNode] {
         let slots = LoadedSlots(nodes)
@@ -263,11 +263,11 @@ public enum MenuUser: Sendable {
 
 /// タップや長押しに割り当てた1項目を、メニューと同じ組み方で組んだときに、どう行うか。決まりはdocs/object-actions.mdの「項目を行う」にある。
 public enum MenuItemOutcome<Command> {
-    /// 押せる項目が1つだけ。メニューを出さずにその操作を行う。
+    /// 選択できる項目が1つだけ。メニューを出さずにその操作を行う。
     case perform(Command)
-    /// 出す項目がないか、1つだけの項目が押せない。押せない理由があれば添える。
+    /// 出す項目がないか、1つだけの項目が無効。無効の理由があれば添える。
     case unavailable(reason: String?)
-    /// サブメニューが1つだけ。名前だけの1行のメニューを出すと、もう1回押さないと中身に届かないため、中身を出す。
+    /// サブメニューが1つだけ。名前だけの1行のメニューを出すと、もう1回選択しないと中身に届かないため、中身を出す。
     case submenu(MenuNode<Command>)
     /// 項目が2つ以上か、開いてから中身を読む項目。そのままメニューで出す。
     case menu([MenuNode<Command>])
@@ -277,7 +277,7 @@ public enum MenuItemOutcome<Command> {
         if case .unavailable = self { false } else { true }
     }
 
-    /// `root`は、1項目だけの並び（`MenuLayout.Groups.single`）で組んだメニュー。まとまりは開いて並べる。
+    /// `root`は、1項目だけの並び（`MenuLayout.Groups.single`）で組んだメニュー。グループは開いて並べる。
     public init(singleItemMenu root: MenuNode<Command>?) {
         let items = root?.flattenedChildren ?? []
         guard let only = items.first else {
@@ -304,14 +304,14 @@ public enum MenuItemOutcome<Command> {
 }
 
 extension MenuLayout.Groups {
-    /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
-    /// 横並びのまとまりは、横に並べる印を付ける。項目は「その他」の外のまとまりから順に組む。
+    /// グループごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないグループと「その他」は出さない。
+    /// 横並びのグループは、横に並べる指定を付ける。項目は「その他」の外のグループから順に組む。
     /// - Parameters:
     ///   - elements: 項目ごとの中身。出さない項目は空。
-    ///   - group: まとまりを1つの要素にする。2つ目の引数は横並びの大きさで、横並びでなければnil。
+    ///   - group: グループを1つの要素にする。2つ目の引数は横並びの大きさで、横並びでなければnil。
     ///   - more: 「その他」のサブメニューにする。
     /// 並びにカスタマイズのほかの項目があるのに、どれも出ないときは、カスタマイズだけのメニューにせず空にする。並びがカスタマイズだけなら、それを出す。
-    /// 開いてから中身を読む項目（関係を覚えていない相手の関係の項目など）は、組む時点では出るものとして数える。読んだ結果が空になると、
+    /// 開いてから中身を読む項目（関係をキャッシュしていない相手の関係の項目など）は、組む時点では出るものとして数える。読んだ結果が空になると、
     /// 開いたメニューにカスタマイズだけが残る。開いたメニューは閉じずに中身を差し替えるだけなので、読んだあとにメニューごと引っ込められないため、この場合は扱わない。
     public func arranged<Element>(_ elements: (Item) -> [Element], group: ([Element], MenuRowSize?) -> Element, more: ([Element]) -> Element) -> [Element] {
         var showsOtherItem = false
@@ -333,7 +333,7 @@ extension MenuLayout.Groups {
         return mainElements + [more(moreElements)]
     }
 
-    /// カスタマイズの項目を除いた並び。空になったまとまりは除く。
+    /// カスタマイズの項目を除いた並び。空になったグループは除く。
     public var excludingCustomize: Self {
         func removing(_ groups: [MenuLayout<Item>.Group]) -> [MenuLayout<Item>.Group] {
             groups.compactMap { group in
@@ -344,7 +344,7 @@ extension MenuLayout.Groups {
         return Self(main: removing(main), more: removing(more))
     }
 
-    /// メニューの木にする。
+    /// メニューのツリーにする。
     public func nodes<Command>(_ elements: (Item) -> [MenuNode<Command>]) -> [MenuNode<Command>] {
         arranged(elements, group: { MenuNode.group($0, row: $1) }, more: { MenuNode.submenu("その他", icon: .symbol("ellipsis.circle"), $0) })
     }

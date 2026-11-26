@@ -47,7 +47,7 @@ enum DummyServer {
         case (_, "/api/v1/markers"), ("GET", "/api/v1/preferences"): Data("{}".utf8)
         case ("GET", "/api/v1/custom_emojis"), ("GET", "/api/v2/filters"): Data("[]".utf8)
         case ("GET", "/api/v1/accounts/verify_credentials"), ("GET", "/api/v1/accounts/\(me.id)"): Content.me
-        // 保留中の通知と通知のフィルタリング。受け入れ、無視、設定の変更は、通信せずに済んだ扱いにする。保留中の通知は読み直すと元に戻る。
+        // 保留中の通知と通知のフィルタリング。受け入れ、無視、設定の変更は、通信せずに済んだ扱いにする。保留中の通知は再読み込みすると元に戻る。
         case ("GET", "/api/v2/notifications/policy"): policyBody()
         case ("PATCH", "/api/v2/notifications/policy"):
             applyPolicyForm(request.httpBody)

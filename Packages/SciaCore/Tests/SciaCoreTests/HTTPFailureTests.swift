@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SciaCore
 
-/// どの経路も、送り直すか、待つか、あきらめるかを、この分け方だけで決める。
+/// どの経路も、再送するか、待つか、あきらめるかを、この分け方だけで決める。
 struct HTTPFailureTests {
     @Test(arguments: [408, 429, 500, 502, 503, 504])
     func temporaryStatusWaits(statusCode: Int) {

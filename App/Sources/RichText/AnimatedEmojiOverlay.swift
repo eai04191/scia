@@ -33,7 +33,7 @@ final class AnimatedEmojiOverlay {
     private var emojiURLs: Set<URL> = []
     /// `emojiURLs`のうち、`prepare`のときにアニメーション版が届いていたもの。
     private var animatedURLs: Set<URL> = []
-    /// `emojiURLs`の絵文字を描く高さのピクセル数。読み直すときも、この高さで求める。
+    /// `emojiURLs`の絵文字を描く高さのピクセル数。再読み込みするときも、この高さで求める。
     private var pixelHeights: [URL: Int] = [:]
     private(set) var entries: [Entry] = []
     private var layers: [CALayer] = []
@@ -75,10 +75,10 @@ final class AnimatedEmojiOverlay {
     ///   - stillIndices: 動かさず、文字の中の静止画のまま描く絵文字の位置。
     ///   - displayScale: 描く画面の、1ptあたりのピクセル数。絵文字を描く高さから、読むコマの高さを決める。
     func prepare(_ text: NSAttributedString?, keepingStill stillIndices: Set<Int> = [], displayScale: CGFloat) -> NSAttributedString? {
-        // 組み終えるまで前の`entries`を持っておく。先に手放すと、ストアから捨てられたアニメーションの最後の参照が切れ、読み直すことになるため。
+        // 組み終えるまで前の`entries`を持っておく。先に手放すと、ストアから捨てられたアニメーションの最後の参照が切れ、再読み込みすることになるため。
         var entries: [Entry] = []
         defer {
-            // セルを描き直すたびに層を作り直さないよう、同じ絵文字を同じ位置に描くなら今の層を使い続ける。
+            // セルを再描画するたびに層を作り直さないよう、同じ絵文字を同じ位置に描くなら今の層を使い続ける。
             if entries.count != self.entries.count || !zip(entries, self.entries).allSatisfy({ $0.isSame(as: $1) }) {
                 entriesGeneration += 1
             }
@@ -116,8 +116,8 @@ final class AnimatedEmojiOverlay {
         return result ?? text
     }
 
-    /// 今の文字列の絵文字のうち、アニメーション版が届いていないものを読み直す。届いていれば`onChange`を呼ぶ。
-    /// 同じ中身の文字列を入れ直したときに、文字列を組み直さずに、`prepare`と同じく読めなかったアニメーション版を読み直すのに使う。
+    /// 今の文字列の絵文字のうち、アニメーション版が届いていないものを再読み込みする。届いていれば`onChange`を呼ぶ。
+    /// 同じ中身の文字列を入れ直したときに、文字列を組み直さずに、`prepare`と同じく読めなかったアニメーション版を再読み込みするのに使う。
     func reloadMissingAnimations() {
         for url in emojiURLs.subtracting(animatedURLs) where store.animation(for: url, pixelHeight: pixelHeights[url] ?? EmojiImageStore<UIImage>.pixelHeight) != nil {
             onChange()

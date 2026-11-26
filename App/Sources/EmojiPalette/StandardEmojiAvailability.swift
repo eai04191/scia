@@ -2,7 +2,7 @@ import CoreText
 import SciaCore
 import UIKit
 
-/// 端末で描けるUnicodeの絵文字だけを、絵文字のシートに並べる。
+/// 端末で描けるUnicodeの絵文字だけを、絵文字ピッカーに並べる。
 ///
 /// アプリに入れた絵文字のリスト（`StandardEmojiCatalog`）は、twemojiの書体と同じUnicodeの版で作っている。OSの絵文字で描く設定では、
 /// 端末のiOSがまだ対応していない新しい絵文字が、豆腐（□）やばらばらの部品で描かれるため除く。

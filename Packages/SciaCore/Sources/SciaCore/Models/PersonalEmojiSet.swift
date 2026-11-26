@@ -37,7 +37,7 @@ public struct PersonalEmojiSet: Decodable, Equatable, Sendable {
             case alt
         }
 
-        /// 同じ絵文字は、先に来た1件だけを残す。絵文字のパレットは、1つのまとまりに同じ絵文字を2つ並べられないため。
+        /// 同じ絵文字は、先に来た1件だけを残す。絵文字のパレットは、1つのセクションに同じ絵文字を2つ並べられないため。
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)

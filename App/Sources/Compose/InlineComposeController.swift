@@ -29,25 +29,25 @@ final class InlineComposeController: NSObject {
     }
     /// 編集を始めるときに呼ぶ。既定の公開範囲などをまだ読めていなければ読む。
     var onBeginEditing: () -> Void = {}
-    /// 畳まない設定で、書き始める前から入力欄とボタンを出すときに呼ぶ。既定の公開範囲やメディアの上限などをまだ読めていなければ読む。
-    /// 読めるまでは、書いていないときに押せるボタン（メディアの添付など）が使えないため。
+    /// 折りたたまない設定で、書き始める前から入力欄とボタンを出すときに呼ぶ。既定の公開範囲やメディアの上限などをまだ読めていなければ読む。
+    /// 読めるまでは、書いていないときに選択できるボタン（メディアの添付など）が使えないため。
     var onOpenWithoutEditing: () -> Void = {}
     /// 書き終えてバーを細いカプセルに戻したときに呼ぶ。メディアを選ぶシートやビューアのためにキーボードを閉じたときは、書いている途中なので呼ばない。
     var onEndEditing: () -> Void = {}
-    /// メディアを選ぶシートや絵文字のシートを重ねる画面を返す。アプリ内のSafariのシートを出している間は、その上に重ねる必要がある。
+    /// メディアを選ぶシートや絵文字ピッカーを重ねる画面を返す。アプリ内のSafariのシートを出している間は、その上に重ねる必要がある。
     /// ほかの画面を出している間はnilを返す。渡されなければ、何も重ねていないときだけ投稿欄の画面に重ねる。
     var presenterAboveInlineCompose: (() -> UIViewController?)?
 
-    /// 失敗の知らせを重ねる画面。ほかの画面（シートやビューア）を出していても、いちばん上に重ねてすぐ知らせる。
+    /// 失敗のアラートを重ねる画面。ほかの画面（シートやビューア）を出していても、いちばん上に重ねてすぐ知らせる。
     /// 閉じるまで待つと、その間は送れたものと思わせ、閉じたことを知る手立てのない画面もあるため。
     private var presenterForErrors: UIViewController? {
         host.map(topPresenter(from:))
     }
-    /// 返信先のラベルを押したときに呼ぶ。返信先の投稿を見せる。編集のラベルなら、編集している投稿を見せる。
+    /// 返信先のラベルを選択したときに呼ぶ。返信先の投稿を見せる。編集のラベルなら、編集している投稿を見せる。
     var onShowReplyTarget: (Status) -> Void = { _ in }
     /// 投稿できたあとに呼ぶ。
     var onPosted: () -> Void = {}
-    /// 予約の書き直しのラベルを押したときに呼ぶ。予約投稿のタイムラインを見せる。
+    /// 予約の書き直しのラベルを選択したときに呼ぶ。予約投稿のタイムラインを見せる。
     var onShowScheduledStatuses: () -> Void = {}
     /// 書いているほかのアカウントの、投稿欄に出す名前とアイコン。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
     struct WritingAccount: Equatable {
@@ -106,10 +106,10 @@ final class InlineComposeController: NSObject {
     private var isPollFoldingScheduled = false
     private let tuning: TuningStore
     private let settings: AppSettings
-    /// キーボードの知らせを受ける先。テストでは、端末の本物のキーボードの知らせが混ざらないよう別のものを渡す。
+    /// キーボードの通知を受ける先。テストでは、端末の本物のキーボードの通知が混ざらないよう別のものを渡す。
     private let keyboardNotifications: NotificationCenter
     private let logger = SciaLog.logger(category: "compose")
-    /// 書いていないときに見せる、下書きの1行。押すと書き始める。
+    /// 書いていないときに見せる、下書きの1行。選択すると書き始める。
     private let restRow = UIControl()
     private let restContent = ComposeRestContent()
     /// 最後にバーを下へ引いて離したときの、指の速さ（pt/秒、下向きが正）と時刻。
@@ -194,7 +194,7 @@ final class InlineComposeController: NSObject {
     private let accountLabel = UILabel()
     /// 予約の行。＋のメニューから足したときと、予約を書き直しているときだけ、返信や編集のラベルの下に出す。
     private lazy var scheduleRow = makeScheduleRow()
-    /// 予約の時計と日時。押すと日時を選ぶシートを出す。時計は、開閉でカプセルの時計とのあいだで動かす。
+    /// 予約の時計と日時。選択すると日時を選ぶシートを出す。時計は、開閉でカプセルの時計とのあいだで動かす。
     private lazy var scheduleDateButton = UIButton(configuration: .tinted(), primaryAction: UIAction { [weak self] _ in
         self?.presentScheduleDatePicker()
     })
@@ -250,9 +250,9 @@ final class InlineComposeController: NSObject {
     }()
     private let visibilityButton = UIButton(configuration: .plain())
     private lazy var expandButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in self?.toggleExpanded() })
-    /// 展開ボタンで広げている。本文の5行の上限を外し、本文に合わせて上の安全領域の上端まで伸ばす。チューニングの最低の行数より短ければ、その行数の高さにする。
+    /// 展開ボタンで広げている。本文の5行の上限を外し、本文に合わせて上のセーフエリアの上端まで伸ばす。チューニングの最低の行数より短ければ、その行数の高さにする。
     private var isExpanded = false
-    /// 広げている間だけ付ける、バーの上端を上の安全領域の上端より下に留める制約。
+    /// 広げている間だけ付ける、バーの上端を上のセーフエリアの上端より下に留める制約。
     private var expandedTop: NSLayoutConstraint?
     /// 広げた状態から戻す動きの間はtrue。この間は本文をスクロールできるままにし、高さだけを本文に合わせる。
     private var isCollapsingFromExpanded = false
@@ -262,7 +262,7 @@ final class InlineComposeController: NSObject {
     /// 広げる・戻すたびに増やす。前の動きの終わりで、次の戻す動きの途中に本文のスクロールを切り替えないようにする。
     private var expansionGeneration = 0
     private let remainingLabel = UILabel()
-    /// 添付の準備を待っている間に押すと、待つのをやめる。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
+    /// 添付の準備を待っている間に選択すると、待つのをやめる。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
     private lazy var sendButton = TintFollowingButton(configuration: .filled(), primaryAction: UIAction { [weak self] _ in
         guard let self else { return }
         if model.isWaitingForMedia {
@@ -288,7 +288,7 @@ final class InlineComposeController: NSObject {
     private let restInset: CGFloat = 4
     /// 書いている。入力欄にフォーカスがあるか、書いている途中に開いたシートなどを出している。
     private var isEditing = false
-    /// バーを広げて、入力欄とボタンを出す。書いているときと、設定で書いていないときも畳まないとき。
+    /// バーを広げて、入力欄とボタンを出す。書いているときと、設定で書いていないときも折りたたまないとき。
     private var isOpen: Bool {
         isEditing || settings.composeBarIdle == .open
     }
@@ -312,7 +312,7 @@ final class InlineComposeController: NSObject {
     /// 隠す設定で、書いている間にキーボードが下がり始めた。書き終える前から、キーボードと一緒に画面の外へ下げる。
     /// 指でキーボードを引き下ろしたときは、下がりきってから書き終えたことになるので、待つとキーボードが消えたあとにバーだけが遅れて下がるため。
     private var isSinkingWithKeyboard = false
-    /// 画面の外へ下げている間、下げ始めたときの高さに留める制約。広げたまま下げると、上端を安全領域より下に留める制約を外すので、
+    /// 画面の外へ下げている間、下げ始めたときの高さに留める制約。広げたまま下げると、上端をセーフエリアより下に留める制約を外すので、
     /// 留めないと、上端に届いて縮めていた本文が伸び、広げた形を保てないまま下がる。画面の外で書いていないときの形に戻すときに外す。
     private var offScreenHeight: NSLayoutConstraint?
     /// バーを出し入れするたびに増やす。前の動きの終わりで、あとから始まった動きの途中にバーの形を変えないようにする。
@@ -358,15 +358,15 @@ final class InlineComposeController: NSObject {
     /// 添付のコンテキストメニューを出したときのキーボードの高さ。メニューの間はiOSがソフトウェアキーボードを隠すため、
     /// キーボードがこの高さまで戻るまでバーを今の位置に留める。留めていなければnil。
     private var keyboardHeightBeforeContextMenu: CGFloat?
-    /// メニューを出してから、キーボードが隠れた知らせを受けたか。メディアを選ぶシートを閉じたあとは、メニューを出すとすぐ、
-    /// iOSが高さの変わらないキーボードの枠を知らせてくる。隠れる前のこの知らせを、キーボードが戻ったと受け取らないために使う。
+    /// メニューを出してから、キーボードが隠れた通知を受けたか。メディアを選ぶシートを閉じたあとは、メニューを出すとすぐ、
+    /// iOSが高さの変わらないキーボードの枠を知らせてくる。隠れる前のこの通知を、キーボードが戻ったと受け取らないために使う。
     private var didKeyboardHideForContextMenu = false
     /// コンテキストメニューを出したときの、キーボードに沿う枠（`keyboardLayoutGuide`）の高さ。
-    /// メニューの間にキーボードが隠れても知らせが届かないことがあり、知らせから覚えた高さでは、閉じ始めたときにキーボードが戻っているか分からないため、枠でも比べる。
+    /// メニューの間にキーボードが隠れても通知が届かないことがあり、通知から覚えた高さでは、閉じ始めたときにキーボードが戻っているか分からないため、枠でも比べる。
     private var keyboardGuideHeightBeforeContextMenu: CGFloat = 0
-    /// 画面に出ているキーボードに沿う枠の高さを測る。テストの窓では枠がキーボードの知らせに追従しないので、テストから差し替える。
+    /// 画面に出ているキーボードに沿う枠の高さを測る。テストのウィンドウでは枠がキーボードの通知に追従しないので、テストから差し替える。
     var measureKeyboardGuideHeight: (UIView) -> CGFloat = { $0.keyboardLayoutGuide.layoutFrame.height }
-    /// 1回のペーストで届いたメディア。項目ごとに届くので、まとめて添付に足し、上限を超えた分の知らせを1回にする。
+    /// 1回のペーストで届いたメディア。項目ごとに届くので、まとめて添付に足し、上限を超えたことを伝えるのを1回にする。
     /// ファイルのURLの項目は、指す先を調べ終えるまでnilで場所を取り、ペーストした順に並べる。
     private var pendingPastedMedia: [PastedMedia?] = []
     /// 指す先を調べているファイルのURLの項目。なくなるまで、添付に足すのも投稿を送るのも待つ。
@@ -379,11 +379,11 @@ final class InlineComposeController: NSObject {
     private var isShowingMediaViewer = false
     /// 書いている途中に並びを変える画面を開いてから、閉じるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
     private var isShowingToolLayoutSettings = false
-    /// ビューアやメディアを選ぶシートを閉じて入力欄にキーボードを戻してから、最初のキーボードの高さの知らせが届くまでtrue。
-    /// 届いた高さがソフトウェアキーボードのものでなければ（ハードウェアキーボードなら）、上がりきった知らせを待たずにバーを外す。
+    /// ビューアやメディアを選ぶシートを閉じて入力欄にキーボードを戻してから、最初のキーボードの高さの通知が届くまでtrue。
+    /// 届いた高さがソフトウェアキーボードのものでなければ（ハードウェアキーボードなら）、上がりきった通知を待たずにバーを外す。
     private var isWaitingForKeyboardAfterClosing = false
-    /// シートを出している間に、キーボードが上がりきった知らせを見送った。キーボードを出したままシートを閉じると、閉じ始めに戻すフォーカスはもうあるので、
-    /// 上がりきった知らせがもう来ない。閉じ終わりで、キーボードに戻っていればその場でバーを外す。キーボードが下がれば、次に上がりきった知らせが来るので下ろす。
+    /// シートを出している間に、キーボードが上がりきった通知を見送った。キーボードを出したままシートを閉じると、閉じ始めに戻すフォーカスはもうあるので、
+    /// 上がりきった通知がもう来ない。閉じ終わりで、キーボードに戻っていればその場でバーを外す。キーボードが下がれば、次に上がりきった通知が来るので下ろす。
     private var skippedKeyboardDidShowForSheet = false
     /// ビューアを開くたびに増やす。閉じる途中に別の添付を開いたら、前のビューアの閉じ終わりでキーボードを戻さないようにする。
     private var mediaViewerGeneration = 0
@@ -406,7 +406,7 @@ final class InlineComposeController: NSObject {
     /// 候補のリストと欄や打っている行との間。
     private let completionListSpacing: CGFloat = 6
 
-    /// 触れるとわずかに膨らんで明るくなるガラス。押せるものだと指に伝える。
+    /// 触れるとわずかに膨らんで明るくなるガラス。選択できるものだと指に伝える。
     private static func interactiveGlass() -> UIGlassEffect {
         let glass = UIGlassEffect()
         glass.isInteractive = true
@@ -452,9 +452,9 @@ final class InlineComposeController: NSObject {
             bottomSheet?.close(notifiesWillClose: false)
             // 空にした本文が入力欄に届くのは少しあとなので、キーボードを閉じる前に入れておく。変換中の文字を残したまま閉じると、
             // 入力欄は変換中の文字を確定するか取り消して本文が変わったと知らせ、そのとき入力欄に残っていた本文が下書きに戻るため。
-            // 欄の出し入れは`update()`に任せる。書き終える前に行うと、書いている間の動きで欄を畳み、フォーカスも本文へ移すため。
+            // 欄の出し入れは`update()`に任せる。書き終える前に行うと、書いている間の動きで欄を折りたたみ、フォーカスも本文へ移すため。
             applyTexts()
-            // カプセルの1行も、畳む動きの行き先になるので、空にした下書きに合わせておく。送った本文のまま畳むと、送った本文へ向かって畳み、
+            // カプセルの1行も、折りたたむ動きの行き先になるので、空にした下書きに合わせておく。送った本文のまま折りたたむと、送った本文へ向かって折りたたみ、
             // 着いたあとで「いまどうしてる？」に替わったため。
             applyRestContent(chip: chip, attachments: attachmentItems())
             resignInput()
@@ -677,7 +677,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 自分の投稿の編集を始める。今の下書きは捨てるので、捨ててよいかは呼ぶ側で確かめておく。
-    /// 始められなければ（送っている途中、投票を送り直せない）、下書きを変えずにfalseを返す。
+    /// 始められなければ（送っている途中、投票を再送できない）、下書きを変えずにfalseを返す。
     /// メディアのピッカーを開いていれば閉じる。開いたままだと、捨てた下書きの選択がピッカーに残り、次に選んだときに足し直されるため。
     /// - Parameter account: 投稿を書いたアカウント。今のアカウントならnil。投稿するアカウントをそのアカウントにしてから始める。
     @discardableResult
@@ -717,7 +717,7 @@ final class InlineComposeController: NSObject {
         return true
     }
 
-    /// 編集か削除して書き直すのをやめて、空の投稿欄に戻す。送っている間はやめない。失敗したときに送り直せるよう、下書きを残すため。
+    /// 編集か削除して書き直すのをやめて、空の投稿欄に戻す。送っている間はやめない。失敗したときに再送できるよう、下書きを残すため。
     /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
     @discardableResult
     func cancelStatusEdit() -> Bool {
@@ -733,7 +733,7 @@ final class InlineComposeController: NSObject {
         mediaPicker?.close(notifiesWillClose: true)
     }
 
-    /// 下書きを捨てて、空の投稿欄に戻す。送っている間は捨てず、falseを返す。失敗したときに送り直せるよう、下書きを残すため。
+    /// 下書きを捨てて、空の投稿欄に戻す。送っている間は捨てず、falseを返す。失敗したときに再送できるよう、下書きを残すため。
     /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
     @discardableResult
     func discardDraft() -> Bool {
@@ -786,7 +786,7 @@ final class InlineComposeController: NSObject {
         beginEditing()
     }
 
-    /// 公開範囲をダイレクトにして、`text`を本文に入れて書き始める。投稿するのは使う人が押す。
+    /// 公開範囲をダイレクトにして、`text`を本文に入れて書き始める。投稿ボタンを選択するのは使う人。
     /// 書きかけを上書きしないよう、下書きを空に戻せる状態（書きかけがある）なら何もせずfalseを返す。
     func startDirectMessage(_ text: String) -> Bool {
         guard !model.isPosting, !model.canDiscardDraft, model.switchAccount(to: nil) else { return false }
@@ -800,7 +800,7 @@ final class InlineComposeController: NSObject {
 
     /// 本文の5行の上限を外して、本文に合わせた高さまで広げる。広げていれば、本文の5行の上限がある高さに戻す。
     /// 本文がチューニングの最低の行数より短ければ、その行数の高さまで広げ、書き足す行の場所を先に取る。
-    /// - Parameter byUser: 使う人が押して広げたか。違和感レポートに残す操作の記録には、自動で広げたときを入れない。
+    /// - Parameter byUser: 使う人が選択して広げたか。違和感レポートに残す操作の記録には、自動で広げたときを入れない。
     private func toggleExpanded(byUser: Bool = true) {
         isExpanded.toggle()
         if isExpanded, byUser {
@@ -816,7 +816,7 @@ final class InlineComposeController: NSObject {
             // 補完の候補のリストも、同じ動きで、動いたあとの欄と打っている行の位置へ動かす（広げて欄の上に場所がなくなれば打っている行の下へ、戻すと欄の上へ）。
             // 動き終わってから置き直すと、動きの間、広げるときは欄の上端に付いて画面の外へ押し出され、戻すときは上端に取り残された。
             // 上で並べ直した時点で、欄と打っている行の位置は動いたあとの値になっている。
-            // 候補のリストの指定は、上の並べ直しの途中（欄が動いた知らせ）で切り替わることがあり、その回の並べ直しには反映されない。
+            // 候補のリストの指定は、上の並べ直しの途中（欄が動いたコールバック）で切り替わることがあり、その回の並べ直しには反映されない。
             // 決め直したうえで並べ直しをはっきり求め、この動きの中で候補のリストを動かす。
             self.layoutCompletionListIfShown()
             self.host?.view.setNeedsLayout()
@@ -842,7 +842,7 @@ final class InlineComposeController: NSObject {
         textDidChange()
     }
 
-    /// 広げている間は、本文に合わせて上の安全領域の上端まで伸ばし、超えたら中でスクロールする。
+    /// 広げている間は、本文に合わせて上のセーフエリアの上端まで伸ばし、超えたら中でスクロールする。
     private func applyExpandedLayout() {
         expandedTop?.isActive = isExpanded || limitsBarTopForPoll
         expandButton.configuration?.image = UIImage(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
@@ -854,7 +854,7 @@ final class InlineComposeController: NSObject {
     /// ペーストか共有で入れたURLの後ろに文字が続いていれば、シートで改行を入れるか聞いてから送る。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
     private func submit() {
         // ペーストした文字を読み終える前に判定すると、URLの後ろに続いた文字を見逃すため、読み終えてから判定する。
-        // 待っている間に下書きを捨てるか本文を入れ替えたら、押したときの下書きはもうないので送らない。
+        // 待っている間に下書きを捨てるか本文を入れ替えたら、選択したときの下書きはもうないので送らない。
         guard readingPastedTexts.isEmpty else {
             let token = model.insertedTextToken
             model.tasks.run(.action) { [weak self] in
@@ -890,7 +890,7 @@ final class InlineComposeController: NSObject {
         } onClose: { [weak self] in
             self?.alertDidClose()
         } onDismissed: { [weak self] in
-            // 押してすぐ送るので、送るのが閉じている途中に失敗すると、失敗のアラートを出せない。閉じ終えてから出し直す。
+            // 選択してすぐ送るので、送るのが閉じている途中に失敗すると、失敗のアラートを出せない。閉じ終えてから出し直す。
             self?.presentErrorIfNeeded()
         }
         sheet.measure(width: presenter.view.bounds.width)
@@ -906,7 +906,7 @@ final class InlineComposeController: NSObject {
             }
             guard let self else { return }
             addPendingPastedMedia()
-            // 添付の準備を待つ間にシートで選び直せないよう、押したらメディアを選ぶシートを閉じる。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
+            // 添付の準備を待つ間にシートで選び直せないよう、選択したらメディアを選ぶシートを閉じる。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
             if model.canPost {
                 mediaPicker?.close(notifiesWillClose: true)
             }
@@ -916,7 +916,7 @@ final class InlineComposeController: NSObject {
 
     // MARK: - ＋のメニュー
 
-    /// ＋のメニューの項目。設定の区切り線で分けたまとまりごとに、区切って並べる。
+    /// ＋のメニューの項目。設定の区切り線で分けたグループごとに、区切って並べる。
     private func addMenuElements() -> [UIMenuElement] {
         (toolPlacement?.menu ?? []).map { UIMenu.group($0.items.map(menuAction(for:)), row: $0.row) }
     }
@@ -1019,10 +1019,10 @@ final class InlineComposeController: NSObject {
         case .linkTitle:
             let actions = linkTitleActions()
             guard !actions.isEmpty else {
-                // URLがなくても項目を消さず、押せない形で出す。押そうとしている間に、メニューの並びがずれないようにするため。
+                // URLがなくても項目を消さず、無効で出す。選択しようとしている間に、メニューの並びがずれないようにするため。
                 return UIAction(title: item.title, subtitle: ComposeTexts.noURLInText, image: UIImage(systemName: item.symbolName), attributes: .disabled) { _ in }
             }
-            // VoiceOverでは、光るURLを探して押すのが難しいため、URLをサブメニューで選ばせる。
+            // VoiceOverでは、光るURLを探して選択するのが難しいため、URLをサブメニューで選ばせる。
             if UIAccessibility.isVoiceOverRunning {
                 return UIMenu(title: item.title, image: UIImage(systemName: item.symbolName), children: actions)
             }
@@ -1044,7 +1044,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 編集では公開範囲を変えられないため、今の範囲にチェックマークを付けたまま、どれも押せないようにする。
+    /// 編集では公開範囲を変えられないため、今の範囲にチェックマークを付けたまま、どれも無効にする。
     /// 編集中と、引用元より広い範囲は、選べない形で並べる。
     /// 引用できる人を選べるときは、選んでもメニューを閉じない。公開範囲と引用できる人を続けて選べるようにするため。
     private func visibilityActions() -> [UIAction] {
@@ -1083,7 +1083,7 @@ final class InlineComposeController: NSObject {
         return UIMenu(title: ComposeTexts.quotePolicyMenuTitle(isFixed: model.quotePolicyFixedReason != nil), options: .displayInline, children: actions)
     }
 
-    /// 開いたままの公開範囲のメニューを、選んだあとの状態に描き直す。選んでも閉じないので、チェックマークと選べるかを開いたまま合わせる。
+    /// 開いたままの公開範囲のメニューを、選んだあとの状態に再描画する。選んでも閉じないので、チェックマークと選べるかを開いたまま合わせる。
     private func refreshVisibleVisibilityMenu() {
         for button in [visibilityButton, addButton] {
             button.contextMenuInteraction?.updateVisibleMenu { [weak self] visible in
@@ -1093,7 +1093,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 引用符のバッジを`button`に重ねる。押してもボタンのメニューが開くよう、触れたものを受けない。
+    /// 引用符のバッジを`button`に重ねる。選択してもボタンのメニューが開くよう、触れたものを受けない。
     /// - Parameter above: ボタンの記号の右上に置くならtrue、右下に置くならfalse。
     private func makeQuotePolicyBadge(on button: UIButton, above: Bool) -> TintSymbolBadge {
         let badge = TintSymbolBadge(symbolName: QuotePolicy.badgeSymbolName, surface: .glass)
@@ -1245,7 +1245,7 @@ final class InlineComposeController: NSObject {
 
     /// 選択肢を書き換える。書くと欄が増えたり、後ろの空の欄が詰められたりする。
     /// 詰められる欄にフォーカスがあると、欄が画面から外れた時点で書き終えたとして投稿欄が閉じるため、詰める前に、残る最後の欄へフォーカスを移す。
-    /// 絵文字のシートを出している間は欄がフォーカスを持たないが、シートで入れる先は最後に書いていた欄なので、それも残る最後の欄へ移す。
+    /// 絵文字ピッカーを出している間は欄がフォーカスを持たないが、シートで入れる先は最後に書いていた欄なので、それも残る最後の欄へ移す。
     /// 移さないと、詰めた欄がなくなったとして、入れる先が本文に替わる。
     private func setPollOption(_ text: String, at index: Int) {
         guard model.poll != nil else { return }
@@ -1344,7 +1344,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 投票の欄を開いたまま本文に最低の行数を残すと、投稿欄が上の安全領域からキーボード（なければタブバー）の上までに収まらない。
+    /// 投票の欄を開いたまま本文に最低の行数を残すと、投稿欄が上のセーフエリアからキーボード（なければタブバー）の上までに収まらない。
     private func pollNeedsFolding() -> Bool {
         guard let host, let restingGuide else { return false }
         let width = stack.bounds.width
@@ -1386,7 +1386,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 折りたたんだ1行を押したら、開いて、まだ書いていない最初の選択肢（なければ最後の選択肢）に書き始める。
+    /// 折りたたんだ1行を選択したら、開いて、まだ書いていない最初の選択肢（なければ最後の選択肢）に書き始める。
     private func unfoldPoll() {
         setPollFolded(false, animated: true)
         let fields = pollEditor.fields
@@ -1415,7 +1415,7 @@ final class InlineComposeController: NSObject {
         return effects
     }()
 
-    /// 本文のURLをハイライトして選ばせる。ハイライトしている間に押したら、やめる。URLが1つだけなら、選ばせずに読み始める。
+    /// 本文のURLをハイライトして選ばせる。ハイライトしている間に選択したら、やめる。URLが1つだけなら、選ばせずに読み始める。
     private func toggleLinkSelection() {
         guard !linkTitleEffects.isSelecting else {
             linkTitleEffects.endSelecting(reason: "toggled")
@@ -1429,7 +1429,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 自分で本文を置き換えている間。入力欄の知らせを、使う人が書き換えたものと取り違えないようにする。
+    /// 自分で本文を置き換えている間。入力欄のコールバックを、使う人が書き換えたものと取り違えないようにする。
     private var isReplacingLink = false
 
     /// タイトルを読んでいる途中のURLの数。
@@ -1471,7 +1471,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 読み終えた時点の本文で同じURLを探し直し、押した場所にいちばん近いものを置き換える。読んでいる間にURLが消されたか、投稿を送り始めていれば何もしない。
+    /// 読み終えた時点の本文で同じURLを探し直し、選択した場所にいちばん近いものを置き換える。読んでいる間にURLが消されたか、投稿を送り始めていれば何もしない。
     /// 入力欄の`replace`で入れ、取り消し（シェイクや⌘Z）で戻せるようにする。カーソルは、置き換えた範囲より後ろにあれば増えた分だけずらす。
     private func replaceLink(_ occurrence: LinkOccurrence, title: String) {
         guard !model.isPosting,
@@ -1519,7 +1519,7 @@ final class InlineComposeController: NSObject {
         textView.replace(range, withText: insertion.text)
         textView.selectedRange = NSRange(location: insertion.cursor, length: 0)
         logger.info("compose: word inserted")
-        // 入力欄の知らせが来なくても、下書きを入力欄に合わせる。
+        // 入力欄のコールバックが来なくても、下書きを入力欄に合わせる。
         model.text = textView.text
         textDidChange()
     }
@@ -1541,7 +1541,7 @@ final class InlineComposeController: NSObject {
             textView.selectedRange = selection
         }
         logger.info("compose: link title applied")
-        // 入力欄の知らせが来なくても、下書きを入力欄に合わせる。
+        // 入力欄のコールバックが来なくても、下書きを入力欄に合わせる。
         model.text = textView.text
         textDidChange()
     }
@@ -1566,7 +1566,7 @@ final class InlineComposeController: NSObject {
             }
         })
         if item == .account {
-            // 押すと、＋のメニューの中と同じアカウントのリストを出す。開いている間に届いたアイコンを差し替える。
+            // 選択すると、＋のメニューの中と同じアカウントのリストを出す。開いている間に届いたアイコンを差し替える。
             watchMenuIcons(of: button)
             button.showsMenuAsPrimaryAction = true
             button.menu = UIMenu(title: item.title, children: [UIDeferredMenuElement.uncached { [weak self] completion in
@@ -1574,7 +1574,7 @@ final class InlineComposeController: NSObject {
             }])
         }
         if item == .linkTitle {
-            // VoiceOverでは、押した時点の本文のURLをメニューで選ばせる。URLがなければ、ないことだけを押せない形で出す。
+            // VoiceOverでは、選択した時点の本文のURLをメニューで選ばせる。URLがなければ、ないことだけを無効で出す。
             button.showsMenuAsPrimaryAction = UIAccessibility.isVoiceOverRunning
             button.menu = UIMenu(title: item.title, children: [UIDeferredMenuElement.uncached { [weak self] completion in
                 let actions = self?.linkTitleActions() ?? []
@@ -1670,7 +1670,7 @@ final class InlineComposeController: NSObject {
         update()
     }
 
-    /// ＋の右上に重ねる言語のコードのバッジ。＋の記号に少しかかる位置に置き、押しても＋のメニューが開くよう、触れたものを受けない。
+    /// ＋の右上に重ねる言語のコードのバッジ。＋の記号に少しかかる位置に置き、選択しても＋のメニューが開くよう、触れたものを受けない。
     private func configureLanguageBadge() {
         languageBadge.font = Self.languageCodeFont(for: addButton.traitCollection)
         languageBadge.layer.cornerRadius = languageBadge.font.lineHeight / 2
@@ -1858,7 +1858,7 @@ final class InlineComposeController: NSObject {
     /// パレットを出したときの、最近使った絵文字。出している間に選んでも並びを変えない。押そうとしている絵文字が指の下から動かないようにするため。
     /// システムの絵文字キーボードも、閉じて開き直すまで最近使った絵文字を並べ替えない。
     private var paletteRecentKeys: [String] = []
-    /// 片方のシートを出している間にもう片方のボタンを押したとき、出しているシートが閉じ終わったら出すシート。
+    /// 片方のシートを出している間にもう片方のボタンを選択したとき、出しているシートが閉じ終わったら出すシート。
     /// UIKitは前のシートが閉じ終わるまで次のシートを出せないため、閉じ終わりを待つ。待つ間も、投稿欄のバーは留めたままにする。
     private enum PendingSheet { case media, emoji }
     private var pendingSheet: PendingSheet?
@@ -1913,7 +1913,7 @@ final class InlineComposeController: NSObject {
         observeEmojiPalette()
         let height = bottomSheetHeight
         setHoldAboveKeyboard(height: height - screenBottomGap(of: host.view))
-        // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
+        // 独自の高さはシートの下のセーフエリアを含まないので、その分を引く。
         let sheet = EmojiPaletteSheet(palette: emojiPalette, lowHeight: height - (host.view.window?.safeAreaInsets.bottom ?? 0))
         sheet.lifecycle.onWillClose = { [weak self] in self?.focusLastInput() }
         sheet.lifecycle.onDidClose = { [weak self] in self?.emojiPaletteDidClose() }
@@ -1939,10 +1939,10 @@ final class InlineComposeController: NSObject {
         defer { checkSheetInvariants() }
         // 閉じ終わる前に、もう別のシートを出していれば、バーと入力欄はそのシートのものなので触らない。
         guard bottomSheet == nil, !presentPendingSheet() else { return }
-        // シートを閉じる途中で知らせられなかった失敗は、ここで知らせる。知らせはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
+        // シートを閉じる途中で知らせられなかった失敗は、ここで知らせる。アラートはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
         let returnedToKeyboard = isInputFocused
-        // ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ないので、待たずにバーをシートの上端から外す。
-        // 閉じた知らせが来ずにシートが消えたときは、キーボードを戻した直後に閉じ終わるので、まだどちらのキーボードかの知らせが届いていない。
+        // ハードウェアキーボードではキーボードが上がらず、上がりきった通知も来ないので、待たずにバーをシートの上端から外す。
+        // 閉じた通知が来ずにシートが消えたときは、キーボードを戻した直後に閉じ終わるので、まだどちらのキーボードかの通知が届いていない。
         // 届く前にハードウェアキーボードとみなしてバーを外すと、ソフトウェアキーボードが上がってくるまでの間、バーがタブバーの上へ落ちてから上がり直す（実機で起きた）。
         // ビューアを閉じたときと同じく、次に届いた高さで決める（`keyboardWillChangeFrame`）。
         if returnedToKeyboard, skippedKeyboardDidShowForSheet {
@@ -2046,8 +2046,8 @@ final class InlineComposeController: NSObject {
     /// スワイプして閉じられなくなったときの逃げ道も兼ねる。シートの上に見えている＋のメニューからは、いつでも閉じられる。
     private func toggleMediaPicker() {
         if let mediaPicker {
-            // 閉じる途中に押されたら、本来はシートを開き直したい。ただしUIKitは閉じ終わるまで次のシートを出せず、
-            // 閉じ終わってから開き直すと、上がってきたキーボードがまた下がる往復になる。どちらが良いか決めていない試作なので、今は押されたことだけを残す。
+            // 閉じる途中に選択されたら、本来はシートを開き直したい。ただしUIKitは閉じ終わるまで次のシートを出せず、
+            // 閉じ終わってから開き直すと、上がってきたキーボードがまた下がる往復になる。どちらが良いか決めていない試作なので、今は選択されたことだけを残す。
             guard !mediaPicker.isClosing else {
                 logger.info("media picker: button tapped while closing, ignored")
                 return
@@ -2088,13 +2088,13 @@ final class InlineComposeController: NSObject {
             presentMediaFilePicker(from: host)
             return
         }
-        // 畳まない設定では、書いていないときもボタンを押せる。絵文字のパレットと同じく、書いている状態にしてから出す。
+        // 折りたたまない設定では、書いていないときもボタンを選択できる。絵文字のパレットと同じく、書いている状態にしてから出す。
         if !isEditing {
             expandForEditing()
         }
         let height = bottomSheetHeight
         setHoldAboveKeyboard(height: height - screenBottomGap(of: host.view))
-        // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
+        // 独自の高さはシートの下のセーフエリアを含まないので、その分を引く。
         let picker = MediaPickerSheet(
             selectedIDs: model.attachedAssetIdentifiers,
             selectionLimit: model.pickerSelectionLimit,
@@ -2167,7 +2167,7 @@ final class InlineComposeController: NSObject {
 
     /// 外した場所をログに残す。シートを出しているのにバーがシートの裏に隠れたままになったことがあり（実機）、どこで外したかがログから分からなかったため。
     /// シートとバーの決まりを確かめ、破れていたらerrorのログに残す。状態が落ち着くはずの節目（シートを出し終えた、閉じ終えた、キーボードが上がりきった、下がりきった）で呼ぶ。
-    /// UIKitの開閉の知らせが来ない経路で、投稿欄の状態と画面がずれたことが何度もあったので、ずれたらその場で分かるようにする。デバッグ版だけで確かめる。
+    /// UIKitの開閉のコールバックが来ない経路で、投稿欄の状態と画面がずれたことが何度もあったので、ずれたらその場で分かるようにする。デバッグ版だけで確かめる。
     private func checkSheetInvariants(function: StaticString = #function) {
         #if DEBUG
         var violations: [String] = []
@@ -2221,7 +2221,7 @@ final class InlineComposeController: NSObject {
            let curve = (notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int).flatMap(UIView.AnimationCurve.init(rawValue:)) {
             keyboardAnimation = (duration, curve)
         }
-        // 出始めで立て、下がりきった知らせ（`keyboardDidChangeFrame`）で下ろす。下がり始めで下ろすと、指で引き下ろして離したとき、
+        // 出始めで立て、下がりきった通知（`keyboardDidChangeFrame`）で下ろす。下がり始めで下ろすと、指で引き下ろして離したとき、
         // 書き終える前にバーがタブバーの上へ戻ってから隠れることがあるため。
         if height > Self.softwareKeyboardMinimumHeight, !isSoftwareKeyboardShown {
             isSoftwareKeyboardShown = true
@@ -2264,7 +2264,7 @@ final class InlineComposeController: NSObject {
 
     /// キーボードが隠れなかったとき（ハードウェアキーボードなど）や、もう戻っているときは、メニューを閉じ始めた時点で外す。
     /// 隠れたままなら、キーボードが戻ったときに外す。隠れたままで外すと、バーがキーボードに沿う枠について一度下がり、
-    /// UIKitがその位置へ押した画像を戻そうとして、画像が上から下りてくるように見える。
+    /// UIKitがその位置へ長押しした画像を戻そうとして、画像が上から下りてくるように見える。
     private func contextMenuWillEnd() {
         guard let host, let before = keyboardHeightBeforeContextMenu else { return }
         let guideHeight = measureKeyboardGuideHeight(host.view)
@@ -2273,7 +2273,7 @@ final class InlineComposeController: NSObject {
             return
         }
         logger.info("attachment context menu: waiting for keyboard (keyboardHeight=\(self.currentKeyboardHeight), guideHeight=\(guideHeight))")
-        // 隠れた知らせが届いていなくても、戻った知らせで外せるようにする。
+        // 隠れた通知が届いていなくても、戻った通知で外せるようにする。
         didKeyboardHideForContextMenu = true
     }
 
@@ -2311,11 +2311,11 @@ final class InlineComposeController: NSObject {
     /// シートを閉じてキーボードが上がりきったら、バーをキーボードに付ける。
     @objc private func keyboardDidShow(_ notification: Notification) {
         defer { checkSheetInvariants() }
-        // 投稿の失敗の知らせは、シートを閉じて戻したキーボードが上がりきる前に出ることがあり、その知らせが知らせを出したあとに届く。
-        // 知らせを出している間はキーボードが下がるので、バーはキーボードの高さに留めたままにする。
+        // 投稿の失敗のアラートは、シートを閉じて戻したキーボードが上がりきる前に出ることがあり、その通知がアラートを出したあとに届く。
+        // アラートを出している間はキーボードが下がるので、バーはキーボードの高さに留めたままにする。
         guard isInputFocused, !isPresentingAlert else { return }
-        // シートを閉じる途中に別のシートのボタンを押すと、閉じ始めに戻したキーボードが上がりきる前に、次のシートを出してバーをその上端に留め直す。
-        // キーボードが上がる途中だと、次のシートを出すときに入力欄のフォーカスを外しても外れず、そのあとに上がりきった知らせが届く。
+        // シートを閉じる途中に別のシートのボタンを選択すると、閉じ始めに戻したキーボードが上がりきる前に、次のシートを出してバーをその上端に留め直す。
+        // キーボードが上がる途中だと、次のシートを出すときに入力欄のフォーカスを外しても外れず、そのあとに上がりきった通知が届く。
         // ここで外すと、バーが次のシートの裏に隠れたままになった（実機の違和感レポートで、出したシートが閉じていないまま外していた）。
         // 閉じていないシートを出している間は外さない。
         if let bottomSheet, !bottomSheet.isClosing {
@@ -2343,7 +2343,7 @@ final class InlineComposeController: NSObject {
         guard isEditing != editing else { return }
         isEditing = editing
         updateCompletionList()
-        // 畳まない設定では、書き終えても形を変えないので、カプセルの写真も散らばらせない。
+        // 折りたたまない設定では、書き終えても形を変えないので、カプセルの写真も散らばらせない。
         if !editing, !isOpen {
             // バーを勢いよく下げて閉じたときだけ、カプセルの写真を散らばらせる。キーボードが下がりきるまで待つので、離してから少し間がある。
             // ほかの閉じ方（タップや投稿）では、正解の形に戻す。
@@ -2355,7 +2355,7 @@ final class InlineComposeController: NSObject {
         applyOpenState()
     }
 
-    /// バーの形を、書いているか（`isOpen`）に合わせる。書き始めと書き終わりのほか、畳まない設定を切り替えたときにも呼ぶ。
+    /// バーの形を、書いているか（`isOpen`）に合わせる。書き始めと書き終わりのほか、折りたたまない設定を切り替えたときにも呼ぶ。
     private func applyOpenState() {
         // 隠すときは、カプセルに変えずに書いていたときの形のまま下げ、画面の外に出てから形を戻す。
         if hidesBar {
@@ -2384,7 +2384,7 @@ final class InlineComposeController: NSObject {
         }
         if expands {
             isExpanded = true
-            // 広げた欄を閉じる途中なら、戻す途中の印を消し、戻す動きの終わりの処理も効かなくする。残すと、開く間の本文の高さを5行の上限のまま決める。
+            // 広げた欄を閉じる途中なら、戻す途中のフラグを消し、戻す動きの終わりの処理も効かなくする。残すと、開く間の本文の高さを5行の上限のまま決める。
             _ = beginExpansionChange()
             logger.info("compose: open expanded")
         }
@@ -2446,7 +2446,7 @@ final class InlineComposeController: NSObject {
                 self.textMorph.finish(generation: textGeneration)
             }
             if let flightGeneration {
-                // 写真同士の影は、動いている間の複製が落とさないので、カプセルに着いてから浮かび上がらせる。
+                // 写真同士の影は、動いている間の複製が落とさないので、カプセルに着いてからフェードインさせる。
                 if self.morphFlights.finish(generation: flightGeneration), !editing {
                     self.restContent.thumbnails.revealBetweenShadows(duration: 0.15)
                 }
@@ -2474,7 +2474,7 @@ final class InlineComposeController: NSObject {
     /// 列の1枚目から3枚目は、カプセルで重ねている同じ添付の写真と行き来する。4枚目より後ろは、カプセルでは3枚目の下に隠れて重なっているものとして、3枚目の写真の位置と行き来する。
     /// 出したばかりの行は中身がまだ並んでいないことがあるので、位置を読む前に並べる。
     /// 動かしている間は、本物を透明にして隠す。空のマスクで隠すと、ガラスのバーの上に、隠した部品の形の灰色の跡が残り、複製とは別に見えたため。
-    /// 列のサムネイルは触れたものをセルで受けるので、透明にしても押せなくはならない。
+    /// 列のサムネイルは触れたものをセルで受けるので、透明にしても選択できなくはならない。
     private func morphEnds(editing: Bool) -> [ComposeMorphFlights.Key: ComposeMorphFlights.End] {
         var ends: [ComposeMorphFlights.Key: ComposeMorphFlights.End] = [:]
         let ids = model.attachments.map(\.id)
@@ -2833,12 +2833,12 @@ final class InlineComposeController: NSObject {
         restingBottom?.isActive = !followsKeyboardDown
         followKeyboard?.isActive = followsKeyboardDown
         hiddenTop?.isActive = offScreen
-        // 広げたまま隠すときは、上端を安全領域より下に留める制約を外し、下げている間の高さは`offScreenHeight`で保つ。画面の外で、広げる前の形に戻す。
+        // 広げたまま隠すときは、上端をセーフエリアより下に留める制約を外し、下げている間の高さは`offScreenHeight`で保つ。画面の外で、広げる前の形に戻す。
         expandedTop?.isActive = (isExpanded || limitsBarTopForPoll) && !offScreen
     }
 
     /// 投票の欄を出して書いている。欄の分だけ投稿欄が高くなり、iPhone SEのような小さい画面では、本文が5行まで伸びると上にはみ出したため、
-    /// 広げているときと同じく上端を安全領域で止め、足りない分は本文を縮めて中でスクロールさせる。
+    /// 広げているときと同じく上端をセーフエリアで止め、足りない分は本文を縮めて中でスクロールさせる。
     private var limitsBarTopForPoll: Bool {
         isOpen && model.poll != nil && !isExpanded
     }
@@ -2897,7 +2897,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 畳まない設定を切り替えたら、書いていないときのバーの形を合わせる。
+    /// 折りたたまない設定を切り替えたら、書いていないときのバーの形を合わせる。
     private func observeKeepsOpen() {
         withObservationTracking {
             _ = settings.composeBarIdle
@@ -3034,7 +3034,7 @@ final class InlineComposeController: NSObject {
         remainingLabel.largeContentTitle = remainingLabel.accessibilityLabel
         sendButton.isEnabled = model.canPost || model.isWaitingForMedia
         sendButton.configuration?.showsActivityIndicator = model.isPosting
-        // 予約している間は、押すと予約されることを、押す前に分かるようにする。
+        // 予約している間は、選択すると予約されることを、選択する前に分かるようにする。
         let sendSymbol = model.scheduledAt != nil ? "clock" : "arrow.up"
         if sendButton.configuration?.image != UIImage(systemName: sendSymbol) {
             sendButton.configuration?.image = UIImage(systemName: sendSymbol)
@@ -3085,7 +3085,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 出ているラベルの中身が替わるなら、替わる前のラベルの像。替わらないか、ラベルが見えていなければnil。
+    /// 出ているラベルの中身が替わるなら、替わる前のラベルのスナップショット。替わらないか、ラベルが見えていなければnil。
     private func replyLabelSwitchSnapshot(to chip: ComposeContextChip) -> UIView? {
         guard isOpen, bar.window != nil, !replyRow.isHidden, replyRow.alpha > 0, !UIAccessibility.isReduceMotionEnabled,
               replyButton.configuration?.title != chip.title || replyButton.configuration?.image != Self.chipSymbol(chip.symbolName)
@@ -3093,7 +3093,7 @@ final class InlineComposeController: NSObject {
         return replyButton.snapshotView(afterScreenUpdates: false)
     }
 
-    /// 書いている間に返信先や引用元を替えたら、前のラベルを薄くしながら、新しいラベルを前の幅から新しい幅へ広げて（縮めて）浮かび上がらせる。
+    /// 書いている間に返信先や引用元を替えたら、前のラベルを薄くしながら、新しいラベルを前の幅から新しい幅へ広げて（縮めて）フェードインさせる。
     /// 次の並べ直しに任せると、ラベルの幅と文字が1コマで替わるため。
     private func crossfadeReplyLabel(from previous: UIView) {
         guard let host else { return }
@@ -3155,7 +3155,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 入力欄の文字を、入力欄の外で同じ見え方に描ける形にする。色は文字の色に揃える。入力欄の文字には、リンクにタイトルを付ける動きの間だけ
-    /// 透明の色が付いていて、そのまま写すと、カプセルの本文が次に下書きが変わるまで見えなくなるため。
+    /// 透明の色が付いていて、そのままコピーすると、カプセルの本文が次に下書きが変わるまで見えなくなるため。
     private static func drawableText(_ text: NSAttributedString) -> NSAttributedString {
         let drawable = NSMutableAttributedString(attributedString: text)
         drawable.addAttribute(.foregroundColor, value: UIColor.label, range: NSRange(location: 0, length: drawable.length))
@@ -3218,7 +3218,7 @@ final class InlineComposeController: NSObject {
 
     /// アラートやシートを、書いている状態を保ったまま出す。閉じたら`alertDidClose()`を呼ぶ。
     ///
-    /// アラートは表示されると最初の応答者になるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、書いていたところから直せない。
+    /// アラートは表示されるとファーストレスポンダーになるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、書いていたところから直せない。
     /// 添付のビューアと同じく、出す前に自分でキーボードを閉じ、バーをキーボードの高さに留め、閉じたら最後に書いていた入力欄にキーボードを戻す。
     /// シートやビューアの上に出したら、閉じても入力欄にキーボードを戻さない。戻すと、その画面の上にキーボードが出るため。
     /// - Parameter holdsBar: バーをキーボードの高さに留める。下から上がって投稿欄を隠すシートでは留めない。
@@ -3226,7 +3226,7 @@ final class InlineComposeController: NSObject {
         isPresentingAlert = true
         alertReturnsFocus = presenter === (presenterAboveInlineCompose?() ?? host)
         if bottomSheet == nil, isInputFocused {
-            // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
+            // ハードウェアキーボードでは、閉じたあとに上がりきった通知が来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
             if holdsBar, currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
                 setHoldAboveKeyboard(height: currentKeyboardHeight)
             }
@@ -3243,11 +3243,11 @@ final class InlineComposeController: NSObject {
 
     // MARK: - 添付のビューア
 
-    /// 添付を押したら、タイムラインと同じビューアで開く。失敗したものも開き、上の中央の失敗の表示から理由と送り直す操作を出す。
+    /// 添付を選択したら、タイムラインと同じビューアで開く。失敗したものも開き、上の中央の失敗の表示から理由と再送する操作を出す。
     ///
-    /// ビューアは表示されると最初の応答者になるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、サムネイルの列が隠れて閉じる画像の戻り先がなくなる。
+    /// ビューアは表示されるとファーストレスポンダーになるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、サムネイルの列が隠れて閉じる画像の戻り先がなくなる。
     /// 開く前に自分でキーボードを閉じ、バーをキーボードの高さに留め、開いている間は書いている状態を解かない。
-    /// 入力欄を最初の応答者のまま開くと、閉じた時点でUIKitが入力欄にキーボードを戻し、閉じ始めの画像が止まって見えたため、キーボードは閉じる動きが終わってから戻す。
+    /// 入力欄をファーストレスポンダーのまま開くと、閉じた時点でUIKitが入力欄にキーボードを戻し、閉じ始めの画像が止まって見えたため、キーボードは閉じる動きが終わってから戻す。
     private func openAttachment(_ id: DraftAttachment.ID) {
         guard let host, isOpen, let index = model.attachments.firstIndex(where: { $0.id == id }) else { return }
         guard mediaViewer == nil else {
@@ -3258,10 +3258,10 @@ final class InlineComposeController: NSObject {
         mediaViewerGeneration += 1
         let generation = mediaViewerGeneration
         isShowingMediaViewer = true
-        // 前のビューアを閉じた直後に開き直したら、閉じたあとのキーボードの知らせはもう待たない。待ったままだと、開き直すときに入力欄を閉じた知らせで、ビューアを出している間にバーを外してしまう。
+        // 前のビューアを閉じた直後に開き直したら、閉じたあとのキーボードの通知はもう待たない。待ったままだと、開き直すときに入力欄を閉じた通知で、ビューアを出している間にバーを外してしまう。
         isWaitingForKeyboardAfterClosing = false
         if bottomSheet == nil, isInputFocused {
-            // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
+            // ハードウェアキーボードでは、閉じたあとに上がりきった通知が来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
             if currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
                 setHoldAboveKeyboard(height: currentKeyboardHeight)
             }
@@ -3294,7 +3294,7 @@ final class InlineComposeController: NSObject {
                 UUID(uuidString: itemID).flatMap { self?.attachmentStrip.tile(for: $0) }
             }
         )
-        // 閉じたビューアがすぐには解放されず、weakの参照がnilに戻るのを待つと、2回目からサムネイルを押しても開けなかった（シミュレーターで確認）。
+        // 閉じたビューアがすぐには解放されず、weakの参照がnilに戻るのを待つと、2回目からサムネイルを選択しても開けなかった（シミュレーターで確認）。
         // 解放されない原因は調べていない。開いているかの判断は解放に頼らず、閉じた時点で参照を外して決める。
         viewer.onDismiss = { [weak self] in self?.mediaViewer = nil }
         viewer.onCloseFinish = { [weak self] in self?.mediaViewerDidFinishClosing(generation: generation) }
@@ -3313,8 +3313,8 @@ final class InlineComposeController: NSObject {
         defer { presentErrorIfNeeded() }
         guard bottomSheet == nil, isEditing else { return }
         focusLastInput()
-        // 開いている間にハードウェアキーボードに替わると、キーボードは上がらず、上がりきった知らせも来ないので、留めたバーが外れなくなる。
-        // 入力欄に戻した時点ではどちらのキーボードかの知らせがまだ届いていないため、次に届いた高さで決める。
+        // 開いている間にハードウェアキーボードに替わると、キーボードは上がらず、上がりきった通知も来ないので、留めたバーが外れなくなる。
+        // 入力欄に戻した時点ではどちらのキーボードかの通知がまだ届いていないため、次に届いた高さで決める。
         isWaitingForKeyboardAfterClosing = isInputFocused && isBarHeld
     }
 
@@ -3358,7 +3358,7 @@ final class InlineComposeController: NSObject {
         topPresenter(from: host).present(crop, animated: true)
     }
 
-    /// 失敗の理由と、送り直すか外すかを、`presenter`の上に出す。
+    /// 失敗の理由と、再送するか外すかを、`presenter`の上に出す。
     private func presentAttachmentFailure(_ id: DraftAttachment.ID, from presenter: UIViewController) {
         guard let status = model.attachmentStatus(of: id), status == .failed || status == .descriptionFailed, let title = status.title else { return }
         let local = model.localMedia[id]
@@ -3413,10 +3413,10 @@ final class InlineComposeController: NSObject {
     }
 
     /// `presenter`（`topPresenter(from:)`で得た画面）に、今すぐ画面を重ねられるか。
-    /// ほかの画面が閉じていく途中は、まだ重ねられない。押した操作を失わないよう、閉じ終えてから`action`でやり直し、falseを返す。
+    /// ほかの画面が閉じていく途中は、まだ重ねられない。選択した操作を失わないよう、閉じ終えてから`action`でやり直し、falseを返す。
     /// やり直すときは、出すかどうかと書いている状態の扱いを、そのときの状態で決め直す。
-    /// 待っている間にまた押されたら、最後に押された操作だけをやり直す。押した数だけやり直すと、同じ画面を重ねて出すため。
-    /// ほかの画面を出している間と、閉じていく画面のない切り替えの最中（押した画面が開く途中など）は、やり直さずにfalseを返す。
+    /// 待っている間にまた選択されたら、最後に選択された操作だけをやり直す。選択した数だけやり直すと、同じ画面を重ねて出すため。
+    /// ほかの画面を出している間と、閉じていく画面のない切り替えの最中（選択した画面が開く途中など）は、やり直さずにfalseを返す。
     private func canPresent(on presenter: UIViewController, retrying action: @escaping @MainActor (InlineComposeController) -> Void) -> Bool {
         guard let closing = presenter.presentedViewController else {
             return presenter.transitionCoordinator == nil
@@ -3465,7 +3465,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 入力が長くなったら、決めた高さまでは伸ばし、超えたら中でスクロールする。
-    /// 広げている間は、チューニングの最低の行数の高さを下限に本文に合わせて伸ばし、上の安全領域の上端に届いたら中でスクロールする。
+    /// 広げている間は、チューニングの最低の行数の高さを下限に本文に合わせて伸ばし、上のセーフエリアの上端に届いたら中でスクロールする。
     private func textDidChange() {
         // 幅が決まる前に測ると1文字ずつ折り返した高さになり、短い文でもスクロールに切り替わってしまう。
         guard textView.bounds.width > 0 else { return }
@@ -3542,7 +3542,7 @@ final class InlineComposeController: NSObject {
             guard let self, let replyTo = model.replyTo else { return [] }
             return LocalMention.replyParticipants(of: replyTo, myAccountID: model.myAccountID)
         }
-        // 入力欄の知らせが来なくても、下書きを入力欄に合わせる。
+        // 入力欄のコールバックが来なくても、下書きを入力欄に合わせる。
         textCompletion.onApply = { [weak self] input in
             guard let self else { return }
             if input === textView {
@@ -3594,7 +3594,7 @@ final class InlineComposeController: NSObject {
         let wanted = completionList.contentHeight
         let safeTop = host.view.safeAreaLayoutGuide.layoutFrame.minY
         let available = bar.frame.minY - completionListSpacing * 2 - safeTop
-        // 欄の上に2行ぶんの場所がなければ、欄の中身に重ねる。欄の上に出すと、上の安全領域を越えて画面の外へはみ出し、選べなかったため。
+        // 欄の上に2行ぶんの場所がなければ、欄の中身に重ねる。欄の上に出すと、上のセーフエリアを越えて画面の外へはみ出し、選べなかったため。
         let fitsAboveBar = available >= min(wanted, CompletionList.rowHeight * 2)
         var height: CGFloat
         if !fitsAboveBar, let caret = textCompletion.caretRect(in: host.view) {
@@ -3631,7 +3631,7 @@ final class InlineComposeController: NSObject {
         constraint.constant = value
     }
 
-    /// 出し入れは薄くするだけにする。動きの途中でも、候補のリストを押せるようにする。
+    /// 出し入れは薄くするだけにする。動きの途中でも、候補のリストを選択できるようにする。
     private func setCompletionListShown(_ shown: Bool) {
         guard shown != isCompletionListShown else { return }
         isCompletionListShown = shown
@@ -3783,7 +3783,7 @@ final class InlineComposeController: NSObject {
         setRowShown(accountRow, isOpen && writingAccount != nil)
     }
 
-    /// 予約の行。時計と日時、「に投稿」、外すボタンを並べる。時計と日時は返信先のラベルと同じ形で、押すと日時を選ぶシートを出す。
+    /// 予約の行。時計と日時、「に投稿」、外すボタンを並べる。時計と日時は返信先のラベルと同じ形で、選択すると日時を選ぶシートを出す。
     private func makeScheduleRow() -> UIView {
         scheduleDateButton.configuration?.image = Self.chipSymbol("clock")
         scheduleDateButton.configuration?.preferredSymbolConfigurationForImage = Self.chipSymbolScale
@@ -3922,8 +3922,8 @@ final class InlineComposeController: NSObject {
         textView.onSubmit = { [weak self] in self?.submit() }
         // 回転やウィンドウの幅の変化で折り返す行の数が変わると、広げている間の本文の高さが合わなくなるため、測り直す。
         // 折り返し直されるので、ハイライトしたURLの枠やきらめきも並べ直す。
-        // 投票の欄を折りたたむかも、要る高さが変わるので決め直す。キーボードの知らせが来ないこともあるため。
-        // 知らせの時点では、投票の欄はまだ前の幅と文字の大きさで並んでいるので、並べ終えてから決める。
+        // 投票の欄を折りたたむかも、要る高さが変わるので決め直す。キーボードの通知が来ないこともあるため。
+        // 通知の時点では、投票の欄はまだ前の幅と文字の大きさで並んでいるので、並べ終えてから決める。
         textView.onWidthChange = { [weak self] in
             self?.textDidChange()
             self?.linkTitleEffects.layoutDidChange()
@@ -4053,7 +4053,7 @@ final class InlineComposeController: NSObject {
 
 extension InlineComposeController: UITextViewDelegate {
     /// 入力バーを引いても中身は動かさない。入力欄も同じ通知を受けるため、バーのスクロールビューだけを止める。
-    /// 変形の途中に本文をスクロールし始めたら、終わりの形にする。変形で動かしている写しは、置き換える前に見えていた範囲しかないため。
+    /// 変形の途中に本文をスクロールし始めたら、終わりの形にする。変形で動かしている複製は、置き換える前に見えていた範囲しかないため。
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         guard scrollView === textView else { return }
         linkTitleEffects.finishMorph()
@@ -4124,7 +4124,7 @@ extension InlineComposeController: UITextViewDelegate {
     }
 
     func textViewDidChangeSelection(_ textView: UITextView) {
-        // ハイライトしている間に、ハイライトしていない場所を押してカーソルを動かしたら、ハイライトするのをやめる。
+        // ハイライトしている間に、ハイライトしていない場所を選択してカーソルを動かしたら、ハイライトするのをやめる。
         if !isReplacingLink {
             linkTitleEffects.endSelecting(reason: "selection")
         }
@@ -4189,8 +4189,8 @@ extension InlineComposeController: UITextViewDelegate {
     private func inputDidEndEditing() {
         // 本文と注意書きの間でフォーカスを移しているときは、書いている状態のままにする。
         // メディアを選ぶシートを出すためにキーボードを閉じたときも同じ。
-        // 添付のビューアや、投稿の失敗の知らせを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
-        // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
+        // 添付のビューアや、投稿の失敗のアラートを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
+        // シートを閉じたあとに書き終えたときは、キーボードが上がりきった通知が来ずにバーを留めたままでも、カプセルに戻す。
         guard !isMovingFocus, bottomSheet == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isShowingScheduleDatePicker, !isShowingLanguagePicker, !isPresentingAlert else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
@@ -4222,7 +4222,7 @@ extension InlineComposeController: UITextPasteDelegate {
     }
 
     /// ペーストした文字のURLを覚える。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
-    /// 本文に入れるのは`setDefaultResult()`に任せ、ここでは同じ項目から文字を読むだけにする。読み終える前に投稿ボタンを押したら、`submit()`が読み終えるのを待つ。
+    /// 本文に入れるのは`setDefaultResult()`に任せ、ここでは同じ項目から文字を読むだけにする。読み終える前に投稿ボタンを選択したら、`submit()`が読み終えるのを待つ。
     /// 読んでいる間に下書きを空に戻すか本文を入れ替えたら、読み終えても覚えない。
     /// Safariの「リンクをコピー」のように、文字ではなくURLだけの項目は、URLを文字にして覚える。
     private func noteInsertedText(of provider: NSItemProvider) {
@@ -4362,19 +4362,19 @@ private final class ComposeTextView: GlyphLanguageTextView {
         }
     }
     var completionKeys = CompletionKeys()
-    /// 入力欄の中の座標にある、入力欄の上に重ねて押させている部品（ハイライトしたURLなど）。
+    /// 入力欄の中の座標にある、入力欄の上に重ねて選択させている部品（ハイライトしたURLなど）。
     var overlayControl: (CGPoint) -> UIView? = { _ in nil }
     /// クリップボードのメディアを添付できるか。
     var canPasteMedia: () -> Bool = { false }
 
     /// クリップボードにメディアしかなくても、「ペースト」を出す。UITextViewは、`pasteConfiguration`に画像と動画を足しても、
-    /// 文字のないときは「ペースト」を出さない（シミュレーターで確かめた）。押したあとは、標準のペーストが`pasteDelegate`に項目を渡す。
-    /// 重ねた部品を、文字を描くビューより先に押させる。入力欄は文字を描くビューを子のビューの前へ並べ直すため、重ねた部品の上を押しても、文字を描くビューが受け取っていた。
+    /// 文字のないときは「ペースト」を出さない（シミュレーターで確かめた）。選択したあとは、標準のペーストが`pasteDelegate`に項目を渡す。
+    /// 重ねた部品を、文字を描くビューより先に選択させる。入力欄は文字を描くビューを子のビューの前へ並べ直すため、重ねた部品の上を選択しても、文字を描くビューが受け取っていた。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         overlayControl(point) ?? super.hitTest(point, with: event)
     }
 
-    /// 重ねた部品の上では、カーソルを動かすなどの入力欄のジェスチャーを始めさせない。始めさせると、部品より先に押した操作を受け取り、部品が押されなかった。
+    /// 重ねた部品の上では、カーソルを動かすなどの入力欄のジェスチャーを始めさせない。始めさせると、部品より先に選択の操作を受け取り、部品が選択されなかった。
     /// スクロールは止めない。ハイライトしたURLが欄を埋めていても、欄の外のURLへスクロールして選べるようにするため。
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard gestureRecognizer === panGestureRecognizer || overlayControl(gestureRecognizer.location(in: self)) == nil else { return false }
@@ -4434,7 +4434,7 @@ final class ComposeLineField: GlyphLanguageTextField {
     }()
 
     /// 空のときも、書いたときと同じ高さを取る。UITextFieldは、空のときの高さを今の書体ではなく既定の大きさの書体から出す。
-    /// 文字の大きさの設定が既定と違うと、書き始めたときと消したときに、欄と投稿欄の高さが変わっていた。
+    /// Dynamic Typeが既定と違うと、書き始めたときと消したときに、欄と投稿欄の高さが変わっていた。
     override var intrinsicContentSize: CGSize {
         var size = super.intrinsicContentSize
         guard text?.isEmpty ?? true, let font else { return size }

@@ -1,6 +1,6 @@
 import UIKit
 
-/// タブごとの画面を積むナビゲーション。ステータスバーの文字の色を、いちばん上の画面に決めさせる。
+/// タブごとの画面をプッシュするナビゲーション。ステータスバーの文字の色を、いちばん上の画面に決めさせる。
 /// 標準のナビゲーションは、バーを出している間はバーの見た目から色を決め、画面に尋ねない。
 /// プロフィールのように、ヘッダー画像をステータスバーの下まで伸ばす画面が、画像の明るさで色を変えられるようにするため。
 final class ContentNavigationController: UINavigationController, UIGestureRecognizerDelegate {
@@ -9,15 +9,15 @@ final class ContentNavigationController: UINavigationController, UIGestureRecogn
     var onEmptyBarClickOnMac: (() -> Void)?
 
     /// 画面の下端から、投稿欄のカプセルとキーボード、アプリ内のSafariのシートが覆っている高さ。
-    /// 積んだどの画面でも末尾が裏に隠れないよう、タブバーなどでsafe areaに入っている分を超えて覆っている分を、積んだ画面のsafe areaに足す。
-    /// ナビゲーション自身のsafe areaには足さない。足すとタブバーがナビゲーションに渡す余白を測り直し、safe areaの変化の知らせが止まらなくなるため。
+    /// プッシュしたどの画面でも末尾が裏に隠れないよう、タブバーなどでsafe areaに入っている分を超えて覆っている分を、プッシュした画面のsafe areaに足す。
+    /// ナビゲーション自身のsafe areaには足さない。足すとタブバーがナビゲーションに渡す余白を測り直し、safe areaの変化のコールバックが止まらなくなるため。
     /// 下側のsafe areaを広げるだけなので、スクロールする画面の上端を基準にした読んでいる位置は動かない。ただし末尾までスクロールしていると、
     /// 下端を覆うものがなくなったときに末尾が下端に合わせて下がる。末尾は古い投稿を読み込む途中で留まる場所ではなく、そこで書き始めることはまれなため、補正しない。
     var coveredBottomHeight: CGFloat = 0 {
         didSet { applyCoveredBottom(to: viewControllers) }
     }
 
-    /// trueの間は、積む画面をアニメーションなしで出す。上に重ねた画面を閉じるのと同時に積むとき、閉じていく画面の下に行き先がもう出ているようにする。
+    /// trueの間は、プッシュする画面をアニメーションなしで出す。上のモーダルビューを閉じるのと同時にプッシュするとき、閉じていく画面の下に行き先がもう出ているようにする。
     var pushesWithoutAnimation = false
 
     override init(rootViewController: UIViewController) {
@@ -83,7 +83,7 @@ protocol NavigationBarTapPassing: UIViewController {
 }
 
 /// ボタンのない場所のタップを、いちばん上の画面が望めば下に通すナビゲーションバー。
-/// 標準のバーは、背景を描かないときもバー全体でタップを受けるため、バーの下に入れたヘッダー画像を押せない。
+/// 標準のバーは、背景を描かないときもバー全体でタップを受けるため、バーの下に入れたヘッダー画像を選択できない。
 private final class ContentNavigationBar: UINavigationBar {
     /// 触れたものを受けたビューが、ボタンのない場所か。
     /// ボタンは、バーの中身のビューのさらに内側にある。バーかその中身のビューそのものが受けたら、ボタンのない場所。
@@ -93,7 +93,7 @@ private final class ContentNavigationBar: UINavigationBar {
 
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
-        // 中身の組み方が変わってこの判定が外れても、今までどおりバーが受けるだけで、ボタンが押せなくなることはない。
+        // 中身の組み方が変わってこの判定が外れても、今までどおりバーが受けるだけで、ボタンが選択できなくなることはない。
         guard let hit, isEmptyArea(hit),
               let top = (delegate as? UINavigationController)?.topViewController as? any NavigationBarTapPassing,
               top.passesEmptyNavigationBarTaps

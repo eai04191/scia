@@ -60,7 +60,7 @@ public struct PickedMedia {
     }
 }
 
-/// 投稿欄にペーストしたか、共有で受け取ったメディア1つ。ピッカーで選んだものと違い、あとから読み直せない。
+/// 投稿欄にペーストしたか、共有で受け取ったメディア1つ。ピッカーで選んだものと違い、あとから再読み込みできない。
 public struct PastedMedia {
     /// 上限を超えて足さなかったときに、知らせる文言を選ぶのに使う。
     public let kind: MediaAttachment.Kind

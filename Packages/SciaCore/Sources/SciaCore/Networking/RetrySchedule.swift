@@ -1,8 +1,8 @@
 public import Foundation
 
-/// 読めなかったもの（画像、Xの投稿、動画の最初のコマ）を覚え、行を描いたときのような自動の読み込みで、いつ読み直してよいかを決める。
+/// 読めなかったもの（画像、Xの投稿、動画の最初のコマ）を覚え、行を描いたときのような自動の読み込みで、いつ再読み込みしてよいかを決める。
 /// 待てば直る失敗（通信の失敗、408、429、5xx）は、失敗するたびに間隔を倍にして上限で止め、応答が再開の時刻を示していればそれまで待つ。
-/// 待っても直らない失敗（そのほかの4xx、読めない中身）は、自動では読み直さない。分け方は`HTTPFailure`に従う。
+/// 待っても直らない失敗（そのほかの4xx、読めない中身）は、自動では再読み込みしない。分け方は`HTTPFailure`に従う。
 /// 使う人が自分で見に行った操作（ビューアを開くなど）は、これに聞かずに読む。読めたら`recordSuccess`で忘れる。
 @MainActor
 public struct RetrySchedule {
@@ -11,7 +11,7 @@ public struct RetrySchedule {
         public var initialDelay: Duration
         public var maxDelay: Duration
         public var jitter: Jitter
-        /// 描いている画像が隠れている間に、見えるようになったかを確かめる間隔。見えたら、読み直してよければすぐ読む。
+        /// 描いている画像が隠れている間に、見えるようになったかを確かめる間隔。見えたら、再読み込みしてよければすぐ読む。
         public var hiddenRecheckInterval: Duration
 
         public init(initialDelay: Duration, maxDelay: Duration, jitter: Jitter = .none, hiddenRecheckInterval: Duration = .seconds(1)) {
@@ -34,7 +34,7 @@ public struct RetrySchedule {
     private let policy: @MainActor () -> Policy
     private let elapsed: @Sendable () -> Duration
     private var records: [URL: Record] = [:]
-    /// 制限の単位（`rateLimitScope`）ごとの、読み直してよくなる時刻。
+    /// 制限の単位（`rateLimitScope`）ごとの、再読み込みしてよくなる時刻。
     private var pausedScopes: [String: Duration] = [:]
 
     /// - Parameter policy: 失敗したときに読む。チューニングで変えた間隔を、次の失敗から効かせる。
@@ -76,13 +76,13 @@ public struct RetrySchedule {
         policy().hiddenRecheckInterval
     }
 
-    /// 画面に描いている間、待てば直る失敗を、読み直してよくなった時刻に読み直す（docs/image-loading.md）。
-    /// 行を描き直したときだけ読み直すと、画面に出たままの行は、間隔が過ぎても、レート制限が明けても、読めないまま残るため。
-    /// 最初の1回は、見えているかによらず読む。読み直しは見えている間だけにし、隠れている間（ほかのタブ、折りたたんだ注意書きの下、使い回しを待つセルなど）は、
-    /// `recheck`ごとに見えたかを確かめる。隠れたまま読み直すと、見ている画像と同じ`/media_proxy`の制限を使ってしまうため。
+    /// 画面に描いている間、待てば直る失敗を、再読み込みしてよくなった時刻に再読み込みする（docs/image-loading.md）。
+    /// 行を再描画したときだけ再読み込みすると、画面に出たままの行は、間隔が過ぎても、レート制限が明けても、読めないまま残るため。
+    /// 最初の1回は、見えているかによらず読む。再読み込みは見えている間だけにし、隠れている間（ほかのタブ、折りたたんだ注意書きの下、使い回しを待つセルなど）は、
+    /// `recheck`ごとに見えたかを確かめる。隠れたまま再読み込みすると、見ている画像と同じ`/media_proxy`の制限を使ってしまうため。
     /// 待っても直らない失敗、覚えない失敗（回線で控えたものなど）、取り消し、`isWanted`がfalseになったら、nilを返してやめる。
     /// - Parameter isWanted: まだその画像を描こうとしているか。描く画像が替わったり、ビューがなくなったりしたらfalse。
-    /// - Parameter delay: 読めなかったあとに、読み直してよくなるまでの長さ（`delayUntilAutomaticLoad(of:)`）。
+    /// - Parameter delay: 読めなかったあとに、再読み込みしてよくなるまでの長さ（`delayUntilAutomaticLoad(of:)`）。
     static func loadWhileShown<Value>(
         clock: any Clock<Duration>,
         isWanted: @MainActor () -> Bool,
@@ -101,15 +101,15 @@ public struct RetrySchedule {
             if let value = try? await load() {
                 return value
             }
-            // 覚えない失敗は今すぐ読んでよいことになるので、ここで続けると読み直し続けてしまう。
+            // 覚えない失敗は今すぐ読んでよいことになるので、ここで続けると再読み込みし続けてしまう。
             guard let wait = delay(), wait > .zero, (try? await clock.sleep(for: wait)) != nil else { return nil }
         }
         return nil
     }
 
-    /// 読み直してよくなるまで待つ（`delayUntilAutomaticLoad(of:)`）。待つ間に失敗を重ねたり制限が延びたりしたら、その時刻まで待ち直す。
-    /// 画面を描き直して読み直させるストア（絵文字、Xの投稿）が、読み直してよくなったことを知らせるのに使う。
-    /// - Returns: 読み直してよくなったらtrue。待っても直らない失敗になったか、取り消されたらfalse。
+    /// 再読み込みしてよくなるまで待つ（`delayUntilAutomaticLoad(of:)`）。待つ間に失敗を重ねたり制限が延びたりしたら、その時刻まで待ち直す。
+    /// 画面を再描画して再読み込みさせるストア（絵文字、Xの投稿）が、再読み込みしてよくなったことを知らせるのに使う。
+    /// - Returns: 再読み込みしてよくなったらtrue。待っても直らない失敗になったか、取り消されたらfalse。
     static func waitUntilAutomaticLoad(clock: any Clock<Duration>, delay: @MainActor () -> Duration?) async -> Bool {
         while let wait = delay() {
             guard wait > .zero else { return true }
@@ -118,7 +118,7 @@ public struct RetrySchedule {
         return false
     }
 
-    /// 読めなかったことがあるか。待てば直るものも含める。先読みのように、読めない画像のために通信を増やしたくないところで使う。
+    /// 読めなかったことがあるか。待てば直るものも含める。プリフェッチのように、読めない画像のために通信を増やしたくないところで使う。
     public func hasFailed(_ url: URL) -> Bool {
         records[url] != nil
     }
@@ -126,7 +126,7 @@ public struct RetrySchedule {
     /// 読めなかったことを覚える。取り消しは失敗ではないので覚えない。
     public mutating func recordFailure(_ error: any Error, for url: URL) {
         switch HTTPFailure(error) {
-        // 回線で控えたものは、回線が変わって描き直したときに読むものを選び直すので、時間では覚えない。
+        // 回線で控えたものは、回線が変わって再描画したときに読むものを選び直すので、時間では覚えない。
         case nil, .unavailableOnNetwork:
             return
         case .permanent, .unauthorized:
@@ -164,7 +164,7 @@ public struct RetrySchedule {
     }
 }
 
-/// 前に読めなかった画像の自動の読み込みを、読み直してよくなるまで見送った。
+/// 前に読めなかった画像の自動の読み込みを、再読み込みしてよくなるまで見送った。
 public struct ImageLoadDeferred: Error, Equatable, Sendable {
     public init() {}
 }

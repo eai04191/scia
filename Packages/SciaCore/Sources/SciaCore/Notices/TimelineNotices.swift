@@ -1,6 +1,6 @@
-/// タイムラインで出す知らせの中身。カタログでも同じ文言を並べるため、タイムラインの外に置く。
+/// タイムラインで出すチップの中身。カタログでも同じ文言を並べるため、タイムラインの外に置く。
 extension Notice {
-    /// 投稿への操作（お気に入り、ブースト）の失敗。数秒で消え、押すと理由が出る。
+    /// 投稿への操作（お気に入り、ブースト）の失敗。数秒で消え、選択すると理由が出る。
     /// - Parameter title: 何が失敗したか。「お気に入りを変更できませんでした」など。
     public static func interactionFailure(title: String, showReason: @escaping @MainActor () -> Void) -> Notice {
         Notice(id: "timeline.interactionFailure", kind: .failure, title: title, action: .disclosure(hint: "理由を見られます。", handler: showReason))
@@ -9,13 +9,13 @@ extension Notice {
     /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中。サーバーが相手のページを取りに行くため、時間がかかることがある。
     public static let profileLookup = Notice(id: "timeline.profileLookup", kind: .progress, title: "取得中")
 
-    /// 押しても応答が届くまで画面が変わらない操作（IDで開くスレッド、編集や書き直しの開始、引用の開始、替えたアカウントでの返信先の検索）で、読むのが長引いている。
+    /// 選択しても応答が届くまで画面が変わらない操作（IDで開くスレッド、編集や書き直しの開始、引用の開始、替えたアカウントでの返信先の検索）で、読むのが長引いている。
     public static let slowFetch = Notice(id: "timeline.slowFetch", kind: .progress, title: "取得中")
 
     /// 投稿の削除の応答が長引いている。
     public static let slowDeletion = Notice(id: "timeline.slowDeletion", kind: .progress, title: "削除中")
 
-    /// まとめてブーストの途中。済んだ件数と全体の件数を出し、押すと止めるかの確認を出す。決まりはdocs/batch-actions.mdの「ブースト」にある。
+    /// まとめてブーストの途中。済んだ件数と全体の件数を出し、選択すると止めるかの確認を出す。決まりはdocs/batch-actions.mdの「ブースト」にある。
     public static func batchReblog(completed: Int, total: Int, onStop: @escaping @MainActor () -> Void) -> Notice {
         Notice(id: "timeline.batchReblog", kind: .progress, title: "ブースト中", value: "\(completed)/\(total)", action: .disclosure(hint: "まとめてブーストを中止するか選べます。", handler: onStop), valueIsProgress: true)
     }
@@ -25,7 +25,7 @@ extension Notice {
         "\(index + 1)件目をブーストできませんでした"
     }
 
-    /// まとめて共有するメディアを落としている途中。落とし終えた数と全体の数を出し、押すと止めるかの確認を出す。決まりはdocs/batch-actions.mdの「共有」にある。
+    /// まとめて共有するメディアを落としている途中。落とし終えた数と全体の数を出し、選択すると止めるかの確認を出す。決まりはdocs/batch-actions.mdの「共有」にある。
     public static func batchDownload(completed: Int, total: Int, onStop: @escaping @MainActor () -> Void) -> Notice {
         Notice(id: "timeline.batchDownload", kind: .progress, title: "ダウンロード中", value: "\(completed)/\(total)", action: .disclosure(hint: "ダウンロードを中止するか選べます。", handler: onStop), valueIsProgress: true)
     }
@@ -54,12 +54,12 @@ extension Notice {
     public static let textCopied = Notice(id: "timeline.textCopied", kind: .success, title: "テキストをコピーしました")
 
     /// 投稿を送っている間に、返信、引用、編集、書き直しを選んだ。送り終えれば始められるので、待ってもらう。
-    /// 押した直後で何の操作かは分かるため、操作の名前は付けない。
+    /// 選択した直後で何の操作かは分かるため、操作の名前は付けない。
     public static let startWhilePosting = Notice(id: "compose.startWhilePosting", kind: .info, title: "投稿が完了するまでお待ちください")
 
-    /// タップや長押しに選んだメニューの項目が、押した対象では使えない（他人の投稿の「編集」など）。決まりはdocs/object-actions.mdの「項目を行う」にある。
-    /// 押した直後で何に対してかは分かるため、対象の呼び名（「この投稿では」）は付けない。付けると項目の名前が長いときに2行に折り返すため、付けずに1行に収める。
-    /// - Parameter reason: 項目が押せない理由（項目のサブタイトル）。あれば、それを文言にする。
+    /// タップや長押しに選んだメニューの項目が、選択した対象では使えない（他人の投稿の「編集」など）。決まりはdocs/object-actions.mdの「項目を行う」にある。
+    /// 選択した直後で何に対してかは分かるため、対象の呼び名（「この投稿では」）は付けない。付けると項目の名前が長いときに2行に折り返すため、付けずに1行に収める。
+    /// - Parameter reason: 項目が無効の理由（項目のサブタイトル）。あれば、それを文言にする。
     public static func objectActionUnavailable(itemTitle: String, reason: String?) -> Notice {
         Notice(id: "objectAction.unavailable", kind: .info, title: reason ?? "“\(itemTitle)”を使えません")
     }

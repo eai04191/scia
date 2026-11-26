@@ -22,13 +22,13 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
     private var inFlight: [Key: Task<Loaded, any Error>] = [:]
     /// 元のファイルを置くディスクキャッシュ。共有や保存で縮めずに元の形式のまま渡すために残し、ビューアで開き直すときは通信せずにここから読む。
     private let files: MediaFileCache
-    /// 先読みした元の画像の置き場。ビューアで開いたら`files`へ移す。nilなら先読みしない。
+    /// プリフェッチした元の画像の置き場。ビューアで開いたら`files`へ移す。nilならプリフェッチしない。
     private let prefetchedFiles: MediaFileCache?
-    /// 先頭から最初のフレームを作れなかった動画。サーバーのプレビューを出し、読み直さない。通信の失敗や429、5xxは、待てば作れるため含めない。
+    /// 先頭から最初のフレームを作れなかった動画。サーバーのプレビューを出し、再読み込みしない。通信の失敗や429、5xxは、待てば作れるため含めない。
     private var failedVideoFrames: Set<URL> = []
-    /// 読めなかった画像と動画の最初のフレームを、タイムラインに描いたときにいつ読み直すか。
+    /// 読めなかった画像と動画の最初のフレームを、タイムラインに描いたときにいつ再読み込みするか。
     private var retry: RetrySchedule
-    /// 画面に描いている画像を読み直すまで待つ時計。
+    /// 画面に描いている画像を再読み込みするまで待つ時計。
     private let clock: any Clock<Duration>
     private let logger = SciaLog.logger(category: "media")
 
@@ -97,12 +97,12 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         }
     }
 
-    /// ビューアで開く元の画像を、展開せずに先読みの置き場へ落とす。置いてあるもの、ビューアで開いたもの、前に読めなかったものは読まない。
+    /// ビューアで開く元の画像を、展開せずにプリフェッチの置き場へ落とす。置いてあるもの、ビューアで開いたもの、前に読めなかったものは読まない。
     /// 展開しないのは、1枚で数十MBのメモリを使うため。展開はビューアで開いたときに行う。
-    /// 先読みの途中にビューアで同じ画像を開くと、ビューアは先読みを待たずに自分で読み、同じ画像を2回読む。Wi-Fiでだけ起き、
-    /// 待ち合わせのために先読みの置き場とビューアの読み込みを結ぶ手間に見合わないため、そのままにしている（docs/image-loading.md）。
+    /// プリフェッチの途中にビューアで同じ画像を開くと、ビューアはプリフェッチを待たずに自分で読み、同じ画像を2回読む。Wi-Fiでだけ起き、
+    /// 待ち合わせのためにプリフェッチの置き場とビューアの読み込みを結ぶ手間に見合わないため、そのままにしている（docs/image-loading.md）。
     /// Wi-Fiではタイムラインのサムネイルにも元の画像を読むことがあるので、同じ画像をサムネイルとして読んでいる途中なら、それを待つ。
-    /// サムネイルで読んだ元の画像も先読みの置き場に置くため、同じファイルを2回読まずに済む。
+    /// サムネイルで読んだ元の画像もプリフェッチの置き場に置くため、同じファイルを2回読まずに済む。
     public func prefetchOriginal(_ url: URL, purpose: RequestPurpose) async {
         guard let prefetchedFiles else { return }
         for task in inFlight.filter({ $0.key.url == url && !$0.key.isVideoFrame }).values {
@@ -130,13 +130,13 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
     }
 
     /// タイムラインのサムネイルを読み込む。動画の最初のフレームを作れなければ、サーバーのプレビューを読む。
-    /// 前に読めなかったものは、読み直してよくなるまで読まない（`image(for:maxPixelSize:keepsOriginal:retriesNow:)`）。
+    /// 前に読めなかったものは、再読み込みしてよくなるまで読まない（`image(for:maxPixelSize:keepsOriginal:retriesNow:)`）。
     public func thumbnail(for request: MediaThumbnailRequest) async throws -> Image {
         switch request.source {
         case .image:
             return try await image(for: request.url, maxPixelSize: request.maxPixelSize, purpose: request.purpose, sharesWithPrefetch: request.isOriginal)
         case .videoFrame(let fallback):
-            // 通信の失敗で作れなかった間は、読み直してよくなるまでサーバーのプレビューで描く。先読みでは、前に読めなかったものを読まない。
+            // 通信の失敗で作れなかった間は、再読み込みしてよくなるまでサーバーのプレビューで描く。プリフェッチでは、前に読めなかったものを読まない。
             if !failedVideoFrames.contains(request.url), retry.allowsAutomaticLoad(of: request.url),
                request.purpose != .prefetch || !retry.hasFailed(request.url) {
                 do {
@@ -146,7 +146,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
                 } catch {
                     // 通信の失敗やサーバーの一時的な障害は、待てば作れるため、間隔をおいて作り直す。
                     // 範囲に応えないサーバーや、先頭から作れない動画は、作り直しても同じなので覚える。
-                    // 回線で控えたものは、回線が変わって描き直したときに選び直すので覚えない。
+                    // 回線で控えたものは、回線が変わって再描画したときに選び直すので覚えない。
                     switch HTTPFailure(error) {
                     case .temporary: retry.recordFailure(error, for: request.url)
                     case .permanent, .unauthorized: failedVideoFrames.insert(request.url)
@@ -154,12 +154,12 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
                     }
                 }
             }
-            // ぼかしている間の先読みなら、代わりのプレビューも先読みとして読み、モバイル通信や低データモードでは読まない。
+            // ぼかしている間のプリフェッチなら、代わりのプレビューもプリフェッチとして読み、モバイル通信や低データモードでは読まない。
             return try await image(for: fallback, maxPixelSize: request.maxPixelSize, purpose: request.purpose == .prefetch ? .prefetch : .display)
         }
     }
 
-    /// タイムラインに描くサムネイルを読み込む。待てば直る失敗なら、`isWanted`の間、見えていれば読み直してよくなった時刻に読み直す（`RetrySchedule.loadWhileShown`）。
+    /// タイムラインに描くサムネイルを読み込む。待てば直る失敗なら、`isWanted`の間、見えていれば再読み込みしてよくなった時刻に再読み込みする（`RetrySchedule.loadWhileShown`）。
     public func shownThumbnail(for request: MediaThumbnailRequest, while isWanted: @MainActor () -> Bool, visible isVisible: @MainActor () -> Bool) async -> Image? {
         // 動画の最初のフレームを作れなくてもプレビューで描くので、失敗として返るのはプレビューが読めなかったときだけ。
         let failing = switch request.source {
@@ -173,7 +173,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         }
     }
 
-    /// 画面に描く画像（リンクのカード、プロフィールのヘッダー画像など）を読み込む。読み直しは`shownThumbnail`と同じ。
+    /// 画面に描く画像（リンクのカード、プロフィールのヘッダー画像など）を読み込む。再読み込みは`shownThumbnail`と同じ。
     public func shownImage(
         for url: URL,
         maxPixelSize: Int,
@@ -228,7 +228,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         }
     }
 
-    /// 同じものを、回線の制限の違う目的で読んでいる途中なら、その結果を待つ。ぼかしている間に先読みしていた画像を、外したときに読み直さないため。
+    /// 同じものを、回線の制限の違う目的で読んでいる途中なら、その結果を待つ。ぼかしている間にプリフェッチしていた画像を、外したときに再読み込みしないため。
     /// 制限の厳しい読み込みにOSが断ったら、その失敗は引き継がずにnilを返し、呼び出し側が自分の目的で読む。
     private func joinRestricted(of key: Key) async throws -> Image? {
         guard let task = inFlight.first(where: {
@@ -257,10 +257,10 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
     /// - Parameter keepsOriginal: 元のファイルをキャッシュに置き、`hasOriginal(for:)`で確かめられるようにする。
     ///   同じURLを残さずに読み込んでいる途中だった場合は、その結果を待つため残らない。元のファイルを求めるのはビューアだけで、
     ///   ビューアは常に残すよう求めるため、この組み合わせは起きない。
-    /// 前に読めなかった画像は、読み直してよくなるまで`ImageLoadDeferred`を投げる。
-    /// - Parameter retriesNow: 使う人が自分で見に行った操作（ビューアを開く、長押しするなど）で、間隔を待たずに読み直す。
+    /// 前に読めなかった画像は、再読み込みしてよくなるまで`ImageLoadDeferred`を投げる。
+    /// - Parameter retriesNow: 使う人が自分で見に行った操作（ビューアを開く、長押しするなど）で、間隔を待たずに再読み込みする。
     /// - Parameter purpose: `retriesNow`でないときに送る目的。タイムラインのサムネイルの元の画像は、質を上げる通信として送る。
-    /// - Parameter sharesWithPrefetch: ビューアで開くのと同じ元の画像を、タイムラインのサムネイルとして読む。読んだファイルを先読みの置き場にも置く。
+    /// - Parameter sharesWithPrefetch: ビューアで開くのと同じ元の画像を、タイムラインのサムネイルとして読む。読んだファイルをプリフェッチの置き場にも置く。
     public func image(
         for url: URL,
         maxPixelSize: Int,
@@ -298,7 +298,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         guard retriesNow || retry.allowsAutomaticLoad(of: url) else {
             throw ImageLoadDeferred()
         }
-        // 先読みでは、前に読めなかった画像を読まない（docs/image-loading.md）。
+        // プリフェッチでは、前に読めなかった画像を読まない（docs/image-loading.md）。
         if purpose == .prefetch, retry.hasFailed(url) {
             throw ImageLoadDeferred()
         }
@@ -306,7 +306,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         let maker = maker
         let files = keepsOriginal ? files : nil
         let prefetchedForViewer = keepsOriginal ? prefetchedFiles : nil
-        // サムネイルに読んだ元の画像は、ビューアで開く画像と同じなので、先読みの置き場にも置く。先読みで同じファイルを読み直さないため。
+        // サムネイルに読んだ元の画像は、ビューアで開く画像と同じなので、プリフェッチの置き場にも置く。プリフェッチで同じファイルを再読み込みしないため。
         let prefetchedFromThumbnail = sharesWithPrefetch && !keepsOriginal ? prefetchedFiles : nil
         // タイムラインに描くための読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
         let task = RequestPurpose.$current.withValue(purpose) { Task<Loaded, any Error> {
@@ -316,7 +316,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
             if let files, let cached = await files.data(for: url), let image = await Self.decode(cached, maxPixelSize: maxPixelSize, maker: maker) {
                 return Loaded(decoded: image, keptOriginal: true)
             }
-            // 先読みしてあれば通信せずに使い、メディアのキャッシュへ移す。開いていない画像と開いた画像の置き場を分けているため（docs/image-loading.md）。
+            // プリフェッチしてあれば通信せずに使い、メディアのキャッシュへ移す。開いていない画像と開いた画像の置き場を分けているため（docs/image-loading.md）。
             if let files, let generation, let prefetchedFiles = prefetchedForViewer, let prefetched = await prefetchedFiles.data(for: url),
                let image = await Self.decode(prefetched, maxPixelSize: maxPixelSize, maker: maker) {
                 var keptOriginal = false
@@ -340,8 +340,8 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
             }
             return Loaded(decoded: image, keptOriginal: keptOriginal)
         } }
-        // 待ち合わせた呼び出しにも、読めたかを覚えてから結果を返す。覚える前に返すと、待ち合わせた側が読み直してよくなるまでの長さを聞いて、
-        // まだ失敗を覚えていない0を受け取り、描いている間の読み直しをやめてしまうため。
+        // 待ち合わせた呼び出しにも、読めたかを覚えてから結果を返す。覚える前に返すと、待ち合わせた側が再読み込みしてよくなるまでの長さを聞いて、
+        // まだ失敗を覚えていない0を受け取り、描いている間の再読み込みをやめてしまうため。
         let settled = Task<Loaded, any Error> { @MainActor in
             defer { inFlight[key] = nil }
             do {

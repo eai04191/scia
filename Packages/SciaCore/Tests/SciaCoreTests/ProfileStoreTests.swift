@@ -17,7 +17,7 @@ struct ProfileStoreTests {
 
     private struct Failure: Error {}
 
-    /// サーバーで固定されている投稿。固定したあとに読み直す応答を変えるのに使う。
+    /// サーバーで固定されている投稿。固定したあとに再読み込みする応答を変えるのに使う。
     private actor PinnedOnServer {
         var statuses: [Status] = []
         func set(_ statuses: [Status]) { self.statuses = statuses }
@@ -189,7 +189,7 @@ struct ProfileStoreTests {
         #expect(cache[known.id]?.following == true)
     }
 
-    /// 読み込みのアカウントの応答を止め、読み直しのアカウントの応答はすぐ返すAPI。止めた方は、届いた時点で古い。
+    /// 読み込みのアカウントの応答を止め、再読み込みのアカウントの応答はすぐ返すAPI。止めた方は、届いた時点で古い。
     private func makeAPIWithGatedFirstAccount(old: Account, new: Account, gate: Gate) -> ProfileStore.API {
         let calls = Mutex(0)
         return ProfileStore.API(
@@ -209,7 +209,7 @@ struct ProfileStoreTests {
         )
     }
 
-    /// フォローしたあとの読み直しのように、あとから頼んだアカウントの読み直しが先に届いたら、前に頼んだ読み込みの応答が後から届いても、古い数で戻さない。
+    /// フォローしたあとの再読み込みのように、あとから頼んだアカウントの再読み込みが先に届いたら、前に頼んだ読み込みの応答が後から届いても、古い数で戻さない。
     @Test func accountRequestedEarlierDoesNotOverwriteLaterReload() async throws {
         let old = try account(statusesCount: 1)
         let new = try account(statusesCount: 2)
@@ -258,7 +258,7 @@ struct ProfileStoreTests {
         }
     }
 
-    /// 前に読んだ関係から始めると、読み直しが終わる前にフォローを送れる。フォローより前に頼んだ読み直しの応答が後から届いても、フォローの結果を古い関係で戻さない。
+    /// 前に読んだ関係から始めると、再読み込みが終わる前にフォローを送れる。フォローより前に頼んだ再読み込みの応答が後から届いても、フォローの結果を古い関係で戻さない。
     @Test func relationshipRequestedBeforeFollowDoesNotOverwriteFollowResult() async throws {
         let known = try account()
         let cache = localRelationships()
@@ -286,7 +286,7 @@ struct ProfileStoreTests {
         #expect(cache[known.id]?.following == true)
     }
 
-    /// ユーザーのメニューで変えた関係を反映して覚え、変える前に頼んだ関係の読み込みが後から届いても戻さない。
+    /// ユーザーのメニューで変えた関係を反映してキャッシュし、変える前に頼んだ関係の読み込みが後から届いても戻さない。
     @Test func appliedRelationshipWinsOverEarlierLoad() async throws {
         let known = try account()
         let cache = localRelationships()
@@ -341,7 +341,7 @@ struct ProfileStoreTests {
         #expect(cache[known.id]?.blocking == true)
     }
 
-    /// 読み直しに失敗しても、前に読んだ関係があれば、読めなかった表示にせずそのまま出す。
+    /// 再読み込みに失敗しても、前に読んだ関係があれば、読めなかった表示にせずそのまま出す。
     @Test func cachedRelationshipStaysWhenReloadFails() async throws {
         let known = try account()
         let cache = localRelationships()
@@ -483,7 +483,7 @@ struct ProfileStoreTests {
         _ = await load.value
     }
 
-    /// 自分のプロフィールで載せるものを変えたあと、注目のハッシュタグと紹介している人だけを読み直す。
+    /// 自分のプロフィールで載せるものを変えたあと、注目のハッシュタグと紹介している人だけを再読み込みする。
     /// 読めなかったほうは前のまま残し、投げる。
     @Test func reloadFeaturedReplacesWhatWasRead() async throws {
         let known = try account()
@@ -516,7 +516,7 @@ struct ProfileStoreTests {
         #expect(store.endorsements == [known])
     }
 
-    /// 続けて読み直したとき、先に読み始めた読み直しの応答が遅れて届いても、あとの読み直しの結果を戻さない。
+    /// 続けて再読み込みしたとき、先に読み始めた再読み込みの応答が遅れて届いても、あとの再読み込みの結果を戻さない。
     @Test func olderFeaturedReloadDoesNotOverwriteNewerOne() async throws {
         let known = try account()
         let old = FeaturedTag(id: "7", name: "猫写真", statusesCount: 3)
@@ -524,7 +524,7 @@ struct ProfileStoreTests {
         let calls = Mutex(0)
         var api = makeAPI(account: known)
         api.featuredTags = { _ in
-            // 1回目は最初の読み込み、2回目は止めておく読み直し、3回目はあとの読み直し。
+            // 1回目は最初の読み込み、2回目は止めておく再読み込み、3回目はあとの再読み込み。
             let call = calls.withLock { count in
                 count += 1
                 return count
@@ -571,7 +571,7 @@ struct ProfileStoreTests {
         #expect(!store.removeStatus("10"))
     }
 
-    /// 固定したり外したりしたあとに、固定された投稿だけを読み直す。
+    /// 固定したり外したりしたあとに、固定された投稿だけを再読み込みする。
     @Test func reloadPinnedReplacesPinnedStatuses() async throws {
         let known = try account()
         let pinned = try pinnedStatus()
@@ -593,7 +593,7 @@ struct ProfileStoreTests {
         #expect(store.pinned == [pinned])
     }
 
-    /// 固定と解除を続けて押し、先に読み始めた読み直しの応答が遅れて届いても、あとの読み直しの結果を戻さない。
+    /// 固定と解除を続けて選択し、先に読み始めた再読み込みの応答が遅れて届いても、あとの再読み込みの結果を戻さない。
     @Test func olderPinnedReloadDoesNotOverwriteNewerOne() async throws {
         let known = try account()
         let pinned = try pinnedStatus()
@@ -605,7 +605,7 @@ struct ProfileStoreTests {
             relationship: { _ in nil },
             statuses: { _, filter, _ in
                 guard filter.pinned else { return TimelinePage(statuses: [], isRegenerating: false) }
-                // 1回目は最初の読み込み、2回目は固定したあとの読み直しで、止めておく。3回目は外したあとの読み直し。
+                // 1回目は最初の読み込み、2回目は固定したあとの再読み込みで、止めておく。3回目は外したあとの再読み込み。
                 let call = calls.withLock { count in
                     count += 1
                     return count
@@ -628,7 +628,7 @@ struct ProfileStoreTests {
         #expect(store.pinned.isEmpty)
     }
 
-    /// 読み直しを待つ間に反映したお気に入りを、読み始めた時点の応答で戻さない。
+    /// 再読み込みを待つ間に反映したお気に入りを、読み始めた時点の応答で戻さない。
     @Test func pinnedReloadKeepsUpdatesMadeWhileWaiting() async throws {
         let known = try account()
         let pinned = try pinnedStatus()
@@ -677,7 +677,7 @@ struct ProfileStoreTests {
         #expect(store.pinned.isEmpty)
     }
 
-    /// アカウントの読み直しに失敗しても、関係と固定された投稿は反映する。失敗はアカウントの分だけ返す。
+    /// アカウントの再読み込みに失敗しても、関係と固定された投稿は反映する。失敗はアカウントの分だけ返す。
     @Test func loadProfileKeepsOtherResultsWhenOneFails() async throws {
         let known = try account()
         let pinned = try pinnedStatus()
@@ -715,7 +715,7 @@ struct ProfileStoreTests {
         #expect(store.followState == .following)
     }
 
-    /// 関係を読めなかったら、フォローのボタンを黙って消さず、読めなかったことを示す。読み直せたら、ボタンに戻す。
+    /// 関係を読めなかったら、フォローのボタンを黙って消さず、読めなかったことを示す。再読み込みできたら、ボタンに戻す。
     @Test func relationshipFailureCanBeRetried() async throws {
         let known = try account()
         let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(
@@ -729,7 +729,7 @@ struct ProfileStoreTests {
         #expect(failures.account == nil)
         #expect(store.followState == .loadFailed)
 
-        // 読み直しにも失敗したら、読めなかったままにする。
+        // 再読み込みにも失敗したら、読めなかったままにする。
         await #expect(throws: Failure.self) { try await store.reloadRelationship() }
         #expect(store.followState == .loadFailed)
         #expect(!store.isReloadingRelationship)
@@ -768,13 +768,13 @@ struct ProfileStoreTests {
         try await store.toggleFollow()
         #expect(store.followState == .requested)
 
-        // リクエスト中に押すと、リクエストを取り消す。
+        // リクエスト中に選択すると、リクエストを取り消す。
         try await store.toggleFollow()
         #expect(store.followState == .notFollowing(locked: true))
         #expect(await calls.follows == ["follow", "unfollow"])
     }
 
-    /// フォローのAPIは関係だけを返すので、フォロワー数はアカウントを読み直して変える。
+    /// フォローのAPIは関係だけを返すので、フォロワー数はアカウントを再読み込みして変える。
     @Test func reloadAccountReflectsFollowersCountAfterFollow() async throws {
         let known = try account()
         let followedAccount = Account(id: known.id, username: known.username, acct: known.acct, displayName: known.displayName, avatar: known.avatar, followersCount: 1)
@@ -789,7 +789,7 @@ struct ProfileStoreTests {
         #expect(store.account.followersCount == 1)
     }
 
-    /// 自分のアカウントでは何も送らないので、読み直しも要らない。
+    /// 自分のアカウントでは何も送らないので、再読み込みも要らない。
     @Test func toggleFollowReportsNothingSentForMyself() async throws {
         let known = try account()
         let calls = Calls()
@@ -809,7 +809,7 @@ struct ProfileStoreTests {
         _ = try await withReplies.loadInitial()
         let media = try #require(store.select(.media))
         _ = try await media.loadInitial()
-        // メディアのタイムラインでは、投稿の絞り込みを変えても読み直さない。
+        // メディアのタイムラインでは、投稿の絞り込みを変えても再読み込みしない。
         #expect(store.setPostsFilter(.standard) == nil)
         #expect(store.select(.media) == nil)
 
@@ -821,7 +821,7 @@ struct ProfileStoreTests {
     }
 }
 
-/// プロフィールの状態は、関係を覚えて読み出すだけで、キャッシュから読み直さない。読み直したらテストを失敗させる。
+/// プロフィールの状態は、関係を覚えて読み出すだけで、キャッシュから再読み込みしない。再読み込みしたらテストを失敗させる。
 @MainActor
 private func localRelationships() -> RelationshipCache {
     RelationshipCache { _ in

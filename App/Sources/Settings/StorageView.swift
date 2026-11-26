@@ -10,13 +10,13 @@ struct StorageView: View {
         var remove: @Sendable (StorageBreakdown.Category) async throws -> Void
         /// メディアのキャッシュの、表示済みの段の中身を並べる画面の処理。
         var mediaFiles: MediaCacheView.Actions
-        /// メディアのキャッシュの、先読みの段の中身を並べる画面の処理。
+        /// メディアのキャッシュの、プリフェッチの段の中身を並べる画面の処理。
         var mediaPrefetch: MediaCacheView.Actions
     }
 
     let actions: Actions
     @State private var breakdown: StorageBreakdown?
-    /// 消している途中のボタン。消し終えて測り直すまで、ほかのボタンも押せないようにする。
+    /// 消している途中のボタン。消し終えて測り直すまで、ほかのボタンも無効にする。
     @State private var removing: StorageRemoveTarget?
     @State private var removeError: ErrorPresentation?
     /// 消す前に確かめているボタン。キャッシュと違い、消すと困ることがあるものだけ確かめる。
@@ -90,7 +90,7 @@ struct StorageView: View {
         }
     }
 
-    /// メディアのキャッシュを、合計の行の下に、表示済みと先読みの2段に分けて並べる。
+    /// メディアのキャッシュを、合計の行の下に、表示済みとプリフェッチの2段に分けて並べる。
     /// 置き場の違う2つを1つの項目として数えつつ、それぞれの大きさと中身を見られるようにする（docs/image-loading.md）。
     @ViewBuilder
     private func mediaCacheRows(viewed: StorageBreakdown.Item, prefetched: StorageBreakdown.Item?) -> some View {
@@ -125,8 +125,8 @@ struct StorageView: View {
     /// メディアのキャッシュの下の段を、合計の行より下げる幅。
     private static let subrowIndent: CGFloat = 16
 
-    /// 消せる大きさは、上の内訳の値と同じなので出さない。値を並べると、内訳と同じ押せない行の形になるため。
-    /// `bytes`がnilなら、測れないだけで消せるものがあるかもしれないので、押せるままにする。
+    /// 消せる大きさは、上の内訳の値と同じなので出さない。値を並べると、内訳と同じ、選択できない行の形になるため。
+    /// `bytes`がnilなら、測れないだけで消せるものがあるかもしれないので、有効のままにする。
     private func removeButton(_ target: StorageRemoveTarget, bytes: Int64?) -> some View {
         Button {
             if target.confirmationMessage != nil {
@@ -226,7 +226,7 @@ extension StorageView.Actions {
                 case .mediaPrefetch:
                     try await mediaPrefetchFiles.removeCachedFiles()
                 case .emojis:
-                    // 消すのはBだけ。A、小さい静止画、端末に残した`api/v1/custom_emojis`の応答、大きすぎる元の画像の記録は、
+                    // 消すのはBだけ。A、サムネイル、端末に残した`api/v1/custom_emojis`の応答、大きすぎる元の画像の記録は、
                     // 絵文字ピッカーを空白なく出すのに要るか、サーバーの絵文字の数で大きさが決まるので残す（docs/animated-custom-emoji.mdの「端末に置く画像の分け方」）。
                     try await emojiImageFiles.removeOthers()
                     await emojiImageFiles.refreshStats()
@@ -252,7 +252,7 @@ extension StorageView.Actions {
         )
     }
 
-    /// 「絵文字」の中の行を数える。リストと小さい静止画のファイルを読むので、メインスレッドの外で行う。
+    /// 「絵文字」の中の行を数える。リストとサムネイルのファイルを読むので、メインスレッドの外で行う。
     @concurrent
     private static func emojiRows(files: EmojiImageFiles, customEmojis: CustomEmojiCaches, thumbnails: EmojiThumbnails, oversized: OversizedEmojiRecord, glyphs: EmojiGlyphArchive) async -> [EmojiStorageRow] {
         let sizes = await files.sizesByFolderName()

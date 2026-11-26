@@ -15,7 +15,7 @@ enum RequestBurstLog {
         }
     }
 
-    /// 表示中のウィンドウごとの、根から一番手前の画面までの型の名前。
+    /// 表示中のウィンドウごとの、ルートから一番手前の画面までの型の名前。
     private static func screens() -> String {
         let windows = UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }

@@ -9,14 +9,14 @@ import UIKit
 /// スクロールが端に届いても広げない。検索欄にキーボードを出すと、選んだ段にかかわらずUIKitがシートを全画面まで広げる（`scia-debug://sheet-keyboard`で確かめた）。
 @MainActor
 final class EmojiPaletteSheet: NSObject, TrackedSheet {
-    /// 開閉。閉じることが決まった知らせ、閉じ終わりの知らせもここで受ける。
+    /// 開閉。閉じることが決まったときのコールバック、閉じ終わりのコールバックもここで受ける。
     let lifecycle: SheetLifecycle
 
     private let controller = UIViewController()
     private let palette: EmojiPaletteView
     private static let lowDetent = UISheetPresentationController.Detent.Identifier("low")
 
-    /// - Parameter lowHeight: 低いときのシートの高さ。画面の下の安全領域は含まない。
+    /// - Parameter lowHeight: 低いときのシートの高さ。画面の下のセーフエリアは含まない。
     init(palette: EmojiPaletteView, lowHeight: CGFloat) {
         self.palette = palette
         lifecycle = SheetLifecycle(controller: controller, name: "emoji palette sheet")

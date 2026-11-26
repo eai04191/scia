@@ -1,10 +1,10 @@
 import Foundation
 import Synchronization
 
-/// `instance`の応答を、クライアント（とその複製）の間で覚える。版、ドメイン、投稿欄の上限、機能の有無、ストリーミングの接続先が、同じ応答から読む。
+/// `instance`の応答を、クライアント（とその複製）の間でキャッシュする。版、ドメイン、投稿欄の上限、機能の有無、ストリーミングの接続先が、同じ応答から読む。
 ///
 /// 同時に呼ばれても、同じ目的（`RequestPurpose`）の呼び出しは、読む通信を1回にまとめる。目的が違えば合流させない。レート制限で自動の通信を控えている間に、操作の呼び出しまで断られないため。
-/// 読めなければ覚えず、次の呼び出しで読み直す。
+/// 読めなければキャッシュせず、次の呼び出しで再読み込みする。
 /// 取り消された呼び出しは、その場で`CancellationError`で終える。待っている呼び出しがすべて取り消されたら、読む通信も、その場で取り消す。
 final class InstanceResponseCache: Sendable {
     struct Response: Sendable {
@@ -20,7 +20,7 @@ final class InstanceResponseCache: Sendable {
         case v2
     }
 
-    /// JSONのオブジェクトとして読めるかだけを確かめる。読めない応答は覚えない。
+    /// JSONのオブジェクトとして読めるかだけを確かめる。読めない応答はキャッシュしない。
     struct JSONObject: Decodable {
         private struct Key: CodingKey {
             let stringValue: String

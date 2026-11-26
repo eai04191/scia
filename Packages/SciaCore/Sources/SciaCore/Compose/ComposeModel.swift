@@ -28,9 +28,9 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored private var mediaLimits = InstanceConfiguration.beforeLoading.mediaLimits
     /// サーバーが受け付けると返した形式。返さないサーバーではnil。
     @ObservationIgnored private var supportedMediaTypes: [String]?
-    /// 投稿ボタンを押してから、送り終えるか、送るのをやめるまで。添付の準備を待っている間も含む。
+    /// 投稿ボタンを選択してから、送り終えるか、送るのをやめるまで。添付の準備を待っている間も含む。
     public private(set) var isPosting = false
-    /// 投稿ボタンを押したあと、添付の準備が済むのを待っている。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
+    /// 投稿ボタンを選択したあと、添付の準備が済むのを待っている。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
     public private(set) var isWaitingForMedia = false
     /// 送れなかった理由。投稿欄がアラートで出し、ログアウトされたアカウントがあればログインし直すボタンを添える。
     public var postError: ErrorPresentation?
@@ -81,7 +81,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored private var insertedURLs: [String] = []
     /// `insertedURLs`を忘れるたびに進める。忘れる前に読み始めたペーストを、読み終えたあとに覚えないため。
     @ObservationIgnored private var insertedGeneration = 0
-    /// 最後に送った内容。同じ内容を送り直すときだけ同じIdempotency-Keyを使い、変えたら別の投稿として新しいキーにする。
+    /// 最後に送った内容。同じ内容を再送するときだけ同じIdempotency-Keyを使い、変えたら別の投稿として新しいキーにする。
     /// 応答だけが失われていた場合に、変えた内容が投稿されないまま成功扱いにならないようにするため。
     @ObservationIgnored private var lastSubmitted: StatusDraft?
     /// 書いているほかのアカウント。ウィンドウのアカウント（`homeAccount`）で書いていればnil。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
@@ -247,7 +247,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         maxCharacters - draftToPost.length(charactersReservedPerURL: charactersReservedPerURL)
     }
 
-    /// 投稿ボタンを押せる。添付の準備が済んでいなくても、失敗したものがなければ押せ、済むのを待ってから送る。
+    /// 投稿ボタンを選択できる。添付の準備が済んでいなくても、失敗したものがなければ選択でき、済むのを待ってから送る。
     public var canPost: Bool {
         !isPosting && pendingRetarget == nil && (hasResolvedDefaults || hasChosenVisibility || editedStatus != nil)
             && draftToPost.canSubmit(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments, pollLimits: pollLimits)
@@ -260,7 +260,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 
     /// メディアを選べる。枚数の上限をサーバーの値で読むまでは、ピッカーを開かない。
-    /// 読めなかったときは、次に書き始めたときに読み直す。
+    /// 読めなかったときは、次に書き始めたときに再読み込みする。
     /// 編集している投稿の添付で上限まで埋まっていても開かない。ピッカーの上限の0は、選べないではなく上限なしを意味するため。
     /// 投票の欄を出している間と、引用している間も開かない。Mastodonは投票や引用と添付を一緒に付けられないため。
     public var canAttachMedia: Bool {
@@ -274,7 +274,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 
     /// 投票の欄を足せる。添付があるときと引用しているときは、Mastodonが一緒に付けられないため足せない。
-    /// 編集では足せない。投票の付いた投稿の編集は、元の投票をそのまま送り直す。決まりはdocs/compose.mdの「自分の投稿の編集」にある。
+    /// 編集では足せない。投票の付いた投稿の編集は、元の投票をそのまま再送する。決まりはdocs/compose.mdの「自分の投稿の編集」にある。
     public var canAddPoll: Bool {
         !isPosting && attachments.isEmpty && editedStatus == nil && !isQuoting
     }
@@ -446,7 +446,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 公開範囲は選び直しにする。新しい投稿で選んだ公開範囲のまま、フォロワー限定の投稿へ公開で返信してしまわないため。
     ///
     /// 送信を待つ間は変えない。送っている下書きと食い違い、成功して空に戻すときに新しい返信先まで消してしまうため。
-    /// 同じ投稿を選び直したときも変えない。失敗した投稿を同じIdempotency-Keyで送り直せるようにするため。
+    /// 同じ投稿を選び直したときも変えない。失敗した投稿を同じIdempotency-Keyで再送できるようにするため。
     /// 返信と引用は一緒に付けないため、引用していれば外す。
     public func setReplyTarget(_ status: Status?) {
         guard !isPosting else { return }
@@ -546,7 +546,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
             || !(poll?.filledOptions.isEmpty ?? true)
     }
 
-    /// 下書きを捨てて空の状態（`reset()`のあと）に戻せる。空の状態のときと、送っている間は戻せない。送れなかったときに送り直せるよう、下書きを残すため。
+    /// 下書きを捨てて空の状態（`reset()`のあと）に戻せる。空の状態のときと、送っている間は戻せない。送れなかったときに再送できるよう、下書きを残すため。
     public var canDiscardDraft: Bool {
         guard !isPosting else { return false }
         return hasWrittenContent
@@ -593,7 +593,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 
     /// 自分の投稿の編集を始める。今の下書きは捨てる。送っている間は始めずfalseを返す。
-    /// 投票を送り直せない投稿（締め切りまで5分を切った）でも、下書きを変えずにfalseを返す。
+    /// 投票を再送できない投稿（締め切りまで5分を切った）でも、下書きを変えずにfalseを返す。
     /// 本文と注意書きは、HTMLの`content`ではなく、書いたときのソースから入れる。
     @discardableResult
     /// - Parameter account: 投稿を書いたアカウント。今のアカウントならnil。投稿するアカウントをそのアカウントにしてから始める。
@@ -643,7 +643,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         visibility = draft.visibility
         attachments = draft.attachments
         // 予約から戻した添付は端末にファイルがなく、サーバーのメディアで描く。代替テキストを送れなかったことは、ほかの添付と同じくここに持つ。
-        // 読み直すファイルがないので、読み込みを送り直すことはない。
+        // 再読み込みするファイルがないので、読み込みを再送することはない。
         for attachment in draft.attachments {
             localMedia[attachment.id] = LocalMedia(assetIdentifier: nil) { _ in throw CocoaError(.fileNoSuchFile) }
         }
@@ -688,7 +688,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         showsSpoiler = draft.hasSpoiler
         visibility = draft.visibility
         attachments = draft.attachments
-        // 元の投稿の添付は端末にファイルがなく、サーバーのメディアで描く。予約の書き直しと同じく、読み直すファイルはない。
+        // 元の投稿の添付は端末にファイルがなく、サーバーのメディアで描く。予約の書き直しと同じく、再読み込みするファイルはない。
         for attachment in draft.attachments {
             localMedia[attachment.id] = LocalMedia(assetIdentifier: nil) { _ in throw CancellationError() }
         }
@@ -794,7 +794,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         case discarded
     }
 
-    /// アカウントを替えて画面を作り直したときに、新しい画面の、ウィンドウのアカウントと書いているアカウントにつなぎ直す。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
+    /// アカウントを替えて画面を作り直したときに、新しい画面の、ウィンドウのアカウントと書いているアカウントに再接続する。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
     /// - Parameters:
     ///   - home: 新しい画面の、ウィンドウのアカウント。
     ///   - writing: 書いていたアカウントを、新しい画面で作り直したもの。そのアカウントからログアウトしていればnil。書いていたのが`home`と同じアカウントなら使わない。
@@ -812,7 +812,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
             return .kept
         }
         guard let writing else {
-            // 送っている途中なら、ログアウトしたアカウントの送り先は送らずに失敗するので、送り直せるようウィンドウのアカウントへ移す。
+            // 送っている途中なら、ログアウトしたアカウントの送り先は送らずに失敗するので、再送できるようウィンドウのアカウントへ移す。
             guard !pointsToServerPost else {
                 reset()
                 return .discarded
@@ -885,7 +885,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 
     /// 新しいサーバーの上限で縮め直してアップロードし直すまで待たせる。前のサーバーへのアップロードは止めずに、送る前と応答を受けたところで抜けさせる（`upload`）。
-    /// 止めると、読み込んでいる途中のファイルや書き出している途中の動画を、止めた処理が消し、同じ読み込みや書き出し先を使う送り直しまで失敗するため。
+    /// 止めると、読み込んでいる途中のファイルや書き出している途中の動画を、止めた処理が消し、同じ読み込みや書き出し先を使う再送まで失敗するため。
     private func prepareReupload(_ id: DraftAttachment.ID) {
         descriptionTasks.removeValue(forKey: id)?.cancel()
         localMedia[id]?.failure = nil
@@ -922,7 +922,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         localMedia[id]?.reduction = nil
     }
 
-    /// 編集には`Idempotency-Key`を付けないため、そのまま送る。同じ編集を送り直しても、サーバーは変化がなければ編集として残さない。
+    /// 編集には`Idempotency-Key`を付けないため、そのまま送る。同じ編集を再送しても、サーバーは変化がなければ編集として残さない。
     private func submission(of draft: StatusDraft) -> StatusDraft {
         guard draft.editing == nil, let lastSubmitted else { return draft }
         if lastSubmitted.text == draft.text, lastSubmitted.spoilerText == draft.spoilerText, lastSubmitted.sensitive == draft.sensitive,
@@ -933,10 +933,10 @@ public final class ComposeModel<Thumbnail: Sendable> {
         return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, quotedStatusID: draft.quotedStatusID, attachments: draft.attachments, poll: draft.poll, scheduledAt: draft.scheduledAt, language: draft.language, quotePolicy: draft.quotePolicy)
     }
 
-    /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで送り直せるようにする。
+    /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで再送できるようにする。
     /// 予約の日時が今から5分より後でなければ送らずに知らせる。サーバーは過去の日時を断らずにすぐ投稿するため。
     /// 添付の準備が済んでいなければ、済むまで待ってから送る。待っている間に失敗したら送らずに知らせ、待つのをやめたら何もしない。
-    /// 予約の日時は、押したときと送る直前の両方で確かめる。待っている間に近づくことがあるため。
+    /// 予約の日時は、選択したときと送る直前の両方で確かめる。待っている間に近づくことがあるため。
     public func submit() async {
         guard canPost, acceptsSchedule() else { return }
         UserAction.submitPost.record()
@@ -974,7 +974,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
                 account.onScheduleRewritten(rewritten)
             }
         } catch {
-            // 編集は応答だけを失っても、代替テキストはサーバーに届いていることがある。元の値に戻して送り直しても届くよう、送った添付に目印を付ける。
+            // 編集は応答だけを失っても、代替テキストはサーバーに届いていることがある。元の値に戻して再送しても届くよう、送った添付に目印を付ける。
             let sentIDs = Set(draft.changedAttachedDescriptions.map(\.id))
             for index in attachments.indices where attachments[index].serverID.map(sentIDs.contains) ?? false {
                 attachments[index].hasUnconfirmedDescription = true
@@ -1003,7 +1003,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 
     /// この端末の「削除」で自分の投稿を消せたときに呼ぶ。今のアカウントで消したなら`StatusDeletion`が呼ぶ。
-    /// 編集している投稿なら、編集をやめて空に戻す。送っている間は、送り直せるよう下書きを残す。
+    /// 編集している投稿なら、編集をやめて空に戻す。送っている間は、再送できるよう下書きを残す。
     /// 削除して書き直している元の投稿なら、添付も消え、書き直した投稿に付けられないので、書き直しをやめる（`redraftedStatusWasDeleted(_:stopsRedrafting:accountID:)`）。
     /// - Parameters:
     ///   - accountID: 消えた投稿のアカウントの`ComposeAccount.id`。今のアカウントならnil。書いているアカウントと違えば、IDが同じでも別の投稿なので何もしない。
@@ -1036,7 +1036,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 
     /// 削除して書き直す元の投稿を、添付を残して削除する。削除できたら（もう消えていたときを含む）trueを返す。
-    /// サーバーが断ったら元の投稿は残っているので、書き直しを続けられる。応答を受け取れなかったら、届いたか分からないものとして、送り直すときに削除から送り直す。
+    /// サーバーが断ったら元の投稿は残っているので、書き直しを続けられる。応答を受け取れなかったら、届いたか分からないものとして、再送するときに削除から再送する。
     /// 削除が届かなかったと分かる失敗。サーバーが断った（5xxでない応答）か、ログアウトしたアカウントなので送らなかった。
     private static func deletionDidNotHappen(_ error: any Error) -> Bool {
         if let error = error as? MastodonAPIError { return error.statusCode < 500 }
@@ -1153,7 +1153,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     }
 }
 
-/// 投稿ボタンを押したあとに、添付の準備を待った結果。
+/// 投稿ボタンを選択したあとに、添付の準備を待った結果。
 private enum MediaWaitOutcome {
     /// 全部済んだので送る。
     case ready
@@ -1169,7 +1169,7 @@ private enum MediaWaitOutcome {
 public struct LocalMedia<Thumbnail> {
     /// ピッカーの`assetIdentifier`。開き直したときに前の選択として渡す。ペーストしたものはピッカーで選んでいないのでnil。
     public let assetIdentifier: String?
-    /// 読み込みを送り直すときに使う。前に選んだメディアはピッカーから読み直せないため、選んだときのものを持っておく。
+    /// 読み込みを再送するときに使う。前に選んだメディアはピッカーから再読み込みできないため、選んだときのものを持っておく。
     /// 引数のMIMEタイプの形式を避けて読み込む。
     public let load: @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile
     /// 添付から外したときに呼ぶ。ペーストしたものは足す前から読み込んでいて、`file`に入る前に外すとファイルが残るため、それを消す。
@@ -1179,7 +1179,7 @@ public struct LocalMedia<Thumbnail> {
     public var thumbnail: Thumbnail?
     /// 失敗の理由。`DraftAttachment.State.failed`は理由を持たないため、ここに持つ。
     public var failure: (any Error)?
-    /// 代替テキストを送れなかった理由。送れないと`needsDescriptionUpdate`のまま止まるため、送り直す操作と表示に使う。
+    /// 代替テキストを送れなかった理由。送れないと`needsDescriptionUpdate`のまま止まるため、再送する操作と表示に使う。
     public var descriptionFailure: (any Error)?
     /// 送っている間の進み具合。0から1。
     public var progress: Double = 0
@@ -1325,7 +1325,7 @@ public struct ComposeMediaService<Thumbnail> {
     /// `client`で送る口を組む。書いている間にログインし直しても新しいトークンで送れるよう、送るたびに`client`を呼ぶ。
     /// - Parameters:
     ///   - formats: 処理できなかった画像の形式を、サーバーの版ごとに覚える先。今のアカウントなら`AccountSession.composeMediaService`が渡す。
-    ///     nilなら覚えず、処理できなかったときにJPEGで送り直すのを、送るたびに行う。
+    ///     nilなら覚えず、処理できなかったときにJPEGで再送するのを、送るたびに行う。
     ///   - serverVersion: 接続しているサーバーの版。読めていなければnilを返し、版の分からないサーバーとして覚える。
     public init(
         client: @escaping @MainActor @Sendable () -> MastodonClient,
@@ -1374,8 +1374,8 @@ extension ComposeModel {
     /// ピッカーの今の選択を取り込む。外されたものは添付から外し、足されたものは後ろに足してアップロードを始める。
     /// 投稿を待つ間も取り込む。ピッカーは選択が変わったことを覚えるので、捨てると投稿に失敗した後の下書きとピッカーの選択が食い違う。
     /// 送っている下書きは送る前にコピーしてあるので、ここで変えても影響しない。
-    /// 添付の準備を待っている間に選択が変わったら、待つのをやめる。待ったあとに作る下書きが、押した時点と違う添付になるため。
-    /// 押したときにシートは閉じるが、閉じ終わる前に選び直しが届くことがある。
+    /// 添付の準備を待っている間に選択が変わったら、待つのをやめる。待ったあとに作る下書きが、選択した時点と違う添付になるため。
+    /// 選択したときにシートは閉じるが、閉じ終わる前に選び直しが届くことがある。
     public func applyPickerSelection(_ selection: [PickedMedia]) {
         let changes = pickerSelection.changes(current: attachedAssetIdentifiers, selected: selection.map(\.assetIdentifier))
         if isWaitingForMedia, !changes.removed.isEmpty || !changes.added.isEmpty {
@@ -1431,7 +1431,7 @@ extension ComposeModel {
 
     /// 投稿欄から添付を外す。ピッカーを開いていれば、ピッカーがまだ選んだままの選択を送ってきても足し直さない。
     /// 編集している投稿に付いている添付とペーストした添付は、ピッカーで選んだものではないため、そのまま外す。
-    /// 送っている間と、準備を待っている間は外さない。送る中身は押した時点で決めるため。
+    /// 送っている間と、準備を待っている間は外さない。送る中身は選択した時点で決めるため。
     public func removeAttachment(_ id: DraftAttachment.ID, pickerIsOpen: Bool) {
         guard !isPosting, attachments.contains(where: { $0.id == id }) else { return }
         if let assetIdentifier = localMedia[id]?.assetIdentifier {
@@ -1440,9 +1440,9 @@ extension ComposeModel {
         discardAttachment(id)
     }
 
-    /// 失敗した添付を送り直す。サーバーが受け付けたあと、変換を待つ間の問い合わせが失敗したのなら、ファイルを送り直さずに、サーバーに残っている同じIDで待ち直す。
-    /// サーバーが変換に失敗したのなら、待ち直しても終わらないので、ファイルを送り直す。
-    /// 代替テキストだけを送れなかったなら、代替テキストだけを送り直す。
+    /// 失敗した添付を再送する。サーバーが受け付けたあと、変換を待つ間の問い合わせが失敗したのなら、ファイルを再送せずに、サーバーに残っている同じIDで待ち直す。
+    /// サーバーが変換に失敗したのなら、待ち直しても終わらないので、ファイルを再送する。
+    /// 代替テキストだけを送れなかったなら、代替テキストだけを再送する。
     public func retryAttachment(_ id: DraftAttachment.ID) {
         guard let attachment = attachments.first(where: { $0.id == id }) else { return }
         // 削除した元の投稿から外れるのを待ちきれなかった添付は、待ち直す。
@@ -1465,7 +1465,7 @@ extension ComposeModel {
         }
     }
 
-    /// 動画をGIFとして送るか（音声を除くか）を切り替え、送り直す。送り終えていても、サーバーの添付は使わずに送り直す。
+    /// 動画をGIFとして送るか（音声を除くか）を切り替え、再送する。送り終えていても、サーバーの添付は使わずに再送する。
     /// 音声のない動画は、もとからGIFとして扱われるので切り替えない。
     public func setRemovesAudio(_ removesAudio: Bool, of id: DraftAttachment.ID) {
         guard !isPosting, let local = localMedia[id], local.hasAudio == true, local.removesAudio != removesAudio else { return }
@@ -1615,7 +1615,7 @@ extension ComposeModel {
         uploadTasks[id] = tasks.run(.action) { [weak self] in await self?.awaitProcessing(id, serverID: serverID) }
     }
 
-    /// サーバーが受け付けた添付の変換を、同じIDで待ち直す。サーバーにもうなければ（404）、ファイルを送り直す。
+    /// サーバーが受け付けた添付の変換を、同じIDで待ち直す。サーバーにもうなければ（404）、ファイルを再送する。
     private func awaitProcessing(_ id: DraftAttachment.ID, serverID: String) async {
         guard localMedia[id] != nil, attachments.contains(where: { $0.id == id }) else { return }
         let endBackgroundTime = backgroundTime("await attachment processing")
@@ -1646,7 +1646,7 @@ extension ComposeModel {
         guard let local = localMedia[id], attachments.contains(where: { $0.id == id }) else { return }
         let endBackgroundTime = backgroundTime("upload attachment")
         defer { endBackgroundTime() }
-        // 投稿するアカウントを替えたら、送る前と応答を受けたところで抜ける。送り直しは`startAwaitingReuploads`が、この処理が抜けるのを待って始める。
+        // 投稿するアカウントを替えたら、送る前と応答を受けたところで抜ける。再送は`startAwaitingReuploads`が、この処理が抜けるのを待って始める。
         let generation = accountGeneration
         let isStale = { [unowned self] in generation != accountGeneration }
         localMedia[id]?.failure = nil
@@ -1663,10 +1663,10 @@ extension ComposeModel {
             do {
                 accepted = try await send(sending, of: id, sentDescription: &sentDescription)
             } catch let error where UnprocessableMediaFormats.shouldReplaceWithJPEG(mimeType: sending.mimeType, error: error) {
-                // 切り抜き直して止めたアップロードには、止める前に届いたエラーがそのまま返る。送り直すと元のファイルを消すので、先に止まったかを確かめる。
+                // 切り抜き直して止めたアップロードには、止める前に届いたエラーがそのまま返る。再送すると元のファイルを消すので、先に止まったかを確かめる。
                 try Task.checkCancellation()
                 // 対応形式として返しているのに処理できないサーバーがある。
-                // 同じ写真のJPEGで1回だけ送り直し、このサーバーのこの版ではその形式を送らないと覚える。
+                // 同じ写真のJPEGで1回だけ再送し、このサーバーのこの版ではその形式を送らないと覚える。
                 logger.info("attachment format unprocessable, resending as jpeg mime=\(sending.mimeType, privacy: .public) reencoded=\(sending != file, privacy: .public)")
                 media.recordUnprocessableImageType(sending.mimeType)
                 let replacement: LocalMediaFile
@@ -1676,7 +1676,7 @@ extension ComposeModel {
                     localMedia[id]?.sending = nil
                     replacement = try await prepare(file, of: id, forcingJPEG: true)
                 } else if local.assetIdentifier == nil {
-                    // ペーストしたものは、クリップボードの中身が変わっているかもしれず読み直せないので、読み込んだファイルからJPEGを作る。
+                    // ペーストしたものは、クリップボードの中身が変わっているかもしれず再読み込みできないので、読み込んだファイルからJPEGを作る。
                     // 位置情報だけを除いて書き直したファイルは、作り直すファイルと同じ場所を使うので、先に消す。
                     if sending != file {
                         try? FileManager.default.removeItem(at: sending.url)
@@ -1726,16 +1726,16 @@ extension ComposeModel {
         }
     }
 
-    /// 送った割合を進み具合にする。URLSessionは細かく知らせてくるので、見た目の変わらない差では描き直さない。
-    /// 知らせはメインスレッドへ順に回すとは限らないので、戻る向きには動かさない。
+    /// 送った割合を進み具合にする。URLSessionは細かく知らせてくるので、見た目の変わらない差では再描画しない。
+    /// コールバックはメインスレッドへ順に回すとは限らないので、戻る向きには動かさない。
     private func setProgress(_ fraction: Double, of id: DraftAttachment.ID) {
         guard let current = localMedia[id]?.progress, fraction - current >= 0.01 || (fraction >= 1 && current < 1) else { return }
         localMedia[id]?.progress = fraction
     }
 
     /// 送るファイルを決める。設定で選んだ大きさとサーバーの上限に収まれば、読み込んだファイルのまま送る。位置情報があれば、それだけを除いたファイルにする。
-    /// 収まらなければ作り直し、サーバーの上限のために設定より小さくしたら知らせる。送り直すときは、前に決めたファイルを使う。
-    /// - Parameter forcingJPEG: JPEGで送り直すので、縮めて作り直すときもHEICなどにしない。覚えたのは処理できなかった形式（HEIFなど）だけで、
+    /// 収まらなければ作り直し、サーバーの上限のために設定より小さくしたら知らせる。再送するときは、前に決めたファイルを使う。
+    /// - Parameter forcingJPEG: JPEGで再送するので、縮めて作り直すときもHEICなどにしない。覚えたのは処理できなかった形式（HEIFなど）だけで、
     ///   HEICは覚えていないことがあり、同じサーバーがHEICも処理できないことが多いため。
     /// - Parameter audio: 動画をGIFとして送るかと、切り替えた回数。
     private func prepare(_ file: LocalMediaFile, of id: DraftAttachment.ID, audio: AudioChoice = AudioChoice(), forcingJPEG: Bool = false) async throws -> LocalMediaFile {
@@ -1849,7 +1849,7 @@ extension ComposeModel {
         return file.url.deletingLastPathComponent().appending(fileName: SafeFileName(prefix + file.url.lastPathComponent))
     }
 
-    /// 書き出した割合を進み具合にする。送った割合と同じく、見た目の変わらない差では描き直さず、戻る向きには動かさない。
+    /// 書き出した割合を進み具合にする。送った割合と同じく、見た目の変わらない差では再描画せず、戻る向きには動かさない。
     private func setExportProgress(_ fraction: Double, of id: DraftAttachment.ID) {
         guard let current = localMedia[id]?.exportProgress, fraction - current >= 0.01 || (fraction >= 1 && current < 1) else { return }
         localMedia[id]?.exportProgress = fraction
@@ -1897,7 +1897,7 @@ extension ComposeModel {
             do {
                 let updated = try await media.updateDescription(serverID, description)
                 guard let self, !Task.isCancelled else { return }
-                // 応答を反映してから送り終えたことにする。先に外すと、投稿を待つ側が、書き戻した値と前のサーバーの値が同じなのを見て、送り直す前に済んだと判断するため。
+                // 応答を反映してから送り終えたことにする。先に外すと、投稿を待つ側が、書き戻した値と前のサーバーの値が同じなのを見て、再送する前に済んだと判断するため。
                 self.setState(.uploaded(updated), of: id)
                 self.acceptServerDescription(of: id, sent: description, returned: updated)
                 self.descriptionTasks[id] = nil

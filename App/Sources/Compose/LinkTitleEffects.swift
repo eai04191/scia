@@ -3,12 +3,12 @@ import SciaCore
 import UIKit
 
 /// 投稿欄でリンクにタイトルを付けるときに、本文の上に重ねる見た目。決まりはdocs/compose.mdの「リンクにタイトルを付ける」にある。
-/// 選ばせる間はURLをハイライトし、読んでいる間はURLの上にきらめきを流し、置き換えるときはURLを動かしてタイトルを浮かび上がらせる。
+/// 選ばせる間はURLをハイライトし、読んでいる間はURLの上にきらめきを流し、置き換えるときはURLを動かしてタイトルをフェードインさせる。
 ///
 /// 重ねるビューは入力欄の子にし、中身と一緒にスクロールさせる。変形の間は、本文の文字色を一時的に透明にして、本物の文字を隠す。
 @MainActor
 final class LinkTitleEffects {
-    /// ハイライトしているURLを押した。
+    /// ハイライトしているURLを選択した。
     var onSelect: (LinkOccurrence) -> Void = { _ in }
 
     private weak var textView: UITextView?
@@ -96,7 +96,7 @@ final class LinkTitleEffects {
         return loading.occurrence
     }
 
-    /// きらめきを浮かび上がらせたり、薄くして消したりする時間。
+    /// きらめきをフェードインさせたり、薄くして消したりする時間。
     private var shimmerFadeDuration: TimeInterval {
         tuning.value(of: TuningCatalog.linkTitleShimmerFadeDuration)
     }
@@ -126,7 +126,7 @@ final class LinkTitleEffects {
 
     /// 流れているきらめきを、`occurrence`の場所へ移す。作り直すと、流れている途中の光が1コマで消えて左端から流れ直すため、
     /// 行ごとの大きさが変わらなければ（URLの後ろや前に打ったとき）、同じビューを置き直す。
-    /// 折り返しが変わって大きさが合わないときは、作り直したものを浮かび上がらせ、前のものを薄くして消す。
+    /// 折り返しが変わって大きさが合わないときは、作り直したものをフェードインさせ、前のものを薄くして消す。
     private func movedShimmers(_ views: [ShimmerView], to occurrence: LinkOccurrence) -> [ShimmerView] {
         let frames = rects(for: occurrence.range).map { $0.insetBy(dx: -3, dy: -1) }
         let sameSizes = frames.count == views.count && zip(frames, views).allSatisfy { frame, view in
@@ -181,7 +181,7 @@ final class LinkTitleEffects {
 
     // MARK: - 変形
 
-    /// `replace`で本文を置き換え、置き換える前のURLを置き換えたあとの位置へ動かし、空いた場所にタイトルを浮かび上がらせる。
+    /// `replace`で本文を置き換え、置き換える前のURLを置き換えたあとの位置へ動かし、空いた場所にタイトルをフェードインさせる。
     /// 動きの途中で`finishMorph`が呼ばれたら、すぐ終わりの形にする。使う人が打つ前には、呼ぶ側が`finishMorph`を呼ぶ。
     func morph(_ replacement: LinkTitleReplacement, replace: @escaping () -> Void) {
         finishMorph()
@@ -195,7 +195,7 @@ final class LinkTitleEffects {
         }
         // 置き換える前のURLと後ろに続く文の、行ごとの枠と文字の範囲、文字の境目の位置を測っておく。
         // 後ろの文も、URLと同じく新しい位置へ動かす。本物の文字のままだと、変形が始まった瞬間に一度に移って見えたため。
-        // 動かすのは、置き換える前に見えている範囲にある文字までにする。写しは見えている範囲しか描き取れず、その外の文字は写しがないため。
+        // 動かすのは、置き換える前に見えている範囲にある文字までにする。スナップショットは見えている範囲しか描き取れず、その外の文字はスナップショットがないため。
         // 長い投稿で測る手間が増えすぎないよう、測るのは後ろの`maxTailLength`文字まで。それより後ろは動かさず、一度に移す。
         let oldLines = lines(of: replacement.range)
         let visible = textView.bounds
@@ -206,7 +206,7 @@ final class LinkTitleEffects {
         // 置き換えてから動かすと、中身はゆっくり動くのに欄だけが急に広がって見えた。後ろに続く文も、同じ動きで新しい位置へ動く。
         // 動きを始めた時点で、欄の大きさと文字の配置は置き換えたあとの値になるので、このあとの測る処理は、置き換えたあとの形で行う。
         // 投稿欄のほかの動きと同じく`UIView.animate`で動かす。`UIViewPropertyAnimator`では、欄の枠は少しずつ伸びても、
-        // Liquid Glassの形が付いてこず、1行分を一度に広げて描き直したため。動きを途中で終わらせる手段はないが、
+        // Liquid Glassの形が付いてこず、1行分を一度に広げて再描画したため。動きを途中で終わらせる手段はないが、
         // 欄の大きさはもう伸びたあとの値なので、途中で打たれても、見えている動きが最後まで続くだけで、打つのは止めない。
         UIView.animate(withDuration: duration, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) { [weak self] in
             replace()
@@ -218,7 +218,7 @@ final class LinkTitleEffects {
         let tail = replacement.urlRange.upperBound ..< replacement.urlRange.upperBound + tailLength
         let newTailLines = lines(of: tail)
         let titleRects = rects(for: replacement.titleRange)
-        // 先にURLと後ろの文を透明にしてからタイトルを描く。タイトルの行の枠に、すぐ下の行の文字の頭が入り込み、浮かび上がるタイトルの下に跡が見えたため。
+        // 先にURLと後ろの文を透明にしてからタイトルを描く。タイトルの行の枠に、すぐ下の行の文字の頭が入り込み、フェードインするタイトルの下に跡が見えたため。
         // タイトルは画面から描き取らず、文字の配置から描く。画面は欄が伸びる途中なので、描き取ると伸びる前の高さで切れたため。
         let hiddenColor = hideText(in: replacement.urlRange.lowerBound ..< tail.upperBound)
         layOutText()
@@ -268,7 +268,7 @@ final class LinkTitleEffects {
     /// 後ろに続く文のうち、変形で動かす文字の数（UTF-16）。
     private static let maxTailLength = 300
 
-    /// 置き換える前と後の行を、どちらの行の境目でも切り分けた切れ端。前の場所の写しと、動かす先の枠。
+    /// 置き換える前と後の行を、どちらの行の境目でも切り分けた切れ端。前の場所のスナップショットと、動かす先の枠。
     private static func pieces(from oldLines: [Line], to newLines: [Line], picture: Picture) -> [(view: UIView, target: CGRect)] {
         oldLines.flatMap { old in
             newLines.compactMap { new -> (view: UIView, target: CGRect)? in
@@ -415,7 +415,7 @@ private struct Picture {
         defer { overlays.forEach { $0.isHidden = false } }
         // `drawHierarchy`は、描く前に画面を更新し直し、そのときの入力欄を渡した枠に合わせて縮めて描く。
         // 置き換えた直後は、そこで欄が1行分伸び、伸びたあとの入力欄を伸びる前の高さに縮めて描いて、文字が縦につぶれた。
-        // 先に配置を済ませ、それでも描いている間に大きさが変わったら、新しい大きさで描き直す。
+        // 先に配置を済ませ、それでも描いている間に大きさが変わったら、新しい大きさで再描画する。
         textView.window?.layoutIfNeeded()
         var size = textView.bounds.size
         var image = Self.draw(textView, size: size)
@@ -477,7 +477,7 @@ private final class PictureView: UIView {
     required init?(coder: NSCoder) { nil }
 }
 
-/// 選ばせている間のURLの枠。押せることが分かるよう、色合いの色で縁取って、ゆっくり明滅させる。
+/// 選ばせている間のURLの枠。選択できることが分かるよう、色合いの色で縁取って、ゆっくり明滅させる。
 private final class HighlightView: UIControl {
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -535,7 +535,7 @@ private final class HighlightView: UIControl {
     }
 }
 
-/// 読んでいる間や、タイトルが浮かび上がるときに、URLやタイトルの上を流れるきらめき。
+/// 読んでいる間や、タイトルがフェードインするときに、URLやタイトルの上を流れるきらめき。
 private final class ShimmerView: UIView {
     private let gradient = CAGradientLayer()
 

@@ -3,7 +3,7 @@ import SciaCore
 
 /// 投稿のメニューの「別のアカウントで」に並べる、ログインしているほかのアカウントを、ウィンドウの画面一式から読むもの。決まりはdocs/other-accounts.mdにある。
 /// アカウントごとのクライアントと、そのアカウントで見つけた投稿は、ウィンドウをまたいで共有する`SignedInAccounts`から取る。
-/// ここには、ウィンドウごとに要るもの（絵文字のパレットのメニュー、リアクションの絵文字を選ぶシート、ハッシュタグの操作の知らせ先）だけを持つ。
+/// ここには、ウィンドウごとに要るもの（絵文字のパレットのメニュー、リアクションの絵文字ピッカー、ハッシュタグの操作の通知先）だけを持つ。
 /// 401を受けたら、そのアカウントはログアウトされたとする。今のアカウントのログインし直しの段にはつなげず、操作の失敗の理由として知らせる。
 @MainActor
 final class OtherAccounts {
@@ -11,7 +11,7 @@ final class OtherAccounts {
     private let tasks: TaskScope
     private let shared: SignedInAccounts
     private let registry: @MainActor () -> AccountRegistry?
-    /// 窓に開いたアカウントの設定。ほかのアカウントで出す部品も、窓の見た目で描く。
+    /// ウィンドウに開いたアカウントの設定。ほかのアカウントで出す部品も、ウィンドウの見た目で描く。
     private let settings: AppSettings
     /// 絵文字のパレットのカスタム絵文字のメニューが使う、セッションの部品。
     var paletteMenu = EmojiPaletteMenuContext()
@@ -42,12 +42,12 @@ final class OtherAccounts {
     }
 
     /// 今ログインしているほかのアカウント。アカウントの切り替えのメニューと同じ順。開くたびに読み、追加やログアウトに追いつく。
-    /// - Parameter loadsProfiles: 読めていないアイコンと、サーバーの対応を読み直すか。メニューを開くときだけ読む。メニューを開かずに組むとき（アクションバーのボタンを押せるかを決めるとき）は読まず、スクロールで投稿を組むたびにほかのサーバーへ通信しないようにする。
+    /// - Parameter loadsProfiles: 読めていないアイコンと、サーバーの対応を再読み込みするか。メニューを開くときだけ読む。メニューを開かずに組むとき（アクションバーのボタンを有効にするかを決めるとき）は読まず、スクロールで投稿を組むたびにほかのサーバーへ通信しないようにする。
     func list(loadsProfiles: Bool = true) -> [OtherAccount] {
         guard let registry = registry() else { return [] }
         let listed = registry.accounts.filter { $0.id != current.id }.map { shared.account($0).account }
         guard loadsProfiles else { return listed }
-        // 読めていないアイコンは、次に開いたときに出せるよう読み直す。
+        // 読めていないアイコンは、次に開いたときに出せるよう再読み込みする。
         for account in listed {
             account.loadProfile()
             // 「リアクション」を出すかを、そのアカウントのサーバーで決める（docs/emoji-reaction.md）。
@@ -56,7 +56,7 @@ final class OtherAccounts {
         return listed
     }
 
-    /// 前に見つけた`status`と、それに出る人の関係を、見つけたアカウントで読み直す。「別のアカウントで」を組んだメニューを出すときに呼び、次に開いたときから使う。
+    /// 前に見つけた`status`と、それに出る人の関係を、見つけたアカウントで再読み込みする。「別のアカウントで」を組んだメニューを出すときに呼び、次に開いたときから使う。
     /// - Parameters:
     ///   - people: 投稿のほかにメニューに出る人。組んだメニューの`otherAccountPeople`を渡す。
     ///   - relationIDs: 見つかった投稿で、関係の項目を出す人のID。組んだメニューの`otherAccountRelationIDs`を渡す。
@@ -142,7 +142,7 @@ final class OtherAccounts {
         signedIn(account).client
     }
 
-    /// ほかのアカウントのプロフィールを読み、「別のアカウントで」の行にアイコンを出せるようにする。読めなかったアカウントは、次にメニューを組むときに読み直す。
+    /// ほかのアカウントのプロフィールを読み、「別のアカウントで」の行にアイコンを出せるようにする。読めなかったアカウントは、次にメニューを組むときに再読み込みする。
     func loadProfiles() {
         _ = list()
     }

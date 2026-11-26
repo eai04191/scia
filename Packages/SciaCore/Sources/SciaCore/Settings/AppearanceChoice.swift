@@ -170,7 +170,7 @@ public enum AppearanceChoice: Hashable, CaseIterable, Sendable {
         case .animatesCustomEmojis: .firstOf([.part(.customEmojis), .part(.bodyText)])
         case .linkCardThumbnailSide: .part(.card)
         case .mediaArrangement: .firstOf([.part(.besideMedia), .part(.media)])
-        // 引用とXの投稿だけを右に出すときは、囲みの中の写真を示す。
+        // 引用とXの投稿だけを右に出すときは、カードの中の写真を示す。
         case .tiltsStackedPhotos: .firstOf([.part(.besideMedia), .part(.xPostBesideMedia), .part(.media)])
         case .embedMediaArrangement: .firstOf([.part(.xPostBesideMedia), .part(.xPostMedia)])
         case .drawsReactionGlowInHDR, .reactionGlowLightFavouriteColor: .part(.reactionGlow)

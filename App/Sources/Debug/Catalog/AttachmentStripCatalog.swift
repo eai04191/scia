@@ -65,7 +65,7 @@ enum AttachmentStripCatalog {
         ]
     }
 
-    /// 並べ替えも試せるよう、移した結果をその列の中だけで描き直す。
+    /// 並べ替えも試せるよう、移した結果をその列の中だけで再描画する。
     @MainActor
     private static func strip(_ items: [ComposeAttachmentStrip.Item]) -> UIView {
         let strip = ComposeAttachmentStrip()

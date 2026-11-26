@@ -14,14 +14,14 @@ public protocol ScheduledStatusesDisplay: AnyObject {
     /// 行に出す自分のアカウント。予約を投稿するのは自分なので、投稿されたときと同じく自分のアイコンと名前を出す。
     var account: Account? { get set }
     /// 予約を並べ直す。並べる順は画面が決める。
-    /// - Parameter animatingChanges: 使う人の操作の結果（取り消し、日時の変更）なら、行を閉じたり動かしたりする。読み直しでは動かさない。
+    /// - Parameter animatingChanges: 使う人の操作の結果（取り消し、日時の変更）なら、行を閉じたり動かしたりする。再読み込みでは動かさない。
     func setStatuses(_ statuses: [ScheduledStatus], animatingChanges: Bool)
     func setContentState(_ state: ScheduledStatusesContentState)
 }
 
 /// 予約した投稿のタイムラインの読み込みと、日時の変更や取り消しの通信を受け持ち、結果をタイムラインの画面（`ScheduledStatusesDisplay`）へ命令として伝える。決まりはdocs/tabs.mdの「予約投稿」にある。
 ///
-/// ストリームがないため購読せず、開くたびと、開いたままアプリに戻ったときに読み直す。
+/// ストリームがないため購読せず、開くたびと、開いたままアプリに戻ったときに再読み込みする。
 @MainActor
 public final class ScheduledStatusesModel {
     /// 失敗を知らせる操作。
@@ -42,13 +42,13 @@ public final class ScheduledStatusesModel {
     /// このタイムラインが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
     private let tasks: TaskScope
     private let logger = SciaLog.logger(category: "scheduled")
-    /// 読み直している途中の読み込み。重ねて読まない。
+    /// 再読み込みしている途中の読み込み。重ねて読まない。
     private var loading: Task<Void, Never>?
-    /// 一度でも読み終えた。読み終える前に予約したものは、読み直しで入るので足さない。
+    /// 一度でも読み終えた。読み終える前に予約したものは、再読み込みで入るので足さない。
     private var hasLoaded = false
-    /// タイムラインの中身を手元で変えた回数。読んでいる間に予約、日時の変更、取り消しが済んだら、その前に送った読み込みの応答は古いので使わず、読み直す。
+    /// タイムラインの中身を手元で変えた回数。読んでいる間に予約、日時の変更、取り消しが済んだら、その前に送った読み込みの応答は古いので使わず、再読み込みする。
     private var changeCount = 0
-    /// 開いて見せている。見せている間にアプリに戻ったら読み直す。
+    /// 開いて見せている。見せている間にアプリに戻ったら再読み込みする。
     private var isShown = false
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     public var runningTaskCount: Int { tasks.runningCount }
@@ -71,7 +71,7 @@ public final class ScheduledStatusesModel {
         isShown = false
     }
 
-    /// 読み直す。読んでいる途中なら、その読み込みに任せる。
+    /// 再読み込みする。読んでいる途中なら、その読み込みに任せる。
     /// - Parameter purpose: 開き直したときやアプリに戻ったときは`.display`。レート制限で止められている間は送らない。
     @discardableResult
     public func reload(purpose: RequestPurpose) -> Task<Void, Never>? {
@@ -88,9 +88,9 @@ public final class ScheduledStatusesModel {
         reload(purpose: .display)
     }
 
-    /// 投稿欄で予約できた。読み終えたタイムラインなら、読み直さずにその場で入れる。
+    /// 投稿欄で予約できた。読み終えたタイムラインなら、再読み込みせずにその場で入れる。
     public func didSchedule(_ scheduled: ScheduledStatus) {
-        // 読んでいる途中なら、その応答は予約する前のものなので読み直させる。
+        // 読んでいる途中なら、その応答は予約する前のものなので再読み込みさせる。
         changeCount += 1
         guard hasLoaded else { return }
         setStatuses(statuses.filter { $0.id != scheduled.id } + [scheduled], animatingChanges: false)
@@ -123,19 +123,19 @@ public final class ScheduledStatusesModel {
                 let changesBefore = changeCount
                 statuses = try await client.scheduledStatuses()
                 guard !tasks.isClosed else { return }
-                // 読んでいる間に手元で変えたら、その結果を古い応答で戻さないよう、読み直す。
+                // 読んでいる間に手元で変えたら、その結果を古い応答で戻さないよう、再読み込みする。
                 if changeCount == changesBefore { break }
                 logger.info("scheduled load restart after local change")
             } while true
             hasLoaded = true
-            // 読み直しで消えたり増えたりする行は、操作によらない変化なので動かさない。
+            // 再読み込みで消えたり増えたりする行は、操作によらない変化なので動かさない。
             setStatuses(statuses, animatingChanges: false)
             display?.setContentState(.loaded)
             logger.info("scheduled load done count=\(statuses.count, privacy: .public)")
         } catch {
             guard !tasks.isClosed, !(error is CancellationError) else { return }
             logger.error("scheduled load failed: \(SciaLog.describe(error), privacy: .public)")
-            // 読めたタイムラインは消さず、読み直しの失敗はログだけにする。まだ何も読めていなければ、理由をタイムラインの場所に出す。
+            // 読めたタイムラインは消さず、再読み込みの失敗はログだけにする。まだ何も読めていなければ、理由をタイムラインの場所に出す。
             if !hasLoaded {
                 display?.setContentState(.failed(ErrorPresentation(error)))
             }

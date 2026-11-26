@@ -55,7 +55,7 @@ struct CatchUpStatusTests {
         #expect(status.phase == .idle)
     }
 
-    /// レート制限で止められたのは失敗ではなく、明けたら読み直すので、いつまで控えるかを持つ。
+    /// レート制限で止められたのは失敗ではなく、明けたら再読み込みするので、いつまで控えるかを持つ。
     @Test func rateLimitPauses() {
         var status = CatchUpStatus()
         status.begin()

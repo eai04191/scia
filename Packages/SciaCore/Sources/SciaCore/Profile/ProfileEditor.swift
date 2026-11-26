@@ -53,7 +53,7 @@ public final class ProfileEditor {
         }
     }
 
-    /// 注目のハッシュタグと紹介しているユーザーの節の、元の値の読み込み。読めるまで、その節は変えられない。
+    /// 注目のハッシュタグと紹介しているユーザーのセクションの、元の値の読み込み。読めるまで、そのセクションは変えられない。
     public enum SectionSource<Value> {
         case loading
         case loaded(Value)
@@ -84,7 +84,7 @@ public final class ProfileEditor {
     /// 編集中の紹介しているアカウント。読み込むまでは空。
     public private(set) var endorsedAccounts: [Account] = []
     /// 保存で、注目のハッシュタグか紹介しているアカウントを1つでも送れたときに呼ぶ。途中で送れなくなったときも呼ぶ。
-    /// 開いている自分のプロフィールの棚と、覚えている自分のタグを読み直すのに使う。
+    /// 開いている自分のプロフィールの棚と、キャッシュしている自分のタグを再読み込みするのに使う。
     @ObservationIgnored public var onFeaturedChange: (@MainActor () -> Void)?
     /// 保存で、プロフィールの項目を送れたときに呼ぶ。そのあとに注目のハッシュタグや紹介しているアカウントを送れなくても呼ぶ。
     /// サーバーにはもう保存されているので、開いている自分のプロフィールに反映するのに使う。
@@ -190,7 +190,7 @@ public final class ProfileEditor {
         return featuredTagNames.count > limit
     }
 
-    /// 元の値を読む。読み込み中なら何もしない。読み直したときも、書きかけの下書きは残す。
+    /// 元の値を読む。読み込み中なら何もしない。再読み込みしたときも、書きかけの下書きは残す。
     public func load() async {
         if case .loaded = source, draft != nil { return }
         source = .loading
@@ -227,7 +227,7 @@ public final class ProfileEditor {
 
     /// 保存し、保存したあとのプロフィールを返す。決まりはdocs/profile.mdの「注目のハッシュタグと紹介しているユーザーの編集」にある。
     /// プロフィールの項目、注目のハッシュタグ、紹介しているユーザーは、互いによらないので並行に送る。応答の遅いサーバーで、待つ時間が足し合わさらないようにするため。
-    /// 送れないものがあっても、ほかは送り終えてから投げる。送れた分は元の値に取り込み、送り直すときは残りだけを送る。書きかけの下書きは残す。
+    /// 送れないものがあっても、ほかは送り終えてから投げる。送れた分は元の値に取り込み、再送するときは残りだけを送る。書きかけの下書きは残す。
     public func save() async throws -> ProfileSource {
         guard case .loaded(let original) = source, let draft, !isSaving else { throw CancellationError() }
         isSaving = true
@@ -257,8 +257,8 @@ public final class ProfileEditor {
         return saved
     }
 
-    /// 送る前に今の注目のハッシュタグを読み直し、それと比べて外すものと足すものを決める。同じタグを2度足すとサーバーが断り、
-    /// 外したタグを2度外すと見つからないと返すので、前の保存が届いたのに応答を失ったときや、別の端末やwebで変えたときに、送り直しが断られ続けないようにするため。
+    /// 送る前に今の注目のハッシュタグを再読み込みし、それと比べて外すものと足すものを決める。同じタグを2度足すとサーバーが断り、
+    /// 外したタグを2度外すと見つからないと返すので、前の保存が届いたのに応答を失ったときや、別の端末やwebで変えたときに、再送が断られ続けないようにするため。
     /// 上限まで載せているときに入れ替えられるよう、外し終えてから足す。外すもの同士、足すもの同士は並行に送る。
     private func saveFeaturedTags() async throws {
         var current = try await api.featuredTags()
@@ -283,7 +283,7 @@ public final class ProfileEditor {
         try Self.throwFirstFailure(of: added)
     }
 
-    /// 紹介は何度送っても同じ結果になるので、読み直さずに元の値と比べて送る。外すものと足すものは、互いによらないので並行に送る。
+    /// 紹介は何度送っても同じ結果になるので、再読み込みせずに元の値と比べて送る。外すものと足すものは、互いによらないので並行に送る。
     private func saveEndorsements() async throws {
         guard var current = endorsementsSource.value else { return }
         let wanted = Set(endorsedAccounts.map(\.id))

@@ -4,8 +4,8 @@ public import Foundation
 import os
 import Synchronization
 
-/// 絵文字のパレットで、静止画が届くまでの間に描く、カスタム絵文字の小さい静止画（docs/animated-custom-emoji.mdの「絵文字ピッカーのサムネイル」）。
-/// 展開済みの画素をLZ4で圧縮して1つのファイルに並べ、メモリに写して（mmap）読む。描くときに、画像の形式の展開もファイルの読み出しも待たないので、
+/// 絵文字のパレットで、静止画が届くまでの間に描く、カスタム絵文字のサムネイル（docs/animated-custom-emoji.mdの「絵文字ピッカーのサムネイル」）。
+/// 展開済みの画素をLZ4で圧縮して1つのファイルに並べ、メモリにマップして（mmap）読む。描くときに、画像の形式の展開もファイルの読み出しも待たないので、
 /// CPUが動く絵文字のコマの展開で埋まっていても、どの速さで流しても絵文字の枠が空かない。
 /// iPhone 16 Proで約6000個のパレットを流すと、端末に置いた画像から静止画を作るのに、中央で579msかかっていたため。
 /// LZ4にしたのは、描くたびにメインスレッドで展開するため。fedibird.comの6129個をMacで測ると、非圧縮の58%の大きさで、1つを1.4µsで展開できた。
@@ -13,7 +13,7 @@ import Synchronization
 ///
 /// 記録の並びは、先頭の`header`のあとに、URLの長さ（4バイト）、URL、幅と高さ（2バイトずつ）、圧縮した画素の長さ（4バイト）、4バイト境界までの詰め物、
 /// LZ4で圧縮した画素（RGBA、乗算済み）、4バイト境界までの詰め物。
-/// 足すときは末尾に書き足し、同じURLはあとの記録を使う。写したデータは書き足しても伸びないので、足した画像は次に読み込むまでメモリに持つ。
+/// 足すときは末尾に書き足し、同じURLはあとの記録を使う。マップしたデータは書き足しても伸びないので、足した画像は次に読み込むまでメモリに持つ。
 public final class EmojiThumbnails: Sendable {
     private struct Entry: Sendable {
         /// 圧縮した画素の始まりと長さ。
@@ -28,7 +28,7 @@ public final class EmojiThumbnails: Sendable {
         var entries: [URL: Entry] = [:]
         var added: [URL: CGImage] = [:]
         var isLoaded = false
-        /// 静止画がなかったときに求められて、小さい静止画を返した数と、返せなかった数。返せなかった分だけ、パレットの枠が空く。
+        /// 静止画がなかったときに求められて、サムネイルを返した数と、返せなかった数。返せなかった分だけ、パレットの枠が空く。
         var served = 0
         var missed = 0
         /// ファイルの、読めた最後の記録の終わり。書き足す前に、ここまで切り詰める。書きかけで途切れた記録の後ろに書き足すと、
@@ -37,13 +37,13 @@ public final class EmojiThumbnails: Sendable {
     }
 
     /// 書き方を変えたら上げる。読んだファイルの値か高さが違えば、捨てて作り直す。
-    /// 3は、先読みが別の絵文字の画像から作った小さい静止画を捨てるために上げた（書き方は2と同じ）。
+    /// 3は、プリフェッチが別の絵文字の画像から作ったサムネイルを捨てるために上げた（書き方は2と同じ）。
     static var version: UInt32 { 3 }
     /// 1枚の幅の、高さに対する上限の割合。極端に横長な絵文字で場所を取りすぎないため。静止画の読み方（`ImageDecoder.maxPixelSize(forHeight:of:)`）と同じ。
     static var maxAspectRatio: Double { 8 }
 
     public let file: URL
-    /// 小さい静止画の高さのピクセル数。
+    /// サムネイルの高さのピクセル数。
     public let pixelHeight: Int
     private let state = Mutex(State())
     /// ファイルに書くのと、画像を縮めるのを、1つずつ行う。
@@ -69,7 +69,7 @@ public final class EmojiThumbnails: Sendable {
         }
     }
 
-    /// `url`の小さい静止画。まだ読み込んでいないか、作っていなければnil。
+    /// `url`のサムネイル。まだ読み込んでいないか、作っていなければnil。
     public func image(for url: URL) -> CGImage? {
         state.withLock { state -> CGImage? in
             let image = Self.image(for: url, in: state)
@@ -87,7 +87,7 @@ public final class EmojiThumbnails: Sendable {
         guard let entry = state.entries[url], let mapped = state.mapped,
               let pixels = decompress(mapped[(mapped.startIndex + entry.offset)..<(mapped.startIndex + entry.offset + entry.length)], count: entry.width * entry.height * 4)
         else { return nil }
-        // 1枚は数KBなので、写したデータから展開して画像にする。ページがまだ読まれていなければ、ここで読む。
+        // 1枚は数KBなので、マップしたデータから展開して画像にする。ページがまだ読まれていなければ、ここで読む。
         return makeImage(pixels, width: entry.width, height: entry.height)
     }
 
@@ -102,12 +102,12 @@ public final class EmojiThumbnails: Sendable {
         state.withLock { $0.added[url] != nil || $0.entries[url] != nil }
     }
 
-    /// 持っている小さい静止画の数。
+    /// 持っているサムネイルの数。
     public var count: Int {
         state.withLock { state in Set(state.entries.keys).union(state.added.keys).count }
     }
 
-    /// `image`を縮めて、`url`の小さい静止画として足す。持っていれば何もしない。縮めるのと書くのは、裏で行う。
+    /// `image`を縮めて、`url`のサムネイルとして足す。持っていれば何もしない。縮めるのと書くのは、裏で行う。
     public func add(_ url: URL, image: CGImage) {
         guard !contains(url) else { return }
         writer.async { [self] in
@@ -120,7 +120,7 @@ public final class EmojiThumbnails: Sendable {
     }
 
     /// `urls`にないものを消して、ファイルを書き直す。絵文字のリストから外れた（画像を差し替えた、消した）絵文字を残し続けないため。
-    /// 書き直したファイルは、次に読み込むときから写す。今の起動では、残すものを前のとおり引ける。
+    /// 書き直したファイルは、次に読み込むときからマップする。今の起動では、残すものを前のとおり引ける。
     public func prune(keeping urls: Set<URL>) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             writer.async { [self] in
@@ -149,7 +149,7 @@ public final class EmojiThumbnails: Sendable {
         }
     }
 
-    /// ファイルにある小さい静止画の、URLごとの大きさ（圧縮した画素と、URLや幅と高さの記録）。設定のストレージで、サーバーごとに数えるのに使う。
+    /// ファイルにあるサムネイルの、URLごとの大きさ（圧縮した画素と、URLや幅と高さの記録）。設定のストレージで、サーバーごとに数えるのに使う。
     /// 同じURLの記録が重なっていれば、あとの記録だけを数える。
     public func storedSizes() -> [URL: Int] {
         Self.read(file, pixelHeight: pixelHeight).entries.reduce(into: [:]) { sizes, item in
@@ -157,7 +157,7 @@ public final class EmojiThumbnails: Sendable {
         }
     }
 
-    /// 書いた分を待つ。テストで、書き終えてから読み直すのに使う。
+    /// 書いた分を待つ。テストで、書き終えてから再読み込みするのに使う。
     public func flush() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             writer.async { continuation.resume() }
@@ -246,7 +246,7 @@ public final class EmojiThumbnails: Sendable {
         return size == count ? output : nil
     }
 
-    /// ファイルを写して、記録を並べる。読めない記録があれば、そこから先は使わない。先頭の書き方か高さが違えば、何も使わない。
+    /// ファイルをマップして、記録を並べる。読めない記録があれば、そこから先は使わない。先頭の書き方か高さが違えば、何も使わない。
     private static func read(_ file: URL, pixelHeight: Int, headerOnly: Bool = false) -> (mapped: Data?, entries: [URL: Entry]) {
         guard let data = try? Data(contentsOf: file, options: .alwaysMapped), data.count >= 12, data.prefix(4) == magic,
               integer(UInt32.self, in: data, at: 4) == version, integer(UInt32.self, in: data, at: 8) == UInt32(pixelHeight)

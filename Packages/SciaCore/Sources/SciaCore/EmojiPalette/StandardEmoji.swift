@@ -1,6 +1,6 @@
 import Foundation
 
-/// Unicodeの絵文字1つ。投稿欄の絵文字のシートで、カスタム絵文字の後ろに並べ、補完でも出す。
+/// Unicodeの絵文字1つ。投稿欄の絵文字ピッカーで、カスタム絵文字の後ろに並べ、補完でも出す。
 /// データは`Tools/build-emoji-data.py`で、Unicodeの絵文字のリスト（emoji-test.txt）、CLDRの絵文字の注釈、gemojiの短縮名から作る。
 public struct StandardEmoji: Hashable, Sendable, Decodable {
     /// 絵文字そのもの。本文にはこの文字をそのまま入れる。
@@ -83,7 +83,7 @@ public struct StandardEmoji: Hashable, Sendable, Decodable {
     }
 }
 
-/// Unicodeの絵文字のまとまり（顔と感情、人と体など）。並びはemoji-test.txtの順で、iOSの絵文字キーボードとほぼ同じ。
+/// Unicodeの絵文字のグループ（顔と感情、人と体など）。並びはemoji-test.txtの順で、iOSの絵文字キーボードとほぼ同じ。
 public struct StandardEmojiGroup: Hashable, Sendable, Decodable {
     public let title: String
     public let emojis: [StandardEmoji]

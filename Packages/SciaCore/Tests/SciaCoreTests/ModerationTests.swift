@@ -53,7 +53,7 @@ struct ModerationTests {
         #expect(requests.dropFirst().map { $0.httpBody.map { String(decoding: $0, as: UTF8.self) } } == ["domain=c.example", "domain=a.example"])
     }
 
-    /// ユーザーのメニューのドメインのブロックは、応答が空なので、送ったあとに相手との関係を読み直して返す。
+    /// ユーザーのメニューのドメインのブロックは、応答が空なので、送ったあとに相手との関係を再読み込みして返す。
     @Test func domainBlockFromMenuReadsRelationshipBack() async throws {
         let transport = StubTransport([.json("{}", statusCode: 200), .json("[\(Self.relationship)]", statusCode: 200)])
 
@@ -65,7 +65,7 @@ struct ModerationTests {
         #expect(requests.map { $0.url?.path() } == ["/api/v1/domain_blocks", "/api/v1/accounts/relationships"])
     }
 
-    /// ドメインのブロックは送れたのに、そのあとの関係の読み直しだけ失敗したら、送れたことが分かる失敗にする。送れなかったときと同じ失敗にすると、ブロックできたのに失敗と知らせるため。
+    /// ドメインのブロックは送れたのに、そのあとの関係の再読み込みだけ失敗したら、送れたことが分かる失敗にする。送れなかったときと同じ失敗にすると、ブロックできたのに失敗と知らせるため。
     @Test func domainBlockAppliedEvenIfRelationshipReloadFails() async throws {
         let transport = StubTransport([.json("{}", statusCode: 200), .json("{}", statusCode: 500)])
 
@@ -89,7 +89,7 @@ struct ModerationTests {
         #expect(AccountListKind.listMembers(listID: "1").removalChange == nil)
     }
 
-    /// Mastodonはドメインをブロックすると、そのドメインの人への自分のフォローも外すので、フォローを変える変更として相手のフォロワー数を読み直す。解除では戻らない。
+    /// Mastodonはドメインをブロックすると、そのドメインの人への自分のフォローも外すので、フォローを変える変更として相手のフォロワー数を再読み込みする。解除では戻らない。
     @Test func domainBlockChangesFollow() {
         #expect(UserRelationChange.blockDomain("remote.example").changesFollow)
         #expect(!UserRelationChange.unblockDomain("remote.example").changesFollow)
@@ -248,7 +248,7 @@ struct DomainBlocksRaceTests {
         #expect(model.domains == ["a.example", "c.example"])
     }
 
-    /// 読んでいる途中にほかの入口（ユーザーのメニュー）でドメインのブロックが変わったら、その読み込みの応答を捨て、終わってから読み直す。
+    /// 読んでいる途中にほかの入口（ユーザーのメニュー）でドメインのブロックが変わったら、その読み込みの応答を捨て、終わってから再読み込みする。
     @Test func outsideChangeDuringLoadReloadsAfterward() async throws {
         let server = Server(pages: [nil: DomainBlockPage(domains: ["a.example"], nextMaxID: nil)])
         let model = DomainBlocksModel(api: server.api, tasks: TaskScope())
@@ -267,7 +267,7 @@ struct DomainBlocksRaceTests {
         #expect(server.loads.withLock { $0 } == 3)
     }
 
-    /// 初めて読んでいる途中に変わっても、その応答を捨て、読み終えてから読み直す。
+    /// 初めて読んでいる途中に変わっても、その応答を捨て、読み終えてから再読み込みする。
     @Test func outsideChangeDuringFirstLoadReloadsAfterward() async throws {
         let server = Server(pages: [nil: DomainBlockPage(domains: ["a.example"], nextMaxID: nil)])
         let model = DomainBlocksModel(api: server.api, tasks: TaskScope())

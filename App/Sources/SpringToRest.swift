@@ -98,8 +98,8 @@ extension UIView {
         guard end > spring.duration,
               let whole = spring.copy() as? CASpringAnimation,
               let cancel = spring.copy() as? CASpringAnimation else { return }
-        // 始まりの時間は元のまま写す。元が0なら、Core Animationが渡したときの同じ時間を3つに入れる。
-        // UIKitは、画面遷移の中の動き（シートを出す動きで確かめた）では`removedOnCompletion`を切り、外す役を自分で持つ。写したままだと、止まったあとも層に残り続ける。
+        // 始まりの時間は元のままコピーする。元が0なら、Core Animationが渡したときの同じ時間を3つに入れる。
+        // UIKitは、画面遷移の中の動き（シートを出す動きで確かめた）では`removedOnCompletion`を切り、外す役を自分で持つ。コピーしたままだと、止まったあとも層に残り続ける。
         whole.delegate = nil
         whole.isRemovedOnCompletion = true
         whole.duration = end
@@ -108,7 +108,7 @@ extension UIView {
         cancel.fromValue = from.negated
         cancel.toValue = to.negated
         // 打ち消しを先に足す。足し合わせる動きは足した順に重なり、元、続き、打ち消しの順だと、途中で元の差の2倍を足した値を通る。
-        // 角の丸みのように負にならない値では、そこで値が詰められたと見られ、投稿欄を開く動き出しのコマで、写真の角が行き先に近い丸みで描かれた。
+        // radiusのように負にならない値では、そこで値が詰められたと見られ、投稿欄を開く動き出しのコマで、写真の角が行き先に近いradiusで描かれた。
         // 打ち消しを先にすれば、途中の値はモデルの値になる。
         layer.add(cancel, forKey: key + ".cancel")
         layer.add(whole, forKey: key)

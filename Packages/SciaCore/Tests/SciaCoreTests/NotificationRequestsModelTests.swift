@@ -99,7 +99,7 @@ struct NotificationRequestsModelTests {
         #expect(requestIDs(display).isEmpty)
     }
 
-    /// 送っている途中のまとまりには重ねて送らず、答える前に送った読み込みの応答でも、答えた行を戻さない。
+    /// 送っている途中のグループには重ねて送らず、答える前に送った読み込みの応答でも、答えた行を戻さない。
     @Test func answeringTwiceSendsOnceAndStaleLoadDoesNotRestoreTheRow() async throws {
         let gate = Gate()
         let transport = RoutedTransport { request in
@@ -324,7 +324,7 @@ struct NotificationRequestsModelTests {
         }.count
     }
 
-    /// ストリーミングで取り込みの知らせが届いたら、一番上から読み直して置き換える。
+    /// ストリーミングで取り込みのイベントが届いたら、一番上から再読み込みして置き換える。
     @Test func mergedEventReloadsFromTheTop() async throws {
         let firstMessage = Gate()
         let connector = ScriptedConnector([.init(messages: [#"{"stream":["user"],"event":"notifications_merged"}"#], firstMessageGate: firstMessage)])
@@ -347,7 +347,7 @@ struct NotificationRequestsModelTests {
         #expect(call.topID == call.entries.first?.id)
     }
 
-    /// 古いページを読んでいる間に取り込みの知らせが届いたら、読み終えてから一番上から読み直す。
+    /// 古いページを読んでいる間に取り込みのイベントが届いたら、読み終えてから一番上から再読み込みする。
     @Test func mergedEventDuringOlderLoadReloadsAfterIt() async throws {
         let url = try #require(Bundle.module.url(forResource: "grouped_notifications", withExtension: "json", subdirectory: "Fixtures"))
         let fixture = try Data(contentsOf: url)
@@ -378,7 +378,7 @@ struct NotificationRequestsModelTests {
         try await waitUntil { latestPageLoads(transport) == 2 && model.runningTaskCount == 0 }
     }
 
-    /// つながっている間に受け入れ、知らせを受け取る前に切れたら、つなぎ直したときに問い合わせて読み直す。
+    /// つながっている間に受け入れ、イベントを受け取る前に切れたら、再接続したときに問い合わせて再読み込みする。
     @Test func acceptThenReconnectChecksMergedState() async throws {
         let disconnect = Gate()
         let transport = try Self.notificationsTransport(merged: true)
@@ -399,7 +399,7 @@ struct NotificationRequestsModelTests {
         #expect(transport.requests(to: "/api/v1/notifications/requests/merged").count == 1)
     }
 
-    /// つながっていないときは、受け入れたあとに取り込みを問い合わせ、済んでいたら読み直す。
+    /// つながっていないときは、受け入れたあとに取り込みを問い合わせ、済んでいたら再読み込みする。
     @Test func acceptWhileOfflineChecksMergedState() async throws {
         let connector = ScriptedConnector(Array(repeating: .init(handshake: .fail(URLError(.cannotConnectToHost))), count: 10))
         let clock = TestClock()

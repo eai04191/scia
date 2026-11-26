@@ -16,7 +16,7 @@ struct EmojiPaletteTests {
         return defaults
     }
 
-    // MARK: - まとまり
+    // MARK: - セクション
 
     /// 最近使ったもの、カテゴリーのないもの、カテゴリーの名前の順に並べる。最近使ったもの以外の中は、Mastodonのweb UIと同じく、ショートコードを小文字にそろえて比べた順。
     @Test func ordersSections() throws {
@@ -33,7 +33,7 @@ struct EmojiPaletteTests {
         #expect(sections.map { $0.emojis.map(\.recentKey) } == [["blobcat", "apple"], ["aaa", "Blob", "blobcat"], ["Ant", "zebra"], ["apple"]])
     }
 
-    /// ピッカーに出さない絵文字と、サーバーからなくなった最近の絵文字は出さない。空のまとまりは作らない。
+    /// ピッカーに出さない絵文字と、サーバーからなくなった最近の絵文字は出さない。空のセクションは作らない。
     @Test func dropsHiddenAndRemovedEmojis() throws {
         let emojis = [try emoji("shown"), try emoji("hidden", visible: false)]
         let sections = EmojiPalette.sections(emojis: emojis, standardGroups: [], recentKeys: ["removed", "hidden"], recentLimit: 10)
@@ -54,7 +54,7 @@ struct EmojiPaletteTests {
         let sections = EmojiPalette.sections(emojis: [try emoji("shown"), hidden], personal: personal, standardGroups: groups, recentKeys: ["hidden", "👍🏽", "🐈"], recentLimit: 10)
         #expect(sections.map(\.kind) == [.recent, .personal(id: "b", name: "同じ名前"), .personal(id: "a", name: "同じ名前"), .uncategorized, .standard("動物と自然")])
         #expect(sections.map { $0.emojis.map(\.recentKey) } == [["hidden", "👍🏽", "🐈"], ["👍🏽", "hidden"], ["🐈", "shown"], ["shown"], ["🐈"]])
-        // Unicodeの絵文字のリストにある絵文字は、どのまとまりでも同じものにする。
+        // Unicodeの絵文字のリストにある絵文字は、どのセクションでも同じものにする。
         #expect(sections[2].emojis.first == sections[4].emojis.first)
         #expect(sections[0].emojis.last == sections[4].emojis.first)
     }
@@ -70,7 +70,7 @@ struct EmojiPaletteTests {
         #expect(sections[1].emojis == [.custom(fresh)])
     }
 
-    /// 個人セットのカテゴリーの見出しを、まとまりに渡す。見出しのUnicodeの絵文字は、まとまりの中と同じく、Unicodeの絵文字のリストのものにそろえる。
+    /// 個人セットのカテゴリーの見出しを、セクションに渡す。見出しのUnicodeの絵文字は、セクションの中と同じく、Unicodeの絵文字のリストのものにそろえる。
     @Test func passesPersonalSetHeadingToSection() throws {
         let groups = [StandardEmojiGroup(title: "動物と自然", emojis: [standard("🐈", "ネコ", ["猫"])])]
         let cat = PaletteEmoji.standard(StandardEmoji(emoji: "🐈", name: "ねこ", keywords: [], version: ""))
@@ -202,7 +202,7 @@ struct EmojiPaletteTests {
         StandardEmoji(emoji: emoji, name: name, keywords: keywords, version: "1.0")
     }
 
-    /// アプリに入れた絵文字のリストが読め、まとまりごとに並ぶ。
+    /// アプリに入れた絵文字のリストが読め、グループごとに並ぶ。
     @Test func loadsBundledStandardEmoji() throws {
         let groups = StandardEmojiCatalog.groups
         #expect(groups.map(\.title) == ["顔と感情", "人と体", "動物と自然", "食べ物と飲み物", "旅行と場所", "活動", "物", "記号", "旗"])
@@ -210,7 +210,7 @@ struct EmojiPaletteTests {
         #expect(groups.flatMap(\.emojis).count > 1500)
     }
 
-    /// Unicodeの絵文字は、カスタム絵文字の後ろにまとまりごとに並べ、最近使ったものにも入る。
+    /// Unicodeの絵文字は、カスタム絵文字の後ろにグループごとに並べ、最近使ったものにも入る。
     @Test func appendsStandardGroupsAfterCustomEmojis() throws {
         let groups = [StandardEmojiGroup(title: "動物と自然", emojis: [standard("🐈", "ネコ", ["猫"])])]
         let sections = EmojiPalette.sections(emojis: [try emoji("blobcat")], standardGroups: groups, recentKeys: ["🐈", "blobcat"], recentLimit: 10)

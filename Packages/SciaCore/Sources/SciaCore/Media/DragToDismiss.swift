@@ -38,7 +38,7 @@ public struct DragToDismiss: Sendable, Equatable {
 
     /// 指を離したときに閉じるか。
     /// - Parameters:
-    ///   - translation: 押した位置から下へ動かした距離。上は負。
+    ///   - translation: 押下した位置から下へ動かした距離。上は負。
     ///   - velocity: 離したときの下向きの速さ（pt/秒）。上は負。
     ///   - height: 画面の高さ。
     public func shouldDismiss(translation: Double, velocity: Double, height: Double) -> Bool {

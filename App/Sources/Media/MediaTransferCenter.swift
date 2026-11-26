@@ -31,7 +31,7 @@ final class MediaTransferCenter {
         /// 共有シートには始めたときの画像を添え、別の画像を出しているサムネイルを起点にしないために持つ。
         var preview: UIImage?
     }
-    /// 落としている途中のチップを押して出した、止めるかの確認と、その対象。対象が済むか止まったら閉じる。
+    /// 落としている途中のチップを選択して出した、止めるかの確認と、その対象。対象が済むか止まったら閉じる。
     private weak var stopConfirmation: UIAlertController?
     private var stopConfirmationTarget: MediaTransfers.Transfer.ID?
     /// 「操作の状況」の「進行中」に並べているもの。
@@ -114,7 +114,7 @@ final class MediaTransferCenter {
         return chip.map { notice(for: $0) { context.presenter } }
     }
 
-    /// 1件だけなら、押すと止めるかの確認を出す。2件以上なら、押すと「操作の状況」の画面を開く。
+    /// 1件だけなら、選択すると止めるかの確認を出す。2件以上なら、選択すると「操作の状況」の画面を開く。
     private func notice(for chip: MediaTransferChip, presenter: @escaping @MainActor () -> UIViewController?) -> Notice {
         var showAll: (@MainActor () -> Void)?
         if let show = notices.showOperationStatus {
@@ -302,7 +302,7 @@ final class MediaTransferCenter {
 
     // MARK: 止めるかの確認
 
-    /// 落としている途中のチップを押したときに、止めるかを確かめる。
+    /// 落としている途中のチップを選択したときに、止めるかを確かめる。
     func confirmStopping(_ id: MediaTransfers.Transfer.ID, from presenter: UIViewController) {
         guard transfers.transfer(id)?.isStoppable == true, stopConfirmation == nil else { return }
         // チップから吹き出すシートでは「続ける」が省かれ、外をタップして続けることになるため、両方を並べるアラートにする。

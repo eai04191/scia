@@ -18,7 +18,7 @@ public enum EmojiPaletteTexts {
 }
 
 extension StandardEmojiGroup {
-    /// まとまりの名前（`Tools/build-emoji-data.py`の`GROUP_TITLES`）と、まとまりのボタンのSF Symbolsの名前。
+    /// グループの名前（`Tools/build-emoji-data.py`の`GROUP_TITLES`）と、グループのボタンのSF Symbolsの名前。
     private static let symbolNames: [String: String] = [
         "顔と感情": "face.smiling",
         "人と体": "hand.raised",
@@ -31,7 +31,7 @@ extension StandardEmojiGroup {
         "旗": "flag",
     ]
 
-    /// まとまりのボタンのSF Symbolsの名前。表にない名前ならnil。
+    /// グループのボタンのSF Symbolsの名前。表にない名前ならnil。
     public static func symbolName(forTitle title: String) -> String? {
         symbolNames[title]
     }

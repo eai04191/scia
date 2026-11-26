@@ -301,7 +301,7 @@ struct SavedStatusesStoreTests {
     }
 
     /// 最新のページが全部除いた相手の投稿で、上に並べる行がなければ、先頭に残っていたギャップは新しいギャップに含めて1つにする。
-    /// 読み直すたびに同じギャップを重ねないため。
+    /// 再読み込みするたびに同じギャップを重ねないため。
     @Test func refreshOfExcludedPageDoesNotStackGaps() async throws {
         let latest = SavedStatusesPage(statuses: ["9", "8"].map { Self.status($0, accountID: "muted") }, nextMaxID: "c8")
         let store = makeStore(Pages([Self.page(["5"], next: nil), latest, latest]))

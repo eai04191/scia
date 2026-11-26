@@ -49,8 +49,8 @@ final class ScrubBar: UIControl {
         fill.frame = CGRect(x: 0, y: 0, width: track.bounds.width * min(max(value, 0), 1), height: thickness)
     }
 
-    /// 触れた時点では位置を変えるだけで知らせない。`UIControl`は、この後に`.touchDown`を送るため、動かし始めた知らせより先に変更の知らせが届かないようにする。
-    /// 触れて動かさずに離したときは、離したときの知らせで、触れた位置へ移る。
+    /// 触れた時点では位置を変えるだけで知らせない。`UIControl`は、この後に`.touchDown`を送るため、動かし始めたイベントより先に変更のイベントが届かないようにする。
+    /// 触れて動かさずに離したときは、離したときのイベントで、触れた位置へ移る。
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         value = fraction(at: touch)
         isDragging = true

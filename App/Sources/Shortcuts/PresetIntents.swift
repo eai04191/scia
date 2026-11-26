@@ -27,7 +27,7 @@ struct PresetQuery: EntityQuery {
         }
     }
 
-    /// アプリの選ぶ画面と同じく、組み込みのプリセットと使う人のプリセットを見出しを付けた節に分けて並べる。名前は重なりうるので、節で見分ける（docs/preset.md）。
+    /// アプリの選ぶ画面と同じく、組み込みのプリセットと使う人のプリセットを見出しを付けたセクションに分けて並べる。名前は重なりうるので、セクションで見分ける（docs/preset.md）。
     func suggestedEntities() async throws -> IntentItemCollection<PresetEntity> {
         let (builtIn, user, builtInHeader, userHeader) = await MainActor.run {
             (Self.builtIn(), Self.user(), SettingsTexts.Presets.builtInHeader, SettingsTexts.Presets.userHeader)

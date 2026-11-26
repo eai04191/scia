@@ -12,7 +12,7 @@ struct EmojiPaletteMenuContext {
     var openURL: (@MainActor (URL, LinkBrowser) -> Void)?
 }
 
-/// 絵文字のパレットでカスタム絵文字を長押ししたときに、カスタム絵文字のメニューを組み、押された項目を行う。決まりはdocs/menus.mdの「カスタム絵文字のメニュー」にある。
+/// 絵文字のパレットでカスタム絵文字を長押ししたときに、カスタム絵文字のメニューを組み、選択された項目を行う。決まりはdocs/menus.mdの「カスタム絵文字のメニュー」にある。
 @MainActor
 struct EmojiPaletteMenu {
     let context: EmojiPaletteMenuContext

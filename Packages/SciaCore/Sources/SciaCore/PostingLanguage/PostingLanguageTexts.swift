@@ -25,7 +25,7 @@ public enum PostingLanguagePurpose: Sendable {
         }
     }
 
-    /// まとまりの見出し。
+    /// グループの見出し。
     public func sectionTitle(of kind: PostingLanguageSection.Kind) -> String {
         switch (kind, self) {
         case (.defaultLanguage, .post): "アカウントのデフォルト"

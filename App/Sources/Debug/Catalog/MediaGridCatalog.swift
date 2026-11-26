@@ -78,7 +78,7 @@ enum MediaGridCatalog {
 
     /// 同じ添付ファイルのタイルを、幅を変えて並べる。タイムラインでの並べ方では狭いタイルが出にくいため、バッジが幅に入らないときの形を直接見る。
     /// - Parameters:
-    ///   - contentSize: 文字の大きさの設定。nilなら端末の設定に従う。
+    ///   - contentSize: Dynamic Type。nilなら端末の設定に従う。
     ///   - square: 高さを幅と同じにする。falseなら高さは64pt。
     @MainActor
     private static func tiles(_ attachment: MediaAttachment, widths: [CGFloat] = [160, 64, 40, 24], square: Bool = false, contentSize: UIContentSizeCategory? = nil) -> UIView {
@@ -132,7 +132,7 @@ enum MediaGridCatalog {
         }
         guard let content = timeline.mediaContent(for: status), let aspectRatio = content.aspectRatio else { return grid }
         grid.apply(content)
-        // ぼかしを押したら外す。タイムラインと同じく、ぼかしと中身は同じ大きさのため高さは変わらない。
+        // ぼかしを選択したら外す。タイムラインと同じく、ぼかしと中身は同じ大きさのため高さは変わらない。
         grid.onReveal = { [weak grid] in
             grid?.apply(MediaGridView.Content(
                 attachments: content.attachments,

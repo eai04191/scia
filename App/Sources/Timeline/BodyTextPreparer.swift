@@ -40,7 +40,7 @@ final class BodyTextPreparer {
         let id: Status.ID
         let status: Status
         let source: Source
-        /// カスタム絵文字の画像を写し取った描き手。
+        /// カスタム絵文字の画像をコピーした描き手。
         let renderer: RichTextRenderer
         let geometry: Geometry?
         let truncation: BodyTruncation?
@@ -84,7 +84,7 @@ final class BodyTextPreparer {
         }
 
         /// `status`の本文を`renderer`で描いたときと同じか。本文の中身、描き方、カスタム絵文字の画像の状態を比べる。
-        /// 絵文字は描いた高さで求めるので、絵文字だけの本文のように大きく描く絵文字は、ここでその高さの読み直しが始まる。
+        /// 絵文字は描いた高さで求めるので、絵文字だけの本文のように大きく描く絵文字は、ここでその高さの再読み込みが始まる。
         @MainActor
         func isCurrent(for status: Status, translation: RichText?, renderer: RichTextRenderer) -> Bool {
             source == Source(status, translation: translation) && self.renderer.hasSameStyle(as: renderer)
@@ -242,7 +242,7 @@ final class BodyTextPreparer {
         return heights
     }
 
-    /// 投稿のリンクカードの文字の書く方向を判定して覚えておく。メインスレッドの外で走らせる。
+    /// 投稿のリンクカードの文字の書く方向を判定してキャッシュしておく。メインスレッドの外で走らせる。
     @concurrent
     private nonisolated static func guessLinkCardDirections(of status: Status) async {
         guard let card = LinkCard(status: status) else { return }

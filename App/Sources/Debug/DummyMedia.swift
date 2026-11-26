@@ -142,12 +142,12 @@ enum DummyMedia {
         }
     }
 
-    /// 単色に格子と`label`を描いた画像。部品のカタログで、通信せずにサムネイルを出すために使う。
+    /// 単色にグリッドと`label`を描いた画像。部品のカタログで、通信せずにサムネイルを出すために使う。
     static func image(size: CGSize, color: UIColor, label: String) -> UIImage {
         render(Spec(size: size, color: color, label: label, description: nil))
     }
 
-    /// 単色に100pxの格子と番号を描く。格子で、拡大や切り抜きのずれを見分けられるようにする。`progress`を渡すと、再生していることが分かるよう、左から右へ動く白い帯を重ねる。
+    /// 単色に100pxのグリッドと番号を描く。グリッドで、拡大や切り抜きのずれを見分けられるようにする。`progress`を渡すと、再生していることが分かるよう、左から右へ動く白い帯を重ねる。
     private static func render(_ spec: Spec, progress: CGFloat? = nil) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1

@@ -1,14 +1,14 @@
 import UIKit
 
-/// ウィンドウの根に置く入れ物。アプリ内のSafariを伏せた高さまで下げている間、中の画面（タブ）を縮めて下の角を丸くし、シートとの間に黒い隙間を空ける。
+/// ウィンドウのルートに置く入れ物。アプリ内のSafariを伏せた高さまで下げている間、中の画面（タブ）を縮めて下の角を丸くし、シートとの間に黒いgapを空ける。
 final class InAppBrowserDockContainer: UIViewController {
     let content: UIViewController
     /// 中の画面を見せる範囲。下の角を丸くし、はみ出した分を切る。
     private let visibleArea = UIView()
-    /// 下に空ける高さ。シートの高さと隙間を足したもの。空けていなければ0。
+    /// 下に空ける高さ。シートの高さとgapを足したもの。空けていなければ0。
     private(set) var reservedHeight: CGFloat = 0
     /// 中の画面を、見せる範囲より下へはみ出させる長さ。
-    /// `UITabBarController`は、下の安全領域が0でも、タブバーを全画面のときと同じだけ下端から浮かせて置き、この空きを変えるAPIがない。中の画面を長くすると、タブバーとその上のカプセルが一緒に下がる。
+    /// `UITabBarController`は、下のセーフエリアが0でも、タブバーを全画面のときと同じだけ下端から浮かせて置き、この空きを変えるAPIがない。中の画面を長くすると、タブバーとその上のカプセルが一緒に下がる。
     private var contentOverhang: CGFloat = 0
 
     init(content: UIViewController) {

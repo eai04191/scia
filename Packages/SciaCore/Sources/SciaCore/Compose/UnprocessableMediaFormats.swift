@@ -20,7 +20,7 @@ public final class UnprocessableMediaFormats {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let key: String
 
-    /// 送り直したときにJPEGにする形式。これ以外の形式では、処理の失敗を形式のせいとみなさない。
+    /// 再送したときにJPEGにする形式。これ以外の形式では、処理の失敗を形式のせいとみなさない。
     public static let replaceableMIMETypes: Set<String> = ["image/heic", "image/heif", "image/avif"]
 
     public init(defaults: UserDefaults, instance: URL) {
@@ -43,7 +43,7 @@ public final class UnprocessableMediaFormats {
         defaults.set(try? JSONEncoder().encode(entries), forKey: key)
     }
 
-    /// 失敗を、形式のせいとみなしてJPEGで送り直すか。
+    /// 失敗を、形式のせいとみなしてJPEGで再送するか。
     ///
     /// サーバーの処理の失敗はどれも同じ500と文言で返り、形式のせいかを応答から見分けられない。
     /// そのため、処理できないことのある形式で、アップロードの処理に失敗したときだけを形式のせいとみなす。

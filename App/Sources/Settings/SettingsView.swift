@@ -17,7 +17,7 @@ struct SettingsView: View {
     let tabSources: SettingsTabSourceActions
     /// 今のウインドウでのタブバーの形。「タブ」の行のアイコンを、今の画面と同じ形にする。
     let tabBarShape: TabBarShapeModel
-    /// アカウントの画面に出すものと、押したときの処理。
+    /// アカウントの画面に出すものと、選択したときの処理。
     let accountScreen: AccountScreenContext
     /// 「アカウントを管理」の画面に渡すもの。
     /// アカウントのリストを読めないとき（Keychainを読めないなど）はnil。
@@ -78,7 +78,7 @@ struct SettingsView: View {
         self.navigation = navigation
         _editingSettings = State(initialValue: editing)
         // 「プリセットを管理」から開いたプリセットを直している途中にアプリ内のSafariの高さを選びに出たときは、戻ったときもそのプリセットの画面を挟む。
-        // 挟まないと、次に画面を移ったときに直す先が開いているアカウントのプリセットに戻るため。
+        // 挟まないと、次に画面遷移したときに直す先が開いているアカウントのプリセットに戻るため。
         if case .preset = editing?.target {
             _path = State(initialValue: SettingsPage.presetEditor.path + (page?.path ?? []))
         } else {
@@ -329,7 +329,7 @@ struct SettingsTabSourceActions {
 }
 
 extension UIViewController {
-    /// 設定の画面を、この画面から重ねた画面のうち、いちばん手前の画面に重ねて出す。
+    /// 設定の画面を、この画面から出したモーダルビューのうち、いちばん手前のものに重ねて出す。
     /// - Parameters:
     ///   - windowSettings: 開いているアカウントが使っているプリセットを読み書きする設定。設定のトップの分類からは、これの値を変える。
     ///   - instance: ログイン中のアカウントのサーバー。
@@ -337,7 +337,7 @@ extension UIViewController {
     ///   - tabIcons: タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
     ///   - tabSources: タブの並びでリストを作る、消す。
     ///   - tabBarShape: 今のウインドウでのタブバーの形。
-    ///   - accountScreen: アカウントの画面に出すものと、押したときの処理。
+    ///   - accountScreen: アカウントの画面に出すものと、選択したときの処理。
     ///   - signedInAccounts: 「アカウントを管理」の画面に渡すもの。
     ///   - openInAppBrowserHeight: 設定を閉じ、ホームの上でアプリ内のSafariの高さを選ぶシートを出す。
     ///   - openProfile: 謝辞の画面で、設定の画面を閉じて、ハンドルの人のプロフィールを開く。
@@ -351,9 +351,9 @@ extension UIViewController {
     }
 
     /// メニューの「カスタマイズ」から、その並びの設定の画面を、設定のトップの画面に重ねて開く。決まりはdocs/menus.mdの「並びの設定」にある。
-    /// `scia://settings/<画面>`と同じ入り口を通し、この画面を出している窓のセッションで開く。
-    /// Macでメディアを別のウインドウに開いたビューアは、窓にセッションを持たない（`MediaWindowSceneDelegate`）ため、押しても開かずにerrorのログだけ残す。
-    /// Macでしか起きず、別の窓のセッションへ届ける経路を足す手間に見合わないため、扱わない。
+    /// `scia://settings/<画面>`と同じ入り口を通し、この画面を出しているウィンドウのセッションで開く。
+    /// Macでメディアを別のウインドウに開いたビューアは、ウィンドウにセッションを持たない（`MediaWindowSceneDelegate`）ため、選択しても開かずにerrorのログだけ残す。
+    /// Macでしか起きず、別のウィンドウのセッションへ届ける経路を足す手間に見合わないため、扱わない。
     func openMenuSettings(_ page: SettingsPage) {
         guard let delegate = viewIfLoaded?.window?.windowScene?.delegate as? SceneDelegate else {
             settingsLogger.error("menu settings ignored without scene: \(page.rawValue, privacy: .public)")
@@ -375,7 +375,7 @@ final class SettingsNavigationState {
 /// 設定の画面を載せ、出たときと消えたときを1回ずつ知らせる。設定の画面の上に重ねたシートが出ている間は、まだ出ている扱いにする。
 /// スワイプして閉じるのを途中でやめると、消えないまま`viewWillAppear`がもう一度呼ばれるので、出ているかを持って、変わったときだけ知らせる。
 /// 開いている間は、アプリ内通知のチップの列をシートの上へ出し、ナビゲーションバーのすぐ下に置く。
-/// 組み込みのプリセットを複製して切り替えたこと（docs/preset.md）など、設定の中で起きたことの知らせが、シートに覆われて見えなくならないようにするため。
+/// 組み込みのプリセットを複製して切り替えたこと（docs/preset.md）など、設定の中で起きたことのチップが、シートに覆われて見えなくならないようにするため。
 private final class SettingsHostingController: UIHostingController<SettingsView>, NoticeScreen {
     private let navigation: SettingsNavigationState
     private let onShownChange: (Bool) -> Void
@@ -470,7 +470,7 @@ extension SettingsHostingController: UIGestureRecognizerDelegate {
 }
 
 private extension UIView {
-    /// 窓にある、隠していないナビゲーションバー。
+    /// ウィンドウにある、隠していないナビゲーションバー。
     var visibleNavigationBar: UINavigationBar? {
         if let bar = self as? UINavigationBar, bar.window != nil, !bar.isHidden {
             return bar

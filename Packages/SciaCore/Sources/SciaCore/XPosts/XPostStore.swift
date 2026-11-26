@@ -17,7 +17,7 @@ public struct XPostClient: Sendable {
         self.client = client
     }
 
-    /// 投稿を読むURL。読めなかった投稿を、URLごとに読み直しの間隔で覚えるのにも使う。
+    /// 投稿を読むURL。読めなかった投稿を、URLごとに再読み込みの間隔で覚えるのにも使う。
     static func url(id: String) -> URL? {
         baseURL?.appending(components: "status", id)
     }
@@ -35,12 +35,12 @@ public struct XPostClient: Sendable {
     }
 }
 
-/// 読んだXの投稿を、セッションの中で覚える。同じ投稿を並べたタイムラインとタブで、1回だけ読む。
+/// 読んだXの投稿を、セッションの中でキャッシュする。同じ投稿を並べたタイムラインとタブで、1回だけ読む。
 ///
-/// 読めないうちは、サーバーのカードを出したままにする。待てば読める失敗（429、5xx、通信の失敗）は、画像と同じく間隔をおいて読み直す（`RetrySchedule`）。
-/// 読み直してよくなった時刻に`onChange`で知らせ、まだその投稿へのリンクを出している行が描き直して求めたら読む。行の描き直しを待つと、
-/// 描き直されない画面では、間隔が過ぎてもサーバーのカードのまま残るため（docs/network.md）。描き直す行がなければ読まないので、見えていない投稿は読まない。
-/// 待っても読めない失敗（投稿がないなど）は、このセッションでは読み直さない。
+/// 読めないうちは、サーバーのカードを出したままにする。待てば読める失敗（429、5xx、通信の失敗）は、画像と同じく間隔をおいて再読み込みする（`RetrySchedule`）。
+/// 再読み込みしてよくなった時刻に`onChange`で知らせ、まだその投稿へのリンクを出している行が再描画して求めたら読む。行の再描画を待つと、
+/// 再描画されない画面では、間隔が過ぎてもサーバーのカードのまま残るため（docs/network.md）。再描画する行がなければ読まないので、見えていない投稿は読まない。
+/// 待っても読めない失敗（投稿がないなど）は、このセッションでは再読み込みしない。
 @MainActor
 public final class XPostStore {
     public typealias Fetch = @Sendable (String) async throws -> XPost
@@ -57,15 +57,15 @@ public final class XPostStore {
     private let clock: any Clock<Duration>
     /// 読み込み中の投稿ごとの、読む処理。`cancelAll()`で取り消す。
     private var loads: [String: Task<Void, Never>] = [:]
-    /// 読めなかった投稿ごとの、読み直してよくなるのを待つ処理。
+    /// 読めなかった投稿ごとの、再読み込みしてよくなるのを待つ処理。
     private var retryWakes: [String: Task<Void, Never>] = [:]
-    /// 読み終えたか、読めなかった投稿を読み直してよくなった投稿のIDを渡す。その投稿へのリンクを出している行を描き直す。
+    /// 読み終えたか、読めなかった投稿を再読み込みしてよくなった投稿のIDを渡す。その投稿へのリンクを出している行を再描画する。
     public var onChange: ((String) -> Void)?
     private let logger = SciaLog.logger(category: "xpost")
 
     /// - Parameters:
-    ///   - clock: 読み直すまでの間隔を数える。テストでは手で進める時計を渡す。
-    ///   - retryPolicy: 失敗したときに読む、読み直しの間隔。
+    ///   - clock: 再読み込みするまでの間隔を数える。テストでは手で進める時計を渡す。
+    ///   - retryPolicy: 失敗したときに読む、再読み込みの間隔。
     public init(
         clock: any Clock<Duration> = SystemTime.clock,
         retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy,
@@ -90,7 +90,7 @@ public final class XPostStore {
         if case .loaded(let post)? = entries[id] { post } else { nil }
     }
 
-    /// まだ読んでいなければ読みに行く。前に読めなかった投稿は、読み直してよくなっていれば読み直す。読み終えたら`onChange`で知らせる。
+    /// まだ読んでいなければ読みに行く。前に読めなかった投稿は、再読み込みしてよくなっていれば再読み込みする。読み終えたら`onChange`で知らせる。
     /// 行に描いたときに呼ぶので、自動の通信として送り、止められている間は送らない。
     public func request(id: String) {
         switch entries[id] {
@@ -119,7 +119,7 @@ public final class XPostStore {
         }
     }
 
-    /// 読み込み中の通信と、読み直しの待ちをすべてやめ、読み込み中の投稿を読んでいないものに戻す。読み終えた投稿は残す。
+    /// 読み込み中の通信と、再読み込みの待ちをすべてやめ、読み込み中の投稿を読んでいないものに戻す。読み終えた投稿は残す。
     /// 設定で展開をオフにしたときに呼ぶ。オフのあいだfxtwitterに通信しないため。
     public func cancelAll() {
         for (id, load) in loads {
@@ -139,8 +139,8 @@ public final class XPostStore {
         finish(id, with: .failed)
     }
 
-    /// 読み直してよくなった時刻に、まだ読めていなければ`onChange`で知らせる。待っても読めない失敗なら知らせない。
-    /// 取り消しのように失敗として覚えないものも知らせない。すぐ読んでよいことになるので、知らせると、描き直した行が読み、待たずに繰り返すため。
+    /// 再読み込みしてよくなった時刻に、まだ読めていなければ`onChange`で知らせる。待っても読めない失敗なら知らせない。
+    /// 取り消しのように失敗として覚えないものも知らせない。すぐ読んでよいことになるので、知らせると、再描画した行が読み、待たずに繰り返すため。
     private func scheduleRetry(_ id: String, url: URL) {
         guard retryWakes[id] == nil, retry.hasFailed(url) else { return }
         let clock = clock

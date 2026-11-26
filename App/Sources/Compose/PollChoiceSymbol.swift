@@ -17,7 +17,7 @@ struct PollChoiceSymbol: View {
     }
 }
 
-/// 部品を重ねて描く。下の段は、輪の内側を濃さで埋め、チェックマークを書き順に線を引いて出す。
+/// 部品を重ねて描く。下の段は、輪の内側を不透明度で埋め、チェックマークを書き順に線を引いて出す。
 /// 内側の丸を縮めたり、チェックマークを拡大して出したりしない。途中のコマが、輪にもチェックマークにも読めない形になるため。
 @Animatable
 private struct PollChoiceSymbolDrawing: View {
@@ -70,7 +70,7 @@ struct PollChoiceSymbolMetrics {
     static let boldTextWeight: CGFloat = 0.4
     /// 四角にしたときの一辺の、丸の直径に対する割合。投票の欄の選択肢の先頭のマークと同じ比にする。
     static var squareSideRatio: CGFloat { ComposePollOptionMark.squareSideRatio / ComposePollOptionMark.circleDiameterRatio }
-    /// 四角にしたときの角の丸みの、一辺に対する割合。
+    /// 四角にしたときのradiusの、一辺に対する割合。
     static var squareCornerRatio: CGFloat { ComposePollOptionMark.squareCornerRatio / ComposePollOptionMark.squareSideRatio }
 
     static let checkCommands = "MCLCCCLLCCCLC"

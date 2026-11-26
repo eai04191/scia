@@ -45,7 +45,7 @@ final class EditHistoryViewController: UIViewController {
     private var state = State.loading
     /// ぼかしを外した版。過去の版の添付ファイルと、外した添付ファイルのぼかしに使う。
     private var revealedEditNumbers: Set<Int> = []
-    /// 並べている版。ビューアを閉じるときに、押したサムネイルを探す。描き直すと入れ替わる。
+    /// 並べている版。ビューアを閉じるときに、選択したサムネイルを探す。再描画すると入れ替わる。
     private var entryViews: [Int: EditHistoryEntryView] = [:]
     private var loadTask: Task<Void, Never>?
 
@@ -99,7 +99,7 @@ final class EditHistoryViewController: UIViewController {
             stack.leadingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: scrollView.frameLayoutGuide.trailingAnchor),
         ])
-        // 文字は描いた時点の大きさで持つため、文字の大きさの設定が変わったら描き直す。
+        // 文字は描いた時点の大きさで持つため、Dynamic Typeが変わったら再描画する。
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.render()
         }
@@ -171,7 +171,7 @@ final class EditHistoryViewController: UIViewController {
     }
 
     /// ぼかしを外す。今の投稿の版なら、タイムラインの同じ投稿の行もそろえるよう、セッションに知らせる。
-    /// 1つの版のぼかしは、どれを押してもまとめて外す。
+    /// 1つの版のぼかしは、どれを選択してもまとめて外す。
     private func revealMedia(of editNumber: Int, isLatest: Bool) {
         revealedEditNumbers.insert(editNumber)
         if isLatest {
@@ -181,7 +181,7 @@ final class EditHistoryViewController: UIViewController {
         render()
     }
 
-    /// ほかの画面で開いたり隠したりした結果を受け取り、描き直す。
+    /// ほかの画面で開いたり隠したりした結果を受け取り、再描画する。
     func applyMediaCovers(_ covers: MediaCovers, changed status: Status) {
         mediaCovers = covers
         guard status.displayed.id == self.status.id else { return }
@@ -192,7 +192,7 @@ final class EditHistoryViewController: UIViewController {
         render()
     }
 
-    /// 閉じるときは、押したサムネイルへ戻す。開いている間に描き直していれば、描き直したあとの同じ場所のサムネイルを探す。
+    /// 閉じるときは、選択したサムネイルへ戻す。開いている間に再描画していれば、再描画したあとの同じ場所のサムネイルを探す。
     private func openMedia(_ attachments: [MediaAttachment], at index: Int, of editNumber: Int, place: EditHistoryEntryView.MediaPlace) {
         MediaViewerOpener(store: mediaImages, tuning: tuning, transfers: mediaTransfers, notices: notices).open(
             attachments,
@@ -238,7 +238,7 @@ final class EditHistoryViewController: UIViewController {
     }
 }
 
-/// 編集履歴の版を並べるスクロールビュー。本文のリンクを押して少し止めてから引いても、スクロールできるようにする。
+/// 編集履歴の版を並べるスクロールビュー。本文のリンクを押下して少し止めてから引いても、スクロールできるようにする。
 final class EditHistoryScrollView: UIScrollView {
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is LinkHitArea || super.touchesShouldCancel(in: view)
@@ -247,8 +247,8 @@ final class EditHistoryScrollView: UIScrollView {
 
 extension EditHistoryViewController: LinkMenuHost {
     /// 編集履歴は開いたときに一度読むだけで、新着で行が動くことはないため、溜めない。
-    /// 読み終えたあとに描き直すのは、ほかの画面で添付ファイルを開いたり隠したりしたときだけで、メニューを出している間に起きるのは、iPadやMacの別のウィンドウでその投稿を操作したときに限る。
-    /// そのときはメニューの後ろで本文が描き直されるが、まれなうえに、溜めるには描き直しを止めて閉じたあとに戻す仕組みを足す必要があるため、対応しない。
+    /// 読み終えたあとに再描画するのは、ほかの画面で添付ファイルを開いたり隠したりしたときだけで、メニューを出している間に起きるのは、iPadやMacの別のウィンドウでその投稿を操作したときに限る。
+    /// そのときはメニューの後ろで本文が再描画されるが、まれなうえに、溜めるには再描画を止めて閉じたあとに戻す仕組みを足す必要があるため、対応しない。
     func linkMenuWillShow() {}
 
     func linkMenuDidHide() {}

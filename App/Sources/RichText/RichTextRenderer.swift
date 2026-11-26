@@ -3,7 +3,7 @@ import TextKit2Label
 import UIKit
 
 /// RichTextを、UILabelに渡せるNSAttributedStringにする。
-/// メインスレッドで作り、タイムラインの本文を先に作るときは、カスタム絵文字の画像を写し取ったもの（`withEmojiSnapshot`）をメインスレッドの外で使う。
+/// メインスレッドで作り、タイムラインの本文を先に作るときは、カスタム絵文字の画像をコピーしたもの（`withEmojiSnapshot`）をメインスレッドの外で使う。
 struct RichTextRenderer: Sendable {
     var font: UIFont
     var textColor: UIColor
@@ -14,7 +14,7 @@ struct RichTextRenderer: Sendable {
     var paragraphSpacing: CGFloat
     /// 行と行のあいだに足す余白。
     var lineSpacing: CGFloat
-    /// 引用とリストの1段あたりの字下げ（pt）。初期化で渡さなければ、設定の「引用とリストの字下げ」の割合を`font`の大きさに掛けた長さ。
+    /// 引用とリストの1段あたりのインデント（pt）。初期化で渡さなければ、設定の「引用とリストの字下げ」の割合を`font`の大きさに掛けた長さ。
     var indentPerLevel: CGFloat
     /// 引用の段落の頭に引く縦線の太さ。0なら引かない。
     var quoteBarWidth: CGFloat
@@ -45,7 +45,7 @@ struct RichTextRenderer: Sendable {
     /// 文字列は描くビューより先に組むので、ビューのtraitではなく、組むときのtraitから読む。iPhoneの画面は1つなので、どのビューでも同じ値になる。
     var displayScale: CGFloat
 
-    /// - Parameter settings: 描く窓に開いたアカウントの設定。リンクの下線、引用の線、絵文字の書体とアニメーションの既定を、ここから決める。
+    /// - Parameter settings: 描くウィンドウに開いたアカウントの設定。リンクの下線、引用の線、絵文字の書体とアニメーションの既定を、ここから決める。
     @MainActor
     init(
         font: UIFont,
@@ -93,7 +93,7 @@ struct RichTextRenderer: Sendable {
     enum EmojiImageSource: Sendable {
         /// アプリのストア。メインスレッドで描くときに使う。読み込んでいなければ読み込みを始める。
         case store(EmojiImageStore<UIImage>)
-        /// メインスレッドで写し取った画像と、読めなかった画像のURL。メインスレッドの外で描くときに使う。写し取っていないURLは、読み込み中として描く。
+        /// メインスレッドでコピーした画像と、読めなかった画像のURL。メインスレッドの外で描くときに使う。コピーしていないURLは、読み込み中として描く。
         case snapshot(images: [URL: UIImage], failed: Set<URL>)
     }
 
@@ -104,7 +104,7 @@ struct RichTextRenderer: Sendable {
         case loading
         case failed
 
-        /// 同じURLの画像なら、描き方が同じになるものを等しいとする。ストアはURLごとに一番高く読んだ1枚だけを持つので、ほかの画面が大きく読み直すと画像が替わるが、
+        /// 同じURLの画像なら、描き方が同じになるものを等しいとする。ストアはURLごとに一番高く読んだ1枚だけを持つので、ほかの画面が大きいサイズで再読み込みすると画像が替わるが、
         /// 前の画像が描く高さに足りていれば（`EmojiImageStore.upscaleTolerance`まで）、どちらで描いても見た目は変わらない。替わるたびに作り直すと、
         /// すでに絵文字を描けている本文を、見た目の変わらないまま作り直すため。
         static func == (lhs: Self, rhs: Self) -> Bool {
@@ -117,8 +117,8 @@ struct RichTextRenderer: Sendable {
         }
     }
 
-    /// `urls`の画像を今のストアから写し取り、メインスレッドの外で描ける描き手を返す。写し取った状態は`emojiState(of:pixelHeight:)`で比べられる。
-    /// ストアはURLごとに画像を1枚だけ持つので、高さごとには写し取らない。大きく描く絵文字の読み直しは、メインスレッドで状態を比べるときに始まる。
+    /// `urls`の画像を今のストアからコピーし、メインスレッドの外で描ける描き手を返す。コピーした状態は`emojiState(of:pixelHeight:)`で比べられる。
+    /// ストアはURLごとに画像を1枚だけ持つので、高さごとにはコピーしない。大きく描く絵文字の再読み込みは、メインスレッドで状態を比べるときに始まる。
     @MainActor
     func withEmojiSnapshot(of urls: some Sequence<URL>) -> RichTextRenderer {
         var images: [URL: UIImage] = [:]
@@ -137,13 +137,13 @@ struct RichTextRenderer: Sendable {
     }
 
     /// `url`の画像を`pixelHeight`の高さで描くときの状態。ストアから求めるときは、読み込んでいなければ読み込みを始め、
-    /// 持っている画像より高く描くなら、その高さで読み直しを始める（読み終えるまでは持っている画像を返す）。写し取ったものでは高さを見ない。
-    /// ストアはメインスレッドで作った描き手だけが持ち、メインスレッドの外では写し取ったものだけを使う（`withEmojiSnapshot`）。
+    /// 持っている画像より高く描くなら、その高さで再読み込みを始める（読み終えるまでは持っている画像を返す）。コピーしたものでは高さを見ない。
+    /// ストアはメインスレッドで作った描き手だけが持ち、メインスレッドの外ではコピーしたものだけを使う（`withEmojiSnapshot`）。
     nonisolated func emojiState(of url: URL, pixelHeight: Int) -> EmojiImageState {
         switch emojiImages {
         case .store(let store):
             MainActor.assumeIsolated {
-                // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで読み直しが始まる。
+                // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで再読み込みが始まる。
                 if let image = store.image(for: url, pixelHeight: pixelHeight) { .loaded(image, pixelHeight: pixelHeight) } else if store.hasFailed(url) { .failed } else { .loading }
             }
         case .snapshot(let images, let failed):
@@ -433,8 +433,8 @@ struct RichTextRenderer: Sendable {
         let font = font(for: [], block: block)
         // 割合が同じなら、Unicodeの絵文字と同じ高さに描く。
         let height = EmojiFont.glyphHeight(of: font) * emojiScale
-        // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで読み直しが始まる。読めるまでは文字で描く。
-        // 絵文字だけの本文のように大きく描くときは、その高さで読み直させ、読み終えるまでは持っている画像を拡大して描く。
+        // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで再読み込みが始まる。読めるまでは文字で描く。
+        // 絵文字だけの本文のように大きく描くときは、その高さで再読み込みさせ、読み終えるまでは持っている画像を拡大して描く。
         let state = emojiState(of: url, pixelHeight: Self.pixelHeight(of: height, scale: displayScale))
         if state == .failed {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
@@ -545,7 +545,7 @@ struct RichTextRenderer: Sendable {
 
     /// 段落スタイルを付ける。行の高さは段落のどの行にも同じものが付くため、段落の中の改行（U+2028）で区切った行の高さが違えば、
     /// 改行を段落の区切りにして、行ごとに高さを付ける。区切らないと、絵文字のある行に合わせた高さが、絵文字のない行にも付いて行間が開く。
-    /// 区切った行は、段落の間隔を最後の行にだけ付け、2行目からの字下げを折り返した行と揃えて、同じ段落の行と同じに並べる。
+    /// 区切った行は、段落の間隔を最後の行にだけ付け、2行目からのインデントを折り返した行と揃えて、同じ段落の行と同じに並べる。
     /// 改行で区切らずに折り返した行は、同じ段落なので、UILabelで描くラベルでは絵文字のある行に合わせた高さのまま並ぶ。
     /// TextKit 2で描くラベルは、この高さを外して行ごとに高さを決める（`TextKitLabelLayout.lineHeightsFromContent(_:style:)`）。
     private func applyLineHeights(for block: RichText.Block, to result: NSMutableAttributedString, range: NSRange) {
@@ -557,7 +557,7 @@ struct RichTextRenderer: Sendable {
             return
         }
         // 分けた行は、それぞれの最初の文字で書く向きを決め直すため、分ける前の段落の向きを引き継ぐ。
-        // 引き継がないと、左から右の段落の途中にアラビア語の行があると、その行から右から左になり、引用の縦線と字下げが反対の側に移る。
+        // 引き継がないと、左から右の段落の途中にアラビア語の行があると、その行から右から左になり、引用の縦線とインデントが反対の側に移る。
         let direction = Self.baseWritingDirection(of: result.attributedSubstring(from: range))
         for (index, line) in lines.enumerated() {
             let isLast = index == lines.count - 1
@@ -657,7 +657,7 @@ struct RichTextRenderer: Sendable {
             guard attributes[.scaledUnicodeEmoji] != nil, let font = attributes[.font] as? UIFont else { return }
             let offset = attributes[.baselineOffset] as? CGFloat ?? 0
             // 書体のascenderとdescenderではなく、描く絵の枠で測る。書体は絵の上に余白を持つため。
-            // 覚える量が絵文字の種類で収まるよう、ランごとではなく絵文字1つずつ測る。
+            // キャッシュする量が絵文字の種類で収まるよう、ランごとではなく絵文字1つずつ測る。
             let string = text.string as NSString
             var location = run.location
             while location < NSMaxRange(run) {
@@ -684,7 +684,7 @@ struct RichTextRenderer: Sendable {
         return attributes[.scaledUnicodeEmoji] as? UIFont ?? attributes[.font] as? UIFont
     }
 
-    /// - Parameter isFirstLine: 段落の中の改行で区切った行を段落に分けたときの、最初の行か。2行目からは、折り返した行と同じく字下げする。
+    /// - Parameter isFirstLine: 段落の中の改行で区切った行を段落に分けたときの、最初の行か。2行目からは、折り返した行と同じくインデントする。
     /// - Parameter isLastLine: 同じく、最後の行か。段落の間隔は最後の行にだけ付ける。
     /// - Parameter direction: 同じく、分ける前の段落の書く向き。
     private func paragraphStyle(
@@ -727,7 +727,7 @@ struct RichTextRenderer: Sendable {
 
 extension NSAttributedString.Key {
     /// リンクの行き先（`RichText.LinkDestination`）。`.link`はUILabelが特別に扱い、再利用したラベルで前の内容の色のまま次の本文を描くことがあるため、
-    /// UILabelが関知しない独自の名前で持つ。押されたリンクは`LinkLabel`がこの属性から読む。
+    /// UILabelが関知しない独自の名前で持つ。選択されたリンクは`LinkLabel`がこの属性から読む。
     static let linkDestination = NSAttributedString.Key("net.mizle.scia.linkDestination")
     /// 自動翻訳のマークの空きと、その後ろの空白（`RichTextRenderer.reservingTranslationMark`）。コピーや読み上げに渡す文字から除くのに使う。
     static let translationMark = NSAttributedString.Key("net.mizle.scia.translationMark")
@@ -787,7 +787,7 @@ private extension UIImage {
         CGSize(width: size.width * scale, height: size.height * scale)
     }
 
-    /// `pixelHeight`の高さで描くのに、拡大しすぎずに描けるか。`EmojiImageStore`が読み直さずに拡大して描く割合と同じにする。
+    /// `pixelHeight`の高さで描くのに、拡大しすぎずに描けるか。`EmojiImageStore`が再読み込みせずに拡大して描く割合と同じにする。
     func covers(pixelHeight: Int) -> Bool {
         Double(size.height * scale) * EmojiImageStore<UIImage>.upscaleTolerance >= Double(pixelHeight)
     }

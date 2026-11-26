@@ -1,7 +1,7 @@
 import Testing
 @testable import SciaCore
 
-/// 送り直し、つなぎ直し、読み直しの間隔を決める決まり。
+/// 再送、再接続、再読み込みの間隔を決める決まり。
 @Suite(.requestPurpose(.action))
 struct BackoffTests {
     @Test func doublesUpToMaximum() {
@@ -38,7 +38,7 @@ struct BackoffTests {
         #expect(backoff.delay(afterFailures: 1, retryAfter: .seconds(9)) == .seconds(9))
     }
 
-    /// 既定の送り直しとつなぎ直しと読み直しは、揺らぎを持つ。
+    /// 既定の再送と再接続と再読み込みは、揺らぎを持つ。
     @Test @MainActor func standardPoliciesHaveJitter() {
         #expect(RetryPolicy.standard.jitter.spread > 0)
         #expect(ReconnectingStream.Policy.standard.jitter.spread > 0)

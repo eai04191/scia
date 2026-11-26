@@ -67,7 +67,7 @@ struct FollowedTagsStoreTests {
         #expect(store.tags.map(\.name) == ["cat", "dog"])
     }
 
-    /// ほかで読み直したハッシュタグ（ハッシュタグのメニューが読んだもの）を受け取って置き換える。読み込み中は、その読み込みに任せて受け取らない。
+    /// ほかで再読み込みしたハッシュタグ（ハッシュタグのメニューが読んだもの）を受け取って置き換える。読み込み中は、その読み込みに任せて受け取らない。
     @Test func receiveReplacesUnlessLoading() async throws {
         let server = Server()
         server.tags = [Hashtag(name: "dog")]

@@ -2,8 +2,8 @@ import os
 import SciaCore
 import UIKit
 
-/// 端末に残した`api/v1/custom_emojis`の応答が変わったら、端末に置く絵文字の画像を分け直し、自分のサーバーの絵文字の画像を先読みする
-/// （docs/animated-custom-emoji.mdの「自分のサーバーの絵文字のプリフェッチ」）。取得し終えたら、絵文字ピッカーの小さい静止画をまとめて作る処理を始める。
+/// 端末に残した`api/v1/custom_emojis`の応答が変わったら、端末に置く絵文字の画像を分け直し、自分のサーバーの絵文字の画像をプリフェッチする
+/// （docs/animated-custom-emoji.mdの「自分のサーバーの絵文字のプリフェッチ」）。取得し終えたら、絵文字ピッカーのサムネイルをまとめて作る処理を始める。
 @MainActor
 final class EmojiPrefetcher {
     private var task: Task<Void, Never>?
@@ -13,8 +13,8 @@ final class EmojiPrefetcher {
     private let didFinish: @MainActor () -> Void
 
     /// - Parameters:
-    ///   - run: 分け直し、`prefetches`なら先読みする。止められたら（`Task.isCancelled`）、途中で終える。テストでは差し替える。
-    ///   - didFinish: 先読みし終えたときに呼ぶ。
+    ///   - run: 分け直し、`prefetches`ならプリフェッチする。止められたら（`Task.isCancelled`）、途中で終える。テストでは差し替える。
+    ///   - didFinish: プリフェッチし終えたときに呼ぶ。
     init(run: (@Sendable (Bool) async -> Void)? = nil, didFinish: (@MainActor () -> Void)? = nil) {
         self.run = run ?? Self.makeRun()
         self.didFinish = didFinish ?? { AppDependencies.emojiThumbnailBuilder.start() }
@@ -61,7 +61,7 @@ final class EmojiPrefetcher {
         let prefetch = EmojiPrefetch(
             files: files,
             fetch: { url in
-                // 前に読めなかった画像は先読みせず、先読みで読めなかったら、表示の読み込みと同じく覚える（docs/image-loading.md）。
+                // 前に読めなかった画像はプリフェッチせず、プリフェッチで読めなかったら、表示の読み込みと同じく覚える（docs/image-loading.md）。
                 guard await emojiImages.allowsPrefetch(of: url) else { throw EmojiPrefetch.Skipped() }
                 guard let purpose = await network.usePolicy(settings: settings).prefetch else { throw EmojiPrefetch.NotAllowed() }
                 do {

@@ -19,7 +19,7 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var mediaArrangement: MediaArrangement = .belowBody
     /// 本文の右に重ねた写真を傾ける。オフなら、どの写真もまっすぐに置き、投稿ごとに角度をばらつかせない。
     public var tiltsStackedPhotos = true
-    /// 引用とXの投稿の囲みの中の添付ファイルを、本文の下に並べるか、囲みの本文の右に小さく出すか。
+    /// 引用とXの投稿のカードの中の添付ファイルを、本文の下に並べるか、カードの本文の右に小さく出すか。
     public var embedMediaArrangement: EmbedMediaArrangement = .sameAsPost
     /// 時刻の前に、公開でない投稿の公開範囲の記号を出す。
     public var showsVisibilitySymbol = true
@@ -79,9 +79,9 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var showsNameRow = true
     /// 本文を出す。
     public var showsBody = true
-    /// 本文、注意書き、投票の選択肢、引用とXの投稿の囲みの本文のカスタム絵文字を出す。出さなければ、ショートコードの文字も出さない。絵文字のリアクションのボタンは変えない。
+    /// 本文、注意書き、投票の選択肢、引用とXの投稿のカードの本文のカスタム絵文字を出す。出さなければ、ショートコードの文字も出さない。絵文字のリアクションのボタンは変えない。
     public var showsCustomEmojis = true
-    /// 名前、名前の上の行、引用の囲みの作者の名前のカスタム絵文字を出す。出さなければ、ショートコードの文字も出さない。
+    /// 名前、名前の上の行、引用のカードの作者の名前のカスタム絵文字を出す。出さなければ、ショートコードの文字も出さない。
     public var showsNameCustomEmojis = true
     /// 切った本文の末尾に「続きを読む」を出す。出さなくても本文は切り、その場では広げられない。
     public var showsReadMore = true
@@ -89,13 +89,13 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var showsFilterNote = true
     /// 注意書きのボックスを出す。出さなければ、注意書きのある投稿の本文を、注意書きのない投稿と同じく出す。
     public var showsSpoiler = true
-    /// 添付ファイルのサムネイルを出す。引用とXの投稿の囲みの中のサムネイルも含む。
+    /// 添付ファイルのサムネイルを出す。引用とXの投稿のカードの中のサムネイルも含む。
     public var showsMedia = true
     /// 添付ファイルを、開く前にぼかすか。選んでいなければnilで、サーバーの設定に従う（`AppSettings.mediaDisplay`）。
     public var mediaDisplay: MediaDisplay?
-    /// 引用の囲みを出す。
+    /// 引用のカードを出す。
     public var showsQuote = true
-    /// 引用とXの投稿の囲みの、作者のアイコンを出す。
+    /// 引用とXの投稿のカードの、作者のアイコンを出す。
     public var showsEmbedAvatar = true
     /// 投票を出す。
     public var showsPoll = true
@@ -108,12 +108,12 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
 
     public init() {}
 
-    /// 引用とXの投稿の囲みの中で使う並べ方。
+    /// 引用とXの投稿のカードの中で使う並べ方。
     public var resolvedEmbedMediaArrangement: MediaArrangement {
         embedMediaArrangement.resolved(post: mediaArrangement)
     }
 
-    /// 投稿か、引用とXの投稿の囲みのどちらかで、添付ファイルを本文の右に重ねて出す。重ねた写真にだけ効く選択肢を押せるかを決める。
+    /// 投稿か、引用とXの投稿のカードのどちらかで、添付ファイルを本文の右に重ねて出す。重ねた写真にだけ効く選択肢を有効にするかを決める。
     public var stacksMediaBesideBody: Bool {
         mediaArrangement == .besideBody || resolvedEmbedMediaArrangement == .besideBody
     }

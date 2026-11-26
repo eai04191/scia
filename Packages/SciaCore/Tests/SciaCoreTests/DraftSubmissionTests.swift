@@ -4,7 +4,7 @@ import SciaTesting
 import Testing
 @testable import SciaCore
 
-/// 下書きを送るAPIの振り分けと、送った結果の知らせ先、送るときに受けた401の扱い。
+/// 下書きを送るAPIの振り分けと、送った結果を渡す先、送るときに受けた401の扱い。
 @Suite(.scratch)
 @MainActor
 struct DraftSubmissionTests {
@@ -32,7 +32,7 @@ struct DraftSubmissionTests {
         }
     }
 
-    /// 投稿ボタンを押したときと同じく、使う人の操作として送る。
+    /// 投稿ボタンを選択したときと同じく、使う人の操作として送る。
     private func asAction<T>(_ body: () async throws -> T) async rethrows -> T {
         try await RequestPurpose.$current.withValue(.action) { try await body() }
     }
@@ -128,7 +128,7 @@ struct DraftSubmissionTests {
         #expect(transport.requests.isEmpty)
     }
 
-    /// セッションは、読めたサーバーの引用の決まりで送る。まだ読めていなければ読み、一度読めたら読み直さない。
+    /// セッションは、読めたサーバーの引用の決まりで送る。まだ読めていなければ読み、一度読めたら再読み込みしない。
     @Test func sessionSubmitsQuoteWithLoadedRules() async throws {
         let transport = RoutedTransport { request in
             switch request.url?.path() {

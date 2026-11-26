@@ -17,14 +17,14 @@ extension TimelineViewController {
         mediaCovers.cover(for: status, filterTitles: filterWarnings.verdict(for: status).mediaTitles, display: settings.mediaDisplay)
     }
 
-    /// `attachments`を並べる中身。引用とXの投稿の囲みの添付ファイルにも使う。
+    /// `attachments`を並べる中身。引用とXの投稿のカードの添付ファイルにも使う。
     func mediaContent(of attachments: [MediaAttachment], cover: MediaCover?) -> MediaGridView.Content? {
         MediaGridView.Content.make(of: attachments, cover: cover, settings: settings, tuning: tuning, network: network)
     }
 
-    /// 引用とXの投稿の囲みの添付ファイルを並べる中身。囲みの並べ方が本文の右に小さく出す設定なら、重ねて出す。
+    /// 引用とXの投稿のカードの添付ファイルを並べる中身。カードの並べ方が本文の右に小さく出す設定なら、重ねて出す。
     /// - Parameter seed: 重ね方をばらつかせる種。引用元の投稿のIDか、Xの投稿のID。
-    /// - Parameter appearance: 囲みを置く投稿を組むときの見た目の選択肢。
+    /// - Parameter appearance: カードを置く投稿を組むときの見た目の選択肢。
     func embedMediaContent(of attachments: [MediaAttachment], cover: MediaCover?, seed: String, appearance: AppearanceChoices) -> MediaGridView.Content? {
         guard appearance.showsMedia else { return nil }
         var content = mediaContent(of: attachments, cover: cover)
@@ -33,7 +33,7 @@ extension TimelineViewController {
         return content
     }
 
-    /// ぼかしを外す。同じ投稿をブーストした行と通知の行もまとめて描き直す。ぼかしと中身は同じ大きさのため、行の高さは変わらない。
+    /// ぼかしを外す。同じ投稿をブーストした行と通知の行もまとめて再描画する。ぼかしと中身は同じ大きさのため、行の高さは変わらない。
     /// ほかの画面にもそろえるよう、セッションに知らせる。
     func revealMedia(of status: Status) {
         mediaCovers.reveal(status)
@@ -41,22 +41,22 @@ extension TimelineViewController {
         onChangeMediaCovers?(mediaCovers, status)
     }
 
-    /// ぼかす。開くときと同じく、同じ投稿の行をまとめて描き直し、行の高さは変わらない。ほかの画面にもそろえる。
+    /// ぼかす。開くときと同じく、同じ投稿の行をまとめて再描画し、行の高さは変わらない。ほかの画面にもそろえる。
     func hideMedia(of status: Status) {
         mediaCovers.hide(status)
         reconfigureRows(showing: status)
         onChangeMediaCovers?(mediaCovers, status)
     }
 
-    /// ほかの画面で開いたり隠したりした結果を受け取り、その投稿の行を描き直す。
+    /// ほかの画面で開いたり隠したりした結果を受け取り、その投稿の行を再描画する。
     func applyMediaCovers(_ covers: MediaCovers, changed status: Status) {
         mediaCovers = covers
-        // まだ開いていない画面は、開いたときにこの状態で描く。描き直しのために画面を読み込ませない。
+        // まだ開いていない画面は、開いたときにこの状態で描く。再描画のために画面を読み込ませない。
         guard isViewLoaded else { return }
         reconfigureRows(showing: status)
     }
 
-    /// Xの投稿を読み終えた。その投稿へのリンクを出している行を描き直し、リンクカードを囲みに替える。
+    /// Xの投稿を読み終えた。その投稿へのリンクを出している行を再描画し、リンクカードをカードに替える。
     /// 行が伸びる分は、リンクカードが届いたときの差し替えと同じ時間で動きでつなぐ。
     func applyXPost(id: String) {
         guard isViewLoaded, settings.expandsXPosts else { return }
@@ -70,7 +70,7 @@ extension TimelineViewController {
         }
     }
 
-    /// Xの投稿へのリンクを出す投稿なら、読み終えた投稿の囲みを返す。まだなら読みに行き、読み終えるまではnilを返してリンクカードを出す。
+    /// Xの投稿へのリンクを出す投稿なら、読み終えた投稿のカードを返す。まだなら読みに行き、読み終えるまではnilを返してリンクカードを出す。
     /// `text`は、コピーや翻訳に渡す本文。本文が空白だけならnil。
     /// - Parameter translatesBody: 本文を自動翻訳の訳文で出してよい。
     func xPostContent(for status: Status, translatesBody: Bool = true, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, post: XPost, media: [MediaAttachment], url: URL, text: String?)? {

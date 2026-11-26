@@ -38,7 +38,7 @@ public final class NotificationPolicyModel {
         self.tasks = tasks
     }
 
-    /// 読み直す。読んでいる途中なら、その読み込みに任せる。
+    /// 再読み込みする。読んでいる途中なら、その読み込みに任せる。
     /// - Parameter purpose: 通知のタイムラインを読み込んだときやアプリに戻ったときは`.display`。
     @discardableResult
     public func reload(purpose: RequestPurpose) -> Task<Void, Never>? {
@@ -107,7 +107,7 @@ public final class NotificationPolicyModel {
         return task
     }
 
-    /// 受け入れや無視で人数が変わった。読み直す。
+    /// 受け入れや無視で人数が変わった。再読み込みする。
     public func requestsDidChange() {
         reload(purpose: .display)
     }

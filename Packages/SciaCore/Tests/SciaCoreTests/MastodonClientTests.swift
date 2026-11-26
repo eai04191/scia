@@ -104,7 +104,7 @@ struct MastodonClientTests {
         ])
     }
 
-    /// 読めない通知は、対象の投稿のURLを開けるように残す。まとまりそのものが読めなくても、最も新しい通知のIDが読めれば残す。
+    /// 読めない通知は、対象の投稿のURLを開けるように残す。グループそのものが読めなくても、最も新しい通知のIDが読めれば残す。
     @Test func notificationsKeepUnreadableNotificationsApart() async throws {
         let body = #"""
         {"accounts":[],"statuses":[{"id":"1","url":"https://example.social/@alice/1"}],"notification_groups":[
@@ -170,7 +170,7 @@ struct MastodonClientTests {
         #expect(error?.account == RequestAccount(id: "https://example.social#1", handle: "@alice@example.social"))
     }
 
-    /// 「別のアカウントで」使うほかのアカウントのクライアントなら、断られた通信のアカウントにその印を付ける。理由にハンドルを出すため。
+    /// 「別のアカウントで」使うほかのアカウントのクライアントなら、断られた通信のアカウントに`isOtherAccount`を付ける。理由にハンドルを出すため。
     @Test func otherAccountClientMarksFailures() async throws {
         let transport = StubTransport([.json(#"{"error":"The access token is invalid"}"#, statusCode: 401)])
         let client = MastodonClient(credential: Credential(instance: try #require(URL(string: "https://example.social")), accessToken: "token", clientID: "client-id", clientSecret: "client-secret", accountID: "1", username: "alice"), transport: transport, isOtherAccount: true)
@@ -209,7 +209,7 @@ struct MastodonClientTests {
         #expect(query.filter { $0.name == "grouped_types[]" }.map(\.value) == ["favourite", "reblog", "follow"])
     }
 
-    /// まとまりは、最も新しい人と対象の投稿を引いて組み立て、人数と並べる人を添える。
+    /// グループは、最も新しい人と対象の投稿を引いて組み立て、人数と並べる人を添える。
     /// `most_recent_notification_id`はMastodonが数値で返すが、並びには`page_max_id`を使う。
     @Test func groupedNotificationsCarryCountAndSampleAccounts() async throws {
         let transport = StubTransport([try .fixture("grouped_notifications")])
@@ -561,7 +561,7 @@ struct MastodonClientTests {
         #expect(await transport.requests.map(\.url?.path) == ["/api/v2/instance"])
     }
 
-    /// 読めなかった応答は覚えず、次の呼び出しで読み直す。
+    /// 読めなかった応答はキャッシュせず、次の呼び出しで再読み込みする。
     @Test func instanceIsReadAgainAfterFailure() async throws {
         let transport = StubTransport([.json("<html>Bad Gateway</html>", statusCode: 502), .json(#"{"configuration":{}}"#, statusCode: 200)])
         let client = MastodonClient(credential: try makeClient(transport).credential, transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero))
@@ -572,7 +572,7 @@ struct MastodonClientTests {
         #expect(await transport.requests.count == 2)
     }
 
-    /// 200でもJSONのオブジェクトとして読めない応答は覚えず、次の呼び出しで読み直す。
+    /// 200でもJSONのオブジェクトとして読めない応答はキャッシュせず、次の呼び出しで再読み込みする。
     @Test(arguments: ["", "<html>Maintenance</html>", "[]"])
     func instanceIsReadAgainAfterUnreadableResponse(_ body: String) async throws {
         let transport = StubTransport([.json(body, statusCode: 200), .json(#"{"configuration":{"statuses":{"max_characters":1000}}}"#, statusCode: 200)])
@@ -1089,7 +1089,7 @@ struct MastodonClientTests {
         #expect(!forms[1].contains { $0.name == "rule_ids[]" })
     }
 
-    /// 通報は二重に届かないよう、一時的な失敗でも送り直さない。
+    /// 通報は二重に届かないよう、一時的な失敗でも再送しない。
     @Test func reportIsNotRetried() async throws {
         let transport = StubTransport([.json("", statusCode: 503), .json("{}", statusCode: 200)])
         let client = try makeClient(transport)
@@ -1197,7 +1197,7 @@ struct MastodonClientTests {
         #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(URLQueryItem(name: "following", value: "true")) == true)
     }
 
-    /// 打っている途中の問い合わせは、一時的な失敗でも送り直さない。
+    /// 打っている途中の問い合わせは、一時的な失敗でも再送しない。
     @Test func completionSearchDoesNotRetry() async throws {
         let transport = StubTransport([try .fixture("error_502", withExtension: "html", statusCode: 502)])
 
@@ -1207,7 +1207,7 @@ struct MastodonClientTests {
         #expect(await transport.requests.count == 1)
     }
 
-    /// リンクカードの取り直しは、リクエストを間隔ごとに1回に収めるため、一時的な失敗でも送り直さない。
+    /// リンクカードの取り直しは、リクエストを間隔ごとに1回に収めるため、一時的な失敗でも再送しない。
     @Test func multipleStatusesDoesNotRetry() async throws {
         let transport = StubTransport([try .fixture("error_502", withExtension: "html", statusCode: 502)])
 
@@ -1217,7 +1217,7 @@ struct MastodonClientTests {
         #expect(await transport.requests.count == 1)
     }
 
-    /// アカウントはIDを並べて1回で読む。メニューを閉じれば要らなくなるため、一時的な失敗でも送り直さない。
+    /// アカウントはIDを並べて1回で読む。メニューを閉じれば要らなくなるため、一時的な失敗でも再送しない。
     @Test func multipleAccountsAreReadAtOnceWithoutRetry() async throws {
         let url = try #require(Bundle.module.url(forResource: "account", withExtension: "json", subdirectory: "Fixtures"))
         let account = try String(contentsOf: url, encoding: .utf8)
@@ -1334,7 +1334,7 @@ struct MastodonClientTests {
         #expect(tags.map(\.id) == ["627", "628"])
         #expect(tags.map(\.name) == ["nowplaying", "猫写真"])
         #expect(tags.map(\.statusesCount) == [70, 312])
-        // 押して開く先として読む。
+        // 選択して開く先として読む。
         #expect(tags.first?.url?.absoluteString == "https://example.social/@alice/tagged/nowplaying")
     }
 
@@ -1347,7 +1347,7 @@ struct MastodonClientTests {
         #expect(tags.map(\.name) == ["nowplaying", "猫写真"])
     }
 
-    /// 載せるときは名前を送り、外すときは載せたことのIDを消す。載せるのは、二重に載せて断られないよう送り直さない。
+    /// 載せるときは名前を送り、外すときは載せたことのIDを消す。載せるのは、二重に載せて断られないよう再送しない。
     @Test func featureAndUnfeatureTag() async throws {
         let tag = #"{"id":"13174","name":"猫写真","url":"https://example.social/@alice/tagged/猫写真","statuses_count":23,"last_status_at":"2026-10-22"}"#
         let transport = StubTransport([.json("", statusCode: 503), .json(tag, statusCode: 200), .json("{}", statusCode: 200)])

@@ -1,13 +1,13 @@
 import SciaCore
 import UIKit
 
-/// ウインドウに重ねる、アプリ内通知のチップの列。画面ごとではなくウインドウに1本だけ置き、画面を移ってもその場に残す。
+/// ウインドウに重ねる、アプリ内通知のチップの列。画面ごとではなくウインドウに1本だけ置き、画面遷移してもその場に残す。
 /// 決まりはdocs/notices.mdの「置き場所」にある。
 ///
-/// 列は、前に出ている画面（`NoticeScreen`）が上から使っている分のすぐ下に置く。前の画面は、ウインドウの根の画面から、
+/// 列は、前に出ている画面（`NoticeScreen`）が上から使っている分のすぐ下に置く。前の画面は、ウインドウのルートの画面から、
 /// 入れ物（タブ、ナビゲーション）は前に出ている子へ、重ねて出した画面は列の位置を決める画面（ビューア）へ、たどって決める。
 ///
-/// ウインドウの中では、根の画面のすぐ上に置く。シートやアラートは、その上に重なって列を覆う。ビューアを開いたときだけ、ビューアの上へ出す。
+/// ウインドウの中では、ルートの画面のすぐ上に置く。シートやアラートは、その上に重なって列を覆う。ビューアを開いたときだけ、ビューアの上へ出す。
 final class NoticeOverlay: UIView {
     let notices: NoticeCenter
     let column = NoticeColumnView()
@@ -15,7 +15,7 @@ final class NoticeOverlay: UIView {
     private let sideMargin: CGFloat = 16
     /// 出たままのアプリ内通知。前に出ている画面のものと、アプリ全体のものをまとめる。
     private var persistentNotices = PersistentNotices()
-    /// 画面を移る動きに相乗りしている間。スクロールなどで毎フレーム置き直す頼みは、移り終えるまで見送る。
+    /// 画面遷移の動きに相乗りしている間。スクロールなどで毎フレーム置き直す頼みは、遷移し終えるまで見送る。
     private var isFollowingTransition = false
     /// 最後に決めた列の上端。指を離したときに、ここへ動かす。
     private var placedTop: CGFloat?
@@ -25,7 +25,7 @@ final class NoticeOverlay: UIView {
 
     /// 置き直しの動かし方。
     enum Movement {
-        /// 呼んだ側のアニメーションに任せる。アニメーションの中でなければ、すぐ置く。毎フレーム置き直すとき（引っぱる、ビューアをスワイプする）に使う。
+        /// 呼んだ側のアニメーションに任せる。アニメーションの中でなければ、すぐ置く。毎フレーム置き直すとき（pull to refresh、ビューアのスワイプ）に使う。
         case inherited
         /// この時間をかけて動かす。タブの切り替え。
         case animated(TimeInterval)
@@ -80,7 +80,7 @@ final class NoticeOverlay: UIView {
         superview?.bringSubviewToFront(self)
     }
 
-    /// ビューアを閉じ終えたら、根の画面のすぐ上に戻す。ビューアの下に残っているシート（アプリ内のSafariなど）が、また列を覆うようにする。
+    /// ビューアを閉じ終えたら、ルートの画面のすぐ上に戻す。ビューアの下に残っているシート（アプリ内のSafariなど）が、また列を覆うようにする。
     /// ほかのビューアを開いていれば、その上に出したままにする。
     func returnBelowPresentations() {
         guard let window, let root = window.rootViewController?.viewIfLoaded else { return }
@@ -110,7 +110,7 @@ final class NoticeOverlay: UIView {
         }
     }
 
-    /// 前に出ている画面が伝える置き場所。根の画面から入れ物をたどった画面に、重ねて出した列の位置を決める画面があれば、それを重ねる。
+    /// 前に出ている画面が伝える置き場所。ルートの画面から入れ物をたどった画面に、重ねて出した列の位置を決める画面があれば、それを重ねる。
     private func placement() -> NoticePlacement? {
         guard let root = window?.rootViewController else { return nil }
         var base = root
@@ -137,7 +137,7 @@ final class NoticeOverlay: UIView {
         return nil
     }
 
-    /// 列の位置を決めない画面では、上の安全領域（ナビゲーションバーを含む）のすぐ下に置く。
+    /// 列の位置を決めない画面では、上のセーフエリア（ナビゲーションバーを含む）のすぐ下に置く。
     static func defaultTop(of viewController: UIViewController) -> CGFloat {
         guard let view = viewController.viewIfLoaded else { return 0 }
         return view.convert(CGPoint(x: 0, y: view.safeAreaInsets.top + 8), to: nil).y
@@ -160,7 +160,7 @@ final class NoticeOverlay: UIView {
         move(toTop: placement.top, movement)
     }
 
-    /// 画面を移る動きに相乗りし、前の画面の位置から次の画面の位置へ、同じ進み方で動かす。スワイプで戻る途中は指に合わせて動き、やめたら戻る。
+    /// 画面遷移の動きに相乗りし、前の画面の位置から次の画面の位置へ、同じ進み方で動かす。スワイプで戻る途中は指に合わせて動き、やめたら戻る。
     /// 動きがなければ、タブを切り替えたときと同じく短く動かす。
     func follow(_ coordinator: (any UIViewControllerTransitionCoordinator)?) {
         let duration = tuning.value(of: TuningCatalog.noticeAnimationDuration)
@@ -184,7 +184,7 @@ final class NoticeOverlay: UIView {
         }
     }
 
-    /// 画面を移る動きの中で、次の画面の位置へ置く。動きの進み方は移り変わりに任せる。
+    /// 画面遷移の動きの中で、次の画面の位置へ置く。動きの進み方は画面遷移に任せる。
     private func moveAlongTransition() {
         guard let placement = placement() else { return }
         move(toTop: placement.top, .inherited)
@@ -263,7 +263,7 @@ final class NoticeOverlay: UIView {
         }
     }
 
-    /// 出たままのチップに出す1件を選び直す。中身の決め方は様子が変わるたびに呼び直し、同じ見た目なら描き直さない。
+    /// 出たままのチップに出す1件を選び直す。中身の決め方は様子が変わるたびに呼び直し、同じ見た目なら再描画しない。
     private func refreshContent(_ placement: NoticePlacement) {
         let context = context(for: placement)
         persistentNotices.set(placement.screenNotice, in: .screen)
@@ -335,11 +335,11 @@ final class NoticeOverlay: UIView {
     }
 }
 
-/// 画面を移るときに、チップの列を前の画面の位置から次の画面の位置へ、移り変わりと同じ進み方で動かす。
+/// 画面遷移のときに、チップの列を前の画面の位置から次の画面の位置へ、画面遷移と同じ進み方で動かす。
 @MainActor
 final class NoticeNavigationDelegate: NSObject, UINavigationControllerDelegate {
     func navigationController(_ navigationController: UINavigationController, willShow viewController: UIViewController, animated: Bool) {
-        // 動きがなければ、次の画面が並び終えてから置く。並ぶ前は安全領域が分からないため。
+        // 動きがなければ、次の画面が並び終えてから置く。並ぶ前はセーフエリアが分からないため。
         guard let coordinator = navigationController.transitionCoordinator else { return }
         navigationController.noticeOverlay?.follow(coordinator)
     }

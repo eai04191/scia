@@ -10,7 +10,7 @@ final class ProfileHeaderView: UIView {
         let followState: FollowState
         let followedBy: Bool
         let isChangingFollow: Bool
-        /// 読めなかったフォローの関係を読み直している途中。
+        /// 読めなかったフォローの関係を再読み込みしている途中。
         let isReloadingRelationship: Bool
         /// フォローの関係を待つのが長引いている。関係を読む前のボタンの中に、アクティビティインジケータを出す。
         let showsRelationshipActivity: Bool
@@ -40,16 +40,16 @@ final class ProfileHeaderView: UIView {
     private var userDisplayContainer: UIView?
 
     var onToggleFollow: ((UIView) -> Void)?
-    /// 自分のプロフィールで、フォローのボタンの場所に出す「プロフィールを編集」を押した。
+    /// 自分のプロフィールで、フォローのボタンの場所に出す「プロフィールを編集」を選択した。
     var onEditProfile: (() -> Void)?
-    /// 自分にしか見えないメモの欄を押した。
+    /// 自分にしか見えないメモの欄を選択した。
     var onEditPrivateNote: (() -> Void)? {
         get { privateNoteView.onTap }
         set { privateNoteView.onTap = newValue }
     }
-    /// フォローかフォロワーの数が押されたときに、どちらの人のリストかを渡して呼ぶ。
+    /// フォローかフォロワーの数が選択されたときに、どちらの人のリストかを渡して呼ぶ。
     var onOpenCountList: ((ProfileCountList) -> Void)?
-    /// フォローの関係を読めなかったときに、フォローのボタンの場所に出す再試行が押された。
+    /// フォローの関係を読めなかったときに、フォローのボタンの場所に出す再試行が選択された。
     var onRetryRelationship: (() -> Void)?
     var onSelectTab: ((ProfileTab) -> Void)?
     var onChangePostsFilter: ((ProfilePostsFilter) -> Void)?
@@ -63,7 +63,7 @@ final class ProfileHeaderView: UIView {
     private var imageMenuInteractions: [ProfileImage: MediaMenuInteraction] = [:]
     /// 表示名、自己紹介、補足情報の行を長押ししたときの、文章のメニュー。nilを返せばメニューを出さない。
     var menuForText: ((ProfileTextPart) -> UIMenu?)?
-    /// ハンドルを押したときの、コピーのメニュー。nilを返せばメニューを出さない。
+    /// ハンドルを選択したときの、コピーのメニュー。nilを返せばメニューを出さない。
     var menuForHandle: (() -> UIMenu?)?
     /// 文章のメニューを出したときと閉じたとき。
     var textMenuLifecycle = MenuLifecycle()
@@ -79,32 +79,32 @@ final class ProfileHeaderView: UIView {
     var followRevealDuration: TimeInterval = 0
     /// 自己紹介か補足情報の値のリンクがタップされたときと、メンションのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
-    /// 固定された投稿のカードが押されたときに、その投稿と、ウインドウの座標でのカードの枠を渡して呼ぶ。
+    /// 固定された投稿のカードが選択されたときに、その投稿と、ウインドウの座標でのカードの枠を渡して呼ぶ。
     var onOpenPinned: ((Status, CGRect) -> Void)? {
         get { pinnedShelf.onOpen }
         set { pinnedShelf.onOpen = newValue }
     }
-    /// 注目のハッシュタグのカプセルが押された。
+    /// 注目のハッシュタグのカプセルが選択された。
     var onOpenFeaturedTag: ((FeaturedTag) -> Void)? {
         get { featuredTagsShelf.onOpen }
         set { featuredTagsShelf.onOpen = newValue }
     }
-    /// 注目のハッシュタグのカプセルを長押ししたときの、ハッシュタグのメニュー。押したカプセルを渡す。nilを返せばメニューを出さない。
+    /// 注目のハッシュタグのカプセルを長押ししたときの、ハッシュタグのメニュー。長押ししたカプセルを渡す。nilを返せばメニューを出さない。
     var menuForFeaturedTag: ((FeaturedTag, UIView) -> UIMenu?)? {
         get { featuredTagsShelf.menuForTag }
         set { featuredTagsShelf.menuForTag = newValue }
     }
-    /// 紹介しているユーザーのカードが押された。
+    /// 紹介しているユーザーのカードが選択された。
     var onOpenEndorsed: ((Account) -> Void)? {
         get { endorsementsShelf.onOpen }
         set { endorsementsShelf.onOpen = newValue }
     }
-    /// 紹介しているユーザーの棚の「すべて見る」が押された。
+    /// 紹介しているユーザーの棚の「すべて見る」が選択された。
     var onOpenAllEndorsements: (() -> Void)? {
         get { endorsementsShelf.onOpenAll }
         set { endorsementsShelf.onOpenAll = newValue }
     }
-    /// 紹介しているユーザーのカードを長押ししたときの、ユーザーのメニュー。押したカードを渡す。nilを返せばメニューを出さない。
+    /// 紹介しているユーザーのカードを長押ししたときの、ユーザーのメニュー。長押ししたカードを渡す。nilを返せばメニューを出さない。
     var menuForEndorsed: ((Account, UIView) -> UIMenu?)? {
         get { endorsementsShelf.menuForAccount }
         set { endorsementsShelf.menuForAccount = newValue }
@@ -138,7 +138,7 @@ final class ProfileHeaderView: UIView {
         didSet { applyTopExtension() }
     }
     /// タイムラインの一番上からさらに引っぱっている長さ。ヘッダー画像はその分だけ上へずらして画面に止め、下の内容だけを下げる。
-    /// 画像を拡大して隙間を埋めることはしない。
+    /// 画像を拡大してgapを埋めることはしない。
     var pulledDistance: CGFloat = 0 {
         didSet {
             guard pulledDistance != oldValue else { return }
@@ -214,7 +214,7 @@ final class ProfileHeaderView: UIView {
     /// 文言はどちらも日本語で、字はベースラインより下へはみ出さないので、ベースラインが見えている字の下端になる。
     private var relationshipFailureBaseline: NSLayoutConstraint?
     private let nameLabel = EmojiLabel()
-    /// ハンドル。押すと、ハンドルのコピーのメニューを出す。決まりはdocs/profile.mdの「ハンドル」にある。
+    /// ハンドル。選択すると、ハンドルのコピーのメニューを出す。決まりはdocs/profile.mdの「ハンドル」にある。
     private let acctButton = UIButton(configuration: .plain())
     /// ヘッダー画像の右下に重ねる「フォローされています」。関係が届いてから出るため、縦に並ぶ情報の中に置くと、出たときに下が動く。
     /// ヘッダー画像の上なら場所を取らない。添付ファイルのALTのバッジと同じ見た目にする。
@@ -238,7 +238,7 @@ final class ProfileHeaderView: UIView {
     private let featuredTagsShelf = ProfileFeaturedTagsShelfView()
     private let endorsementsShelf: ProfileEndorsementsShelfView
     /// 投稿、フォロー、フォロワーの数。補足情報のカードの一番下に小さく出す。
-    /// フォローとフォロワーは、押すとその人のリストを開く。押した文字で見分けるため、文字の位置を探せるラベルにする。
+    /// フォローとフォロワーは、選択するとその人のリストを開く。選択した文字で見分けるため、文字の位置を探せるラベルにする。
     private let countsLabel = EmojiLabel()
     /// 補足情報と数の間の区切り線。補足情報がなければ出さない。
     private let fieldsDivider = UIView()
@@ -287,7 +287,7 @@ final class ProfileHeaderView: UIView {
         content?.usesAvatarAccent == false ? nil : avatarAccent
     }
 
-    /// - Parameter settings: 開いたアカウントの設定。中身は窓に載る前に組むことがあるので、窓からではなくここから読む。
+    /// - Parameter settings: 開いたアカウントの設定。中身はウィンドウに載る前に組むことがあるので、ウィンドウからではなくここから読む。
     init(emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>, settings: AppSettings) {
         self.emojiImages = emojiImages
         self.mediaImages = mediaImages
@@ -310,7 +310,7 @@ final class ProfileHeaderView: UIView {
             view.applyAccent()
         }
         avatarView.onShowImage = { [weak self] image, arrived in
-            // 読み込みの間に描く空の画像では、色を消さない。消すと、同じ人のアイコンを読み直すたびに、システムの色を挟んで点滅するため。
+            // 読み込みの間に描く空の画像では、色を消さない。消すと、同じ人のアイコンを再読み込みするたびに、システムの色を挟んで点滅するため。
             // 別の人に変わったときは、applyで消す。
             guard let self, let image else { return }
             let accent = ProfileAccentColor(uiImage: image)
@@ -426,7 +426,7 @@ final class ProfileHeaderView: UIView {
         moreButton.isHidden = true
         moreButton.addAction(UIAction { [weak self] _ in self?.expandNote() }, for: .primaryActionTriggered)
 
-        // ほかのサーバーのアカウントであることは、補足情報のカードの中に1行で出す。投稿がこのサーバーに届いた分だけなのは、押して開く元のサーバーで分かる。
+        // ほかのサーバーのアカウントであることは、補足情報のカードの中に1行で出す。投稿がこのサーバーに届いた分だけなのは、選択して開く元のサーバーで分かる。
         remoteLabel.font = .preferredFont(forTextStyle: .footnote)
         remoteLabel.adjustsFontForContentSizeCategory = true
         remoteLabel.textColor = .secondaryLabel
@@ -475,8 +475,8 @@ final class ProfileHeaderView: UIView {
             stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: margin, bottom: 0, trailing: margin)
             return stack
         }
-        // ハンドルのボタンは文字の幅に縮め、メニューをハンドルのそばに出す。`@_`のような短いハンドルでも押せるよう、幅は44pt以上にする。
-        // 高さは1行のまま広げない。上下に広げると、上の名前のメニューと押す範囲が重なるため。
+        // ハンドルのボタンは文字の幅に縮め、メニューをハンドルのそばに出す。`@_`のような短いハンドルでも選択できるよう、幅は44pt以上にする。
+        // 高さは1行のまま広げない。上下に広げると、上の名前のメニューとヒット領域が重なるため。
         let acctRow = UIView()
         acctButton.translatesAutoresizingMaskIntoConstraints = false
         acctRow.addSubview(acctButton)
@@ -824,7 +824,7 @@ final class ProfileHeaderView: UIView {
             applyFollowedByBadge(content)
         }
         tabControl.selectedSegmentIndex = content.tab == .media ? 1 : 0
-        // メディアのタイムラインでは使えないが、消すとタブの幅が変わって動くため、場所を残したまま押せなくする。
+        // メディアのタイムラインでは使えないが、消すとタブの幅が変わって動くため、場所を残したまま無効にする。
         filterButton.isEnabled = content.tab == .posts
         applyFilterButton(content.postsFilter)
         applyAccent()
@@ -1182,7 +1182,7 @@ final class ProfileHeaderView: UIView {
         return before != (featuredTagsShelf.isHidden, endorsementsShelf.isHidden, featuredTagsShelf.tags, endorsementsShelf.content)
     }
 
-    /// 紹介しているユーザーの表示名に、`urls`のカスタム絵文字を使っている人がいれば描き直す。描き直したらtrue。
+    /// 紹介しているユーザーの表示名に、`urls`のカスタム絵文字を使っている人がいれば再描画する。再描画したらtrue。
     @discardableResult
     func redrawEndorsements(ifUsing urls: Set<URL>) -> Bool {
         guard endorsementsShelf.uses(emojiURLs: urls) else { return false }
@@ -1195,7 +1195,7 @@ final class ProfileHeaderView: UIView {
         aboutBox.setCustomSpacing(countsSpacing, after: countsLabel)
     }
 
-    /// 固定された投稿のカードの本文に、`urls`のカスタム絵文字を使っているものがあれば描き直す。描き直したらtrue。
+    /// 固定された投稿のカードの本文に、`urls`のカスタム絵文字を使っているものがあれば再描画する。再描画したらtrue。
     @discardableResult
     func redrawPinned(ifUsing urls: Set<URL>) -> Bool {
         guard pinnedShelf.uses(emojiURLs: urls) else { return false }
@@ -1218,7 +1218,7 @@ final class ProfileHeaderView: UIView {
         }
     }
 
-    /// 投稿、フォロー、フォロワーの数。フォローとフォロワーは、数と名前に、押すと開く人のリストを付ける。
+    /// 投稿、フォロー、フォロワーの数。フォローとフォロワーは、数と名前に、選択すると開く人のリストを付ける。
     static func countsText(of account: Account) -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .footnote)
         let bold = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
@@ -1336,6 +1336,6 @@ enum ProfileCountList: String, CaseIterable {
 }
 
 extension NSAttributedString.Key {
-    /// プロフィールの数の文字で、押すと開く人のリスト（`ProfileCountList`の`rawValue`）。
+    /// プロフィールの数の文字で、選択すると開く人のリスト（`ProfileCountList`の`rawValue`）。
     static let profileCountList = NSAttributedString.Key("net.mizle.scia.profileCountList")
 }

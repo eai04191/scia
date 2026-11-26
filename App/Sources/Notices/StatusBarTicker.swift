@@ -11,17 +11,17 @@ import UIKit
 final class StatusBarTicker {
     /// 流してよいか。通知タブを見ているときや、ビューアのように画面全体を覆っているときは流さない。
     var canShow: () -> Bool = { true }
-    /// 押されたとき。
+    /// 選択されたとき。
     var onTap: () -> Void = {}
 
     /// 流す画面のシーン。セッションの画面がウィンドウに載る前に作るため、流すときに尋ねる。
     var scene: () -> UIWindowScene? = { nil }
-    /// アプリの画面のいちばん下の画面。ステータスバーを隠している間、安全領域を保つのに使う。
+    /// アプリの画面のいちばん下の画面。ステータスバーを隠している間、セーフエリアを保つのに使う。
     var rootController: () -> UIViewController? = { nil }
-    /// ステータスバーを隠している間、アプリの画面の安全領域の上端に足している高さ。
+    /// ステータスバーを隠している間、アプリの画面のセーフエリアの上端に足している高さ。
     private var keptSafeAreaTop: CGFloat = 0
     /// 出している間、ステータスバーを隠すか。Macでは、ステータスバーは描かれず、ナビゲーションバーの上に帯が空いているだけなので隠さない。
-    /// 隠すと、安全領域がすぐ縮むのに、補う足し分はアニメーションで遅れて効くため、出すたびに画面が約20pt上へ跳ねてから戻る。
+    /// 隠すと、セーフエリアがすぐ縮むのに、補う足し分はアニメーションで遅れて効くため、出すたびに画面が約20pt上へ跳ねてから戻る。
     private let hidesSystemStatusBar = !ProcessInfo.processInfo.isiOSAppOnMac
     private let tuning: TuningStore
     private var queue: StatusBarTickerQueue<StatusBarTickerItem>
@@ -118,7 +118,7 @@ final class StatusBarTicker {
         if !wasShowing {
             window.isHidden = false
         }
-        // 縮めている途中に届いたときは、ステータスバーを隠したままなので、隠し直さず、安全領域の補いもそのまま使う。
+        // 縮めている途中に届いたときは、ステータスバーを隠したままなので、隠し直さず、セーフエリアの補いもそのまま使う。
         // 隠している間はステータスバーの高さが0になり、補い直すと補いが消えて画面が上へずれるため。
         if !window.host.hidesStatusBar, hidesSystemStatusBar {
             keepSafeArea(whileHiding: true, window: window)
@@ -138,7 +138,7 @@ final class StatusBarTicker {
         let duration = Duration.seconds(queue.displayDuration)
         let clock = clock
         advanceTask = Task(.withoutRequests) { [weak self] in
-            // 出している間にビューアを開いたときなど、流してはいけなくなったらすぐ消す。画面を出す口は多く、どれにも知らせを足すより、出している間だけ見張るほうが漏れないため。
+            // 出している間にビューアを開いたときなど、流してはいけなくなったらすぐ消す。画面を出す口は多く、どれにもコールバックを足すより、出している間だけ見張るほうが漏れないため。
             // 長押しの拡大表示で読んでいる間は、時間が過ぎても進めず、離すのを待つ。
             while true {
                 let remaining = duration - sinceShown()
@@ -156,8 +156,8 @@ final class StatusBarTicker {
         }
     }
 
-    /// 切り欠きのない画面（iPhone SE、iPad）では、ステータスバーを隠すと、アプリの画面の安全領域の上端がステータスバーの分だけ縮み、画面全体が上へずれる。
-    /// 隠している間は、縮んだ分をアプリの画面の安全領域に足して、画面を動かさない。アイランドとノッチの機種では、ステータスバーを隠しても安全領域は変わらない。
+    /// 切り欠きのない画面（iPhone SE、iPad）では、ステータスバーを隠すと、アプリの画面のセーフエリアの上端がステータスバーの分だけ縮み、画面全体が上へずれる。
+    /// 隠している間は、縮んだ分をアプリの画面のセーフエリアに足して、画面を動かさない。アイランドとノッチの機種では、ステータスバーを隠してもセーフエリアは変わらない。
     private func keepSafeArea(whileHiding hiding: Bool, window: TickerWindow) {
         guard let root = rootController() else { return }
         root.additionalSafeAreaInsets.top -= keptSafeAreaTop
@@ -181,7 +181,7 @@ final class StatusBarTicker {
     }
 
     /// 消し終えてから、ステータスバーを出し直し、出し終えたらウィンドウを隠す。出し終えるまでに届いた通知は、出し終えてから出す。
-    /// ステータスバーを出し直している途中に隠し直すと、システムは途中の濃さからではなく、1コマで濃く出してから薄くし、薄くなるまでカプセルの上に重なって描く。
+    /// ステータスバーを出し直している途中に隠し直すと、システムは途中の不透明度からではなく、1コマで濃く出してから薄くし、薄くなるまでカプセルの上に重なって描く。
     /// 縮めている途中から出し直すと、縮めている途中に次の通知が届いたときにそうなるため、縮め終えるまでステータスバーは隠したままにする。
     private func restoreStatusBar(in window: TickerWindow) {
         guard hidesSystemStatusBar else {

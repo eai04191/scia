@@ -20,7 +20,7 @@ final class NotificationsController {
     }
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     var runningTaskCount: Int { model.runningTaskCount }
-    /// 通知のタイムラインを最初から読み込んだとき、引っぱって読み直したときに呼ぶ。保留中の通知の人数を読み直すのに使う。
+    /// 通知のタイムラインを最初から読み込んだとき、pull to refreshしたときに呼ぶ。保留中の通知の人数を再読み込みするのに使う。
     var onReload: () -> Void {
         get { model.onReload }
         set { model.onReload = newValue }
@@ -106,7 +106,7 @@ final class NotificationsController {
         accountScreens.add(screen)
     }
 
-    /// 保留中の通知を受け入れた。サーバーが取り込み終えたら通知のタイムラインを読み直す。
+    /// 保留中の通知を受け入れた。サーバーが取り込み終えたら通知のタイムラインを再読み込みする。
     func didAcceptRequest() {
         model.didAcceptRequest()
     }

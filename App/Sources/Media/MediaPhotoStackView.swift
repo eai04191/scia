@@ -7,8 +7,8 @@ import UIKit
 /// 傾けないときは、手で置いた写真の見立てをやめ、`rectangle.stack`を上下逆にした形で重ねる。奥の写真は手前の写真の下に隠れているだけの写真として扱い、
 /// 奥へ行くほど同じ割合ずつ小さくし、同じ幅ずつ下からのぞかせ、少しずつ暗くする。奥の写真は中身を描かず紙だけにし、のぞく帯に中身の色を並べない。
 /// 左右にはずらさず、投稿ごとにばらつかせない。
-/// 回す角度、ずらす量、影の濃さはタイムラインのチューニングで決め、フチの太さ、角の丸み、影の広がりは、写真の大きさによらずカプセルの写真と同じにする。
-/// どこを押しても1枚目から開き、メニューも1枚目のものを出す。奥の写真はほとんど隠れていて、押し分けられないため。
+/// 回す角度、ずらす量、影の不透明度はタイムラインのチューニングで決め、フチの太さ、radius、影の広がりは、写真の大きさによらずカプセルの写真と同じにする。
+/// どこを選択しても1枚目から開き、メニューも1枚目のものを出す。奥の写真はほとんど隠れていて、1枚ずつ選択できないため。
 ///
 /// 閲覧注意などでぼかすときは、写真のフチと重なりはそのまま見せ、中の画像を読まずにblurhashで描いて、リンクカードのサムネイルと同じ薄い素材を重ねる。
 /// 写真は小さく文字が入りきらないため、手前の写真にだけ目の記号を出す。
@@ -36,10 +36,10 @@ final class MediaPhotoStackView: PhotoStackView {
     private var covers: [UIVisualEffectView] = []
     /// ぼかしているときに読み上げる文。
     private var coverAccessibilityLabel = ""
-    /// ぼかしを押されたときに呼ぶ。読み上げで押されたときも呼ぶ。
+    /// ぼかしが選択されたときに呼ぶ。読み上げで選択されたときも呼ぶ。
     var onReveal: (() -> Void)?
 
-    /// 手前の1枚のサムネイル。押したときの処理を受ける。
+    /// 手前の1枚のサムネイル。選択したときの処理を受ける。
     var frontTile: MediaTileView { front.tile }
 
     /// 描く写真の数の上限。傾けるときは3枚目まで、傾けないときは4枚目まで。
@@ -73,7 +73,7 @@ final class MediaPhotoStackView: PhotoStackView {
         followTuning()
     }
 
-    /// 角度、ずらす量、影の濃さを、チューニングの値に合わせ続ける。
+    /// 角度、ずらす量、影の不透明度を、チューニングの値に合わせ続ける。
     private func followTuning() {
         withObservationTracking {
             applyTuning()
@@ -158,7 +158,7 @@ final class MediaPhotoStackView: PhotoStackView {
         for (index, cover) in covers.enumerated() {
             cover.isHidden = !content.isCovered || index >= attachments.count
         }
-        // ぼかしている間は、添付ファイルの説明を読まず、ぼかしている理由を読む。押すとぼかしを外す。
+        // ぼかしている間は、添付ファイルの説明を読まず、ぼかしている理由を読む。選択するとぼかしを外す。
         self.coverAccessibilityLabel = coverAccessibilityLabel
         isAccessibilityElement = content.isCovered
         front.tile.isAccessibilityElement = !content.isCovered
@@ -198,7 +198,7 @@ final class MediaPhotoStackView: PhotoStackView {
         }
     }
 
-    /// 重なりのどこを押しても、手前の1枚を押したことにする。
+    /// 重なりのどこを選択しても、手前の1枚を選択したことにする。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !isHidden, !front.isHidden, bounds.contains(point) else { return super.hitTest(point, with: event) }
         return front.tile

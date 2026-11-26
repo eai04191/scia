@@ -26,7 +26,7 @@ public struct EmojiStorageSources: Sendable {
     /// AとBに置いた画像の大きさを、フォルダーの名前（`MediaFileCache.folderName(for:)`）で引く。
     public var listedSizes: [String: Int]
     public var othersSizes: [String: Int]
-    /// 絵文字ピッカーの小さい静止画の、URLごとの大きさ。
+    /// 絵文字ピッカーのサムネイルの、URLごとの大きさ。
     public var thumbnailSizes: [URL: Int]
     /// 大きすぎて動かせない元の画像の記録の、URLとファイルの大きさ。
     public var oversizedURLs: Set<URL>

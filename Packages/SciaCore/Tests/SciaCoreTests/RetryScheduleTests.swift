@@ -3,7 +3,7 @@ import SciaTesting
 import Testing
 @testable import SciaCore
 
-/// 読めなかった画像を、自動の読み込みでいつ読み直してよいか。
+/// 読めなかった画像を、自動の読み込みでいつ再読み込みしてよいか。
 @MainActor
 struct RetryScheduleTests {
     private let clock = TestClock()
@@ -65,7 +65,7 @@ struct RetryScheduleTests {
         #expect(schedule.allowsAutomaticLoad(of: image))
     }
 
-    /// 待っても直らない失敗は、自動では読み直さない。
+    /// 待っても直らない失敗は、自動では再読み込みしない。
     @Test(arguments: [HTTPStatusError(statusCode: 404) as any Error, HTTPStatusError(statusCode: 410), CocoaError(.fileReadCorruptFile)])
     func permanentFailureIsNotRetriedAutomatically(error: any Error) {
         var schedule = makeSchedule()
@@ -75,7 +75,7 @@ struct RetryScheduleTests {
         #expect(schedule.hasFailed(image))
     }
 
-    /// 回線で控えた失敗は覚えない。回線が変わって描き直したときに、すぐ読めるようにする。
+    /// 回線で控えた失敗は覚えない。回線が変わって再描画したときに、すぐ読めるようにする。
     @Test func failureUnavailableOnNetworkIsNotRecorded() {
         var schedule = makeSchedule()
         let error = URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue])
@@ -84,7 +84,7 @@ struct RetryScheduleTests {
         #expect(!schedule.hasFailed(image))
     }
 
-    /// 端末の設定でモバイルデータ通信を切ったときの失敗は、アプリが付けた制限ではないので、間隔をおいて読み直す。
+    /// 端末の設定でモバイルデータ通信を切ったときの失敗は、アプリが付けた制限ではないので、間隔をおいて再読み込みする。
     @Test func cellularRestrictionIsTemporary() {
         var schedule = makeSchedule()
         let error = URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.cellular.rawValue])

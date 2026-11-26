@@ -5,7 +5,7 @@ import UIKit
 final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     /// ダブルタップで拡大するとき、画面に収めた大きさの何倍にするか。
     private static let doubleTapZoomScale: CGFloat = 2.5
-    /// 等倍が画面に収めた大きさのこの割合以上なら、等倍ではなく画面に収める。端にわずかな隙間だけが残る見た目を避けるため。
+    /// 等倍が画面に収めた大きさのこの割合以上なら、等倍ではなく画面に収める。端にわずかなgapだけが残る見た目を避けるため。
     private static let nearFitRatio: CGFloat = 0.9
     /// ピンチを終えた倍率が、画面に収める倍率とこの割合以内の差なら、画面に収める倍率へ寄せる。
     private static let fitSnapTolerance: CGFloat = 0.15
@@ -20,7 +20,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     var doubleTapZoomDuration: TimeInterval = 0.2
     /// ダブルタップの拡大か縮小か、等倍へ縮める動きが動いている。
     private var isAnimatingZoom = false
-    /// 拡大や縮小の動きを始めた回数。途中で次の動きを始めたら、前の動きの終わりの知らせを捨てる。
+    /// 拡大や縮小の動きを始めた回数。途中で次の動きを始めたら、前の動きの完了のコールバックを捨てる。
     private var zoomAnimationGeneration = 0
     /// 拡大や縮小の動きが終わるのを待っている処理。
     private var actionsAfterZoom: [@MainActor () -> Void] = []
@@ -119,7 +119,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         return image.frame.offsetBy(dx: bounds.minX - scroll.bounds.minX, dy: bounds.minY - scroll.bounds.minY)
     }
 
-    /// 前の画像から薄く入れ替えている途中なら、前の画像と、いま見えている濃さ。
+    /// 前の画像から薄く入れ替えている途中なら、前の画像と、いま見えている不透明度。
     var fadingImage: (image: UIImage, alpha: CGFloat)? {
         imageView.fadingImage
     }
@@ -314,7 +314,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         UIView.animate(springDuration: duration ?? doubleTapZoomDuration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
             changes(self)
         } completion: { [weak self] _ in
-            // 並べ直しで倍率を置き直すと、動きは途中で打ち切られ、終えていない知らせが届く。それでも最後に始めた動きなら、動いていないとみなす。
+            // 並べ直しで倍率を置き直すと、動きは途中で打ち切られ、終えていないことを示す完了のコールバックが届く。それでも最後に始めた動きなら、動いていないとみなす。
             // 動いているままにすると、動きの終わりを待つ処理がいつまでも行われない。
             guard let self, generation == self.zoomAnimationGeneration, self.isAnimatingZoom else { return }
             self.isAnimatingZoom = false

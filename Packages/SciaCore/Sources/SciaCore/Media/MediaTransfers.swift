@@ -12,7 +12,7 @@ public final class MediaTransfers {
         case share
     }
 
-    /// 用意するファイルと、知らせに使うその持ち主。
+    /// 用意するファイルと、チップに使うその持ち主。
     public struct Target: Sendable, Equatable {
         public let url: URL
         /// 失敗をどの添付ファイルのものか分かる文言にするために持つ。
@@ -36,7 +36,7 @@ public final class MediaTransfers {
         /// 落とし終えて写真に足している。もう止められない。
         public internal(set) var isFinishing = false
 
-        /// 知らせに出すか。手元にあったものはすぐ済むため、落とし始めたものだけを出す。
+        /// チップに出すか。手元にあったものはすぐ済むため、落とし始めたものだけを出す。
         public var isVisible: Bool { fraction != nil }
         /// 止められるか。写真に足し始めたら止められない。
         public var isStoppable: Bool { !isFinishing }
@@ -116,7 +116,7 @@ public final class MediaTransfers {
         return id
     }
 
-    /// 使う人が止めた。知らせは出さない。写真に足し始めていたら止めない。
+    /// 使う人が止めた。チップは出さない。写真に足し始めていたら止めない。
     public func stop(_ id: Transfer.ID) {
         guard let transfer = transfer(id), transfer.isStoppable else { return }
         cancel(id)
@@ -124,7 +124,7 @@ public final class MediaTransfers {
     }
 
     /// ビューアを閉じたので、共有のために落としている途中のものを止める。保存も求めていれば、保存のために落とし続ける。
-    /// 知らせに出していたものは、止めたことを`shareStopped`で伝える。
+    /// チップに出していたものは、止めたことを`shareStopped`で伝える。
     /// - Parameter shouldStop: 止めるもの。Macではビューアを別々のウィンドウで開くため、閉じたビューアで始めたものだけを止める。
     public func stopSharing(where shouldStop: (Transfer) -> Bool = { _ in true }) {
         let stopped = dropSharing(where: shouldStop)
@@ -200,7 +200,7 @@ public final class MediaTransfers {
     }
 }
 
-/// 知らせのチップに出す、落としている途中のもの。決まりはdocs/notices.mdの「複数のダウンロード」にある。
+/// チップに出す、落としている途中のもの。決まりはdocs/notices.mdの「複数のダウンロード」にある。
 public enum MediaTransferChip: Equatable {
     /// 1つのものの進み具合を出し、ほかを件数で添える。
     case single(MediaTransfers.Transfer, others: Int)

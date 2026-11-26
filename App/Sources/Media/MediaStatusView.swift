@@ -6,7 +6,7 @@ import UIKit
 /// ページいっぱいに広げ、「ブラウザで開く」のほかのタッチは受けずに、下の画像や映像に渡す。
 ///
 /// 明るいサムネイルの上でも読めるよう、半透明の黒の下地に白で描く。下地をぼかし（`UIVisualEffectView`）にしないのは、
-/// 閉じ始めにビューアが描き写す複製（`snapshotView`）にぼかしが写らず、下地だけが一コマで消えるため。
+/// 閉じ始めにビューアが描くスナップショット（`snapshotView`）にぼかしが描かれず、下地だけが一コマで消えるため。
 final class MediaStatusView: UIView {
     enum State: Equatable {
         case hidden
@@ -98,7 +98,7 @@ final class MediaStatusView: UIView {
         touch.view?.isDescendant(of: openButton) == true
     }
 
-    /// 出すものを替える。`animated`なら、前に出していたものを薄くして消し、新しく出すものを浮かび上がらせる。
+    /// 出すものを替える。`animated`なら、前に出していたものを薄くして消し、新しく出すものをフェードインさせる。
     func setState(_ state: State, animated: Bool) {
         guard state != self.state else { return }
         self.state = state

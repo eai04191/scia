@@ -8,7 +8,7 @@ public enum LinkTitling {
         return StatusURLs.ranges(in: text).map { String(text[$0]) }.filter { seen.insert(Array($0.utf8)).inserted }
     }
 
-    /// 本文に出てくるURLの1つ1つ。同じURLが2回あれば、2つとも並べる。ハイライトして選ばせるときに、押した場所を置き換えるため。
+    /// 本文に出てくるURLの1つ1つ。同じURLが2回あれば、2つとも並べる。ハイライトして選ばせるときに、選択した場所を置き換えるため。
     public static func occurrences(in text: String) -> [LinkOccurrence] {
         StatusURLs.ranges(in: text).map { range in
             let start = text.utf16.distance(from: text.startIndex, to: range.lowerBound)
@@ -29,7 +29,7 @@ public enum LinkTitling {
     /// URLが行の頭にあれば、タイトルを1行にして改行で区切り、文の途中なら空白で区切る。
     /// - Parameters:
     ///   - title: `normalizedTitle`で整えたタイトル。
-    ///   - location: 押したURLの、押した時点の位置。読んでいる間に前で打たれてずれても、いちばん近いものを置き換える。nilなら最初のもの。
+    ///   - location: 選択したURLの、選択した時点の位置。読んでいる間に前で打たれてずれても、いちばん近いものを置き換える。nilなら最初のもの。
     public static func replacement(of url: String, title: String, in text: String, nearestTo location: Int? = nil) -> LinkTitleReplacement? {
         guard let occurrence = occurrence(of: url, nearestTo: location, in: text) else { return nil }
         let before = text[..<String.Index(utf16Offset: occurrence.range.lowerBound, in: text)]
@@ -69,7 +69,7 @@ public struct LinkTitleReplacement: Equatable, Sendable {
     /// 置き換える範囲（UTF-16）。`UITextView`の位置と同じ数え方。
     public let range: Range<Int>
     public let text: String
-    /// 置き換えたあとの本文での、タイトルの範囲（UTF-16）。タイトルを浮かび上がらせるため。
+    /// 置き換えたあとの本文での、タイトルの範囲（UTF-16）。タイトルをフェードインさせるため。
     public let titleRange: Range<Int>
     /// 置き換えたあとの本文での、URLの範囲（UTF-16）。URLを置き換えたあとの位置へ動かすため。
     public let urlRange: Range<Int>

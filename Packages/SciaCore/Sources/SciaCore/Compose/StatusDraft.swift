@@ -16,7 +16,7 @@ public struct StatusDraft: Sendable, Equatable {
     public var attachments: [DraftAttachment]
     /// 付ける投票。付けなければnil。Mastodonは投票と添付を一緒に付けられない。
     public var poll: PollDraft?
-    /// 送り直しても二重に投稿されないよう、下書きごとに決めてサーバーに渡す。
+    /// 再送しても二重に投稿されないよう、下書きごとに決めてサーバーに渡す。
     public let idempotencyKey: String
     /// 自分の投稿の編集なら、元の投稿から引き継ぐもの。新しい投稿ならnil。
     public let editing: StatusEditTarget?

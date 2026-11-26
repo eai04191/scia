@@ -45,7 +45,7 @@ public final class BatchReblog {
         case stopped
         /// `index`番目（0から数える）の投稿で失敗した。
         case failed(index: Int, any Error)
-        /// 前に呼んだ`run()`がまだ走っているので、何もしなかった。失敗のチップを続けて押したときなど。
+        /// 前に呼んだ`run()`がまだ走っているので、何もしなかった。失敗のチップを続けて選択したときなど。
         case alreadyRunning
 
         public var isAlreadyRunning: Bool {
@@ -81,8 +81,8 @@ public final class BatchReblog {
     ///   - interval: 1件ごとにあける間隔。ほかのサーバーは、ブーストを秒までの日時で並べるため。
     ///   - isRemovalPending: 取り消した直後のブーストの失敗が、取り消したブーストをサーバーがまだ消し終えていないためのものか。
     ///     Mastodonは取り消しを受け付けても、ブーストを裏の処理で後から消し、消し終えるまでは「既にブーストされています」の422で断る。
-    ///   - removalRetryDelays: `isRemovalPending`に当たる失敗のあと、ブーストを送り直すまで待つ長さ。使い切ったら失敗にする。
-    ///     ブーストは送り直しても結果が変わらないので、自動で送り直してよい。
+    ///   - removalRetryDelays: `isRemovalPending`に当たる失敗のあと、ブーストを再送するまで待つ長さ。使い切ったら失敗にする。
+    ///     ブーストは再送しても結果が変わらないので、自動で再送してよい。
     ///   - isReblogged: 送る直前に、投稿がブースト済みかを確かめる。選んでから送るまでの間に、ほかのタイムラインでブーストしていることがあるため。
     ///     ブースト済みなら、取り消してから付け直す。
     public init(
@@ -148,7 +148,7 @@ public final class BatchReblog {
         return .finished
     }
 
-    /// 取り消した直後のブーストを、サーバーが取り消したブーストを消し終えるまで、間をおいて送り直す。
+    /// 取り消した直後のブーストを、サーバーが取り消したブーストを消し終えるまで、間をおいて再送する。
     private func reblogAfterUnreblog(_ status: Status) async throws {
         var delays = removalRetryDelays[...]
         while true {

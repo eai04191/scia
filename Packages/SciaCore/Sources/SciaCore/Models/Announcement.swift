@@ -17,7 +17,7 @@ public struct Announcement: Decodable, Hashable, Sendable, Identifiable {
     /// 自分が既読にしたか。ストリーミングで届いたお知らせには入っていないのでnil。
     public var read: Bool?
     public let mentions: [Mention]
-    /// 本文でリンクした投稿。リンクを押したとき、URLからスレッドを開く投稿を探すのに使う。
+    /// 本文でリンクした投稿。リンクを選択したとき、URLからスレッドを開く投稿を探すのに使う。
     public let statuses: [LinkedStatus]
     public let tags: [Tag]
     public let emojis: [CustomEmoji]

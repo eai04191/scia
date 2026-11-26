@@ -20,8 +20,8 @@ public final class AvatarImageStore<Image: AnyObject & Sendable> {
     /// 120ピクセル四方の止まった画像なら500枚ほど入る大きさ。何をいつ捨てるかはdocs/image-loading.mdの「メモリに持つ画像」に従う。
     private var cache = MemoryCache<AvatarImageKey, Image>(totalCostLimit: 32 * 1_024 * 1_024)
     private var inFlight: [AvatarImageKey: Task<Decoded, any Error>] = [:]
-    /// 読めなかった画像。先読みと新着の挿入前の待ちでは読み直さず、読めないアイコンのために通信を増やしたり挿入を遅らせたりしない。
-    /// 行に描くときは、間隔をおいてから読み直す。読めたら忘れる。
+    /// 読めなかった画像。プリフェッチと新着の挿入前の待ちでは再読み込みせず、読めないアイコンのために通信を増やしたり挿入を遅らせたりしない。
+    /// 行に描くときは、間隔をおいてから再読み込みする。読めたら忘れる。
     private var retry: RetrySchedule
     private var listeners: [Listener] = []
     private let logger = SciaLog.logger(category: "avatar")
@@ -61,7 +61,7 @@ public final class AvatarImageStore<Image: AnyObject & Sendable> {
     }
 
     /// 読み込み済みなら画像を返す。まだなら読み込みを始めてnilを返し、届いたら`addListener(owner:onLoad:)`で知らせる。
-    /// 文字に差し込むアイコンのように、届いたときに描き直す側が画像を受け取れない場合に使う。
+    /// 文字に差し込むアイコンのように、届いたときに再描画する側が画像を受け取れない場合に使う。
     public func requestImage(for key: AvatarImageKey) -> Image? {
         if let image = cachedImage(for: key) {
             return image
@@ -80,7 +80,7 @@ public final class AvatarImageStore<Image: AnyObject & Sendable> {
     }
 
     /// 画像を読み込み終える（読めなかった場合も含む）か、`timeout`が過ぎるまで待つ。まだ読み込んでいなければ読み込みを始める。
-    /// 前に読めなかった画像は、読み直さず待たない。`timeout`で戻っても、読み込みは止めずにキャッシュへ入れる。
+    /// 前に読めなかった画像は、再読み込みせず待たない。`timeout`で戻っても、読み込みは止めずにキャッシュへ入れる。
     public func load(_ keys: Set<AvatarImageKey>, within timeout: Duration) async {
         let missing = keys.filter { cachedImage(for: $0) == nil && !retry.hasFailed($0.url) }
         guard !missing.isEmpty, timeout > .zero else { return }
@@ -130,8 +130,8 @@ public final class AvatarImageStore<Image: AnyObject & Sendable> {
 
     /// 画像を読み込む。同じ画像を読み込んでいる途中なら、その結果を待つ。
     /// 呼び出し側のタスクを取り消しても、読み込みは止めずにキャッシュへ入れる。同じアカウントの投稿が続けて並ぶことが多いため。
-    /// 前に読めなかった画像は、読み直してよくなるまで`ImageLoadDeferred`を投げる。
-    /// - Parameter retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに読み直す。
+    /// 前に読めなかった画像は、再読み込みしてよくなるまで`ImageLoadDeferred`を投げる。
+    /// - Parameter retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに再読み込みする。
     public func image(for key: AvatarImageKey, retriesNow: Bool = false) async throws -> Image {
         if let image = cachedImage(for: key) {
             return image
@@ -154,8 +154,8 @@ public final class AvatarImageStore<Image: AnyObject & Sendable> {
                 return decoded
             }
         }
-        // 待ち合わせた呼び出しにも、読めたかを覚えてから結果を返す。覚える前に返すと、待ち合わせた側が読み直してよくなるまでの長さを聞いて、
-        // まだ失敗を覚えていない0を受け取り、描いている間の読み直しをやめてしまうため。
+        // 待ち合わせた呼び出しにも、読めたかを覚えてから結果を返す。覚える前に返すと、待ち合わせた側が再読み込みしてよくなるまでの長さを聞いて、
+        // まだ失敗を覚えていない0を受け取り、描いている間の再読み込みをやめてしまうため。
         let settled = Task<Decoded, any Error> { @MainActor in
             defer { inFlight[key] = nil }
             do {
@@ -177,7 +177,7 @@ public final class AvatarImageStore<Image: AnyObject & Sendable> {
         return try await settled.value.image
     }
 
-    /// 行に描くアイコンを読み込む。待てば直る失敗なら、`isWanted`の間、見えていれば読み直してよくなった時刻に読み直す（`RetrySchedule.loadWhileShown`）。
+    /// 行に描くアイコンを読み込む。待てば直る失敗なら、`isWanted`の間、見えていれば再読み込みしてよくなった時刻に再読み込みする（`RetrySchedule.loadWhileShown`）。
     public func shownImage(for key: AvatarImageKey, while isWanted: @MainActor () -> Bool, visible isVisible: @MainActor () -> Bool) async -> Image? {
         await RetrySchedule.loadWhileShown(
             clock: clock, isWanted: isWanted, isVisible: isVisible, recheck: { retry.hiddenRecheckInterval }, delay: { retry.delayUntilAutomaticLoad(of: key.url) }

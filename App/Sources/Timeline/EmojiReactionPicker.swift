@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 投稿にリアクションする絵文字を、投稿欄と同じ絵文字のシートで選ばせる。選んだらシートを閉じて、選んだ絵文字を渡す。
+/// 投稿にリアクションする絵文字を、投稿欄と同じ絵文字ピッカーで選ばせる。選んだら絵文字ピッカーを閉じて、選んだ絵文字を渡す。
 /// 決まりはdocs/emoji-reaction.mdの「絵文字ピッカー」にある。
 @MainActor
 final class EmojiReactionPicker {

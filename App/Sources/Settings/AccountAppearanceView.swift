@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// アカウントの画面の「外観」。Sciaが従うのにAPIでは変えられないアカウントの設定を見せ、Mastodonのウェブの「外観」の画面へ送る。
-/// 開いたときと、アプリに戻ってきたときに読み直す。決まりはdocs/account-screen.mdの「外観」にある。
+/// 開いたときと、アプリに戻ってきたときに再読み込みする。決まりはdocs/account-screen.mdの「外観」にある。
 struct AccountAppearanceView: View {
     let model: AccountPreferencesModel
     /// Mastodonのウェブの「外観」の画面。

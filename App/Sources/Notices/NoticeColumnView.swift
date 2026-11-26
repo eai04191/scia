@@ -165,7 +165,7 @@ final class NoticeColumnView: UIView {
 }
 
 /// ログインし直しの段。オレンジのガラスのカプセルに、1行目に「ログインし直してください」、2行目にアカウント名を小さく出す。
-/// 1行のチップでは短いアカウント名でも切れるため、チップとは別の形にする。押すとすぐログインし直しを始める。
+/// 1行のチップでは短いアカウント名でも切れるため、チップとは別の形にする。選択するとすぐログインし直しを始める。
 final class ReauthenticationButton: UIButton {
     private var action: (@MainActor () -> Void)?
     /// 指が触れているか、VoiceOverの読み上げ位置が乗っている。

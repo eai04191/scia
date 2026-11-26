@@ -24,7 +24,7 @@ public final class FollowedTagsStore {
         self.fetch = fetch
     }
 
-    /// 読み直して置き換える。読み込み中なら何もせずfalseを返す。読めなければ投げ、前に読んだものを残す。
+    /// 再読み込みして置き換える。読み込み中なら何もせずfalseを返す。読めなければ投げ、前に読んだものを残す。
     public func load() async throws -> Bool {
         guard !isLoading else { return false }
         isLoading = true
@@ -39,8 +39,8 @@ public final class FollowedTagsStore {
         return true
     }
 
-    /// ほかで読み直したもので置き換える。ハッシュタグのメニューを開いたときの読み直しも、「フォロー中のハッシュタグ」に効かせるため。
-    /// 読み込み中なら、その読み込みに任せて受け取らずfalseを返す。読み込みの応答も同じ読み直しの結果になるため。
+    /// ほかで再読み込みしたもので置き換える。ハッシュタグのメニューを開いたときの再読み込みも、「フォロー中のハッシュタグ」に効かせるため。
+    /// 読み込み中なら、その読み込みに任せて受け取らずfalseを返す。読み込みの応答も同じ再読み込みの結果になるため。
     public func receive(_ loaded: [Hashtag]) -> Bool {
         guard !isLoading else { return false }
         replace(with: loaded)
@@ -53,12 +53,12 @@ public final class FollowedTagsStore {
         isLoaded = true
     }
 
-    /// アプリの中でフォローしたタグを、読み直すのを待たずに先頭に入れる。もう並んでいれば何もしない。
+    /// アプリの中でフォローしたタグを、再読み込みするのを待たずに先頭に入れる。もう並んでいれば何もしない。
     public func didFollow(_ tag: Hashtag) {
         record(.follow(tag))
     }
 
-    /// アプリの中でフォローを外したタグを、読み直すのを待たずに除く。
+    /// アプリの中でフォローを外したタグを、再読み込みするのを待たずに除く。
     public func didUnfollow(_ name: String) {
         record(.unfollow(name))
     }

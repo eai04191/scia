@@ -1,7 +1,7 @@
 import SwiftSyntax
 
 extension Rule {
-    // confirmationDialogは、付けたビューからポップオーバーで出る。画面やFormに付けると、押したボタンから離れた画面の中央に出る
+    // confirmationDialogは、付けたビューからポップオーバーで出る。画面やFormに付けると、選択したボタンから離れた画面の中央に出る
     static let confirmationDialogWithoutAnchor = Rule(
         id: "confirmation_dialog_without_anchor",
         message: "confirmationDialogは、押すButton、Picker、Menu、Toggleに付け、押したものから出す。画面やFormに付けない",
@@ -20,7 +20,7 @@ extension Rule {
 
 private let anchorControls: Set<String> = ["Button", "Picker", "Menu", "Toggle"]
 
-/// `Button { ... }.disabled(...)`のような修飾子の連なりの、根元で作るビューの名前。根元が呼び出しでなければnil
+/// `Button { ... }.disabled(...)`のような修飾子の連なりの、ルートで作るビューの名前。ルートが呼び出しでなければnil
 private func modifierRoot(of expression: ExprSyntax) -> String? {
     var current = expression
     while let call = current.as(FunctionCallExprSyntax.self) {

@@ -12,10 +12,10 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
     var crashMarkID: Status.ID?
     var crashGuard: PostCrashGuard?
 
-    /// 押している間の色の強さを読むのに使う。
+    /// 押されている状態の色の強さを読むのに使う。
     var tuning = AppDependencies.tuning
 
-    /// 押している間に中身の手前へ重ねるビュー。UIKitの押下の色は背景に付くので、不透明な画像は元の色のまま残って目立つ。
+    /// 押されている状態で中身の手前へ重ねるビュー。UIKitの押下の色は背景に付くので、不透明な画像は元の色のまま残って目立つ。
     private(set) var highlightOverlay: UIView?
 
     var isShowingHighlightOverlay: Bool {
@@ -65,15 +65,15 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
         return overlay
     }
 
-    /// 縮む途中に重ねている、縮む前の像。なくなった部品の場所に見せる（`TimelineViewController.concealDownwardShrink`、`concealUpwardShrink`）。
+    /// 縮む途中に重ねている、縮む前のスナップショット。なくなった部品の場所に見せる（`TimelineViewController.concealDownwardShrink`、`concealUpwardShrink`）。
     private var shrinkSnapshot: UIView?
 
-    /// 縮む前の像を重ねているか。テストで、閉じる動きを見るのに使う。
+    /// 縮む前のスナップショットを重ねているか。テストで、閉じる動きを見るのに使う。
     var isShowingShrinkSnapshot: Bool {
         shrinkSnapshot != nil
     }
 
-    /// 縮む前の像を重ねる。前に重ねていた像は外す。
+    /// 縮む前のスナップショットを重ねる。前に重ねていたスナップショットは外す。
     func showShrinkSnapshot(_ snapshot: UIView) {
         shrinkSnapshot?.removeFromSuperview()
         shrinkSnapshot = snapshot
@@ -81,7 +81,7 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
         highlightOverlay?.isHidden = true
     }
 
-    /// 縮み終えたら像を外す。途中で別の像に替わっていたら、そちらは外さない。
+    /// 縮み終えたらスナップショットを外す。途中で別のスナップショットに替わっていたら、そちらは外さない。
     func removeShrinkSnapshot(_ snapshot: UIView) {
         guard shrinkSnapshot === snapshot else { return }
         snapshot.removeFromSuperview()
@@ -89,7 +89,7 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
         updateHighlightAppearance()
     }
 
-    /// 縮む途中に中身を入れ直したら、像を外す。像は縮む前の中身なので、残すと新しい中身の手前に古い中身が見える。
+    /// 縮む途中に中身を入れ直したら、スナップショットを外す。スナップショットは縮む前の中身なので、残すと新しい中身の手前に古い中身が見える。
     /// 縮む動きの途中で外れるので、まわりのアイテムがまだ動いていても、アクションバーはそのコマで消える。
     func discardShrinkSnapshot() {
         shrinkSnapshot?.removeFromSuperview()
@@ -97,7 +97,7 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
         updateHighlightAppearance()
     }
 
-    /// 縮む途中に別の投稿に使い回されたら、前の投稿の像を残さない。
+    /// 縮む途中に別の投稿に使い回されたら、前の投稿のスナップショットを残さない。
     override func prepareForReuse() {
         super.prepareForReuse()
         discardShrinkSnapshot()

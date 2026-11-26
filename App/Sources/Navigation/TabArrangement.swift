@@ -14,7 +14,7 @@ final class TabArrangement {
     private let shapeObserver = LayoutObserverView()
     /// 並びが変わったとき。どの項目を購読するかを決め直す。
     var onPlacementChange: ((TabPlacement) -> Void)?
-    /// 選んでいる画面が変わったとき。タブを押したときと、見出しのメニューで切り替えたとき。
+    /// 選んでいる画面が変わったとき。タブを選択したときと、見出しのメニューで切り替えたとき。
     var onShownItemChange: (() -> Void)?
     /// 切り替えタブで開く項目が変わったとき。起動し直しても同じ項目から開けるよう、保存するのに使う。
     var onSwitchSelectionChange: ((TabItem) -> Void)?
@@ -71,7 +71,7 @@ final class TabArrangement {
         if #available(iOS 27.0, *) {
             switchTabMenu = SwitchTabMenuInteraction(on: tabBarController.tabBar, isPlaced: { [weak self] in self?.switchSelection != nil }, menuBottom: { [weak self] in self?.switchMenuBottom }, menu: { [weak self] in self?.switchMenu(from: .longPress) })
         }
-        // Macで窓の幅を変えたときなど、並べられる数が変わったら振り分け直す。
+        // Macでウィンドウの幅を変えたときなど、並べられる数が変わったら振り分け直す。
         tabBarController.registerForTraitChanges([UITraitHorizontalSizeClass.self, UITraitUserInterfaceIdiom.self]) { [weak self] (_: UITabBarController, _: UITraitCollection) in
             guard let self else { return }
             apply(self.layout)
@@ -261,7 +261,7 @@ final class TabArrangement {
         updateTitleMenus()
     }
 
-    /// 押したときに何が開くかが分かるよう、開いている項目の名前とアイコンで、切り替えタブを作り直す。
+    /// 選択したときに何が開くかが分かるよう、開いている項目の名前とアイコンで、切り替えタブを作り直す。
     /// 同じタブの`title`を変えると、タブバーの読み上げの名前が前の名前のまま残ることがあり、UITabには読み上げの名前を渡す口がないため。
     /// 中身の入れ物も一緒に作り直す。
     private func renewSwitchTab(for item: TabItem) {
@@ -286,7 +286,7 @@ final class TabArrangement {
         UITab(title: item.title, image: UIImage(systemName: item.symbolName), identifier: switchIdentifier) { _ in container }
     }
 
-    /// 切り替えタブの中の項目だけ、見出しを押して切り替えるメニューにする。
+    /// 切り替えタブの中の項目だけ、見出しを選択して切り替えるメニューにする。
     private func updateTitleMenus() {
         for (item, navigation) in navigations {
             guard let root = navigation.viewControllers.first else { continue }
@@ -485,7 +485,7 @@ final class SwitchTabMenuInteraction: NSObject, UIContextMenuInteractionDelegate
     }
 
     /// ボタンの場所に置いた、ボタンと同じ大きさの透明な丸。メニューはここから開く。
-    /// ボタンそのものを渡すと、UIKitがメニューを出している間ボタンを隠し、押している間ボタンが消えたため、別のビューを渡す。
+    /// ボタンそのものを渡すと、UIKitがメニューを出している間ボタンを隠し、押されている状態の間ボタンが消えたため、別のビューを渡す。
     private var preview: UITargetedPreview? {
         guard let tabBar, let button, button.window != nil else { return nil }
         let circle = UIView(frame: button.bounds)
@@ -499,7 +499,7 @@ final class SwitchTabMenuInteraction: NSObject, UIContextMenuInteractionDelegate
 }
 
 /// 背景を暗くしない、ボタンのメニューと同じ表示（compact）で出すコンテキストメニュー。
-/// 長押しの時間と触覚は、投稿などの長押しと同じくUIKitのコンテキストメニューのものを使い、こちらでは数値を決めない。
+/// 長押しの時間とハプティクスは、投稿などの長押しと同じくUIKitのコンテキストメニューのものを使い、こちらでは数値を決めない。
 /// UIKitが表示の形を選ぶときにこのプロパティを読むことに頼っている。iOS 27.0で確かめた。読まなくなったら、背景が暗くなる標準の表示に戻るだけで、メニューは出る。
 @MainActor
 final class CompactContextMenuInteraction: UIContextMenuInteraction {

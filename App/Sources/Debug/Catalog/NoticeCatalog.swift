@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// アプリ内通知のチップの列（`NoticeColumnView`）の状態。ガラスの効果を見られるよう、ビューアのように画像の上に置く。
-/// 本物の数秒で消えるチップはすぐ消えるため、カタログでは1時間出したままにする。押しても何も起きない。
+/// 本物の数秒で消えるチップはすぐ消えるため、カタログでは1時間出したままにする。選択しても何も起きない。
 /// タイムラインの新着のボタンとの重なりは、「タイムラインの上に重ねる表示」に並べる。
 enum NoticeCatalog {
     private static let url = URL(string: "https://x.example/video.mp4") ?? URL(filePath: "/")
@@ -35,7 +35,7 @@ enum NoticeCatalog {
                 stack(persistent: .download(of: url, fraction: 0.42) {}, transient: .transferFailure(title: Notice.transferFailureTitle(of: .gifv, purpose: .share)) {})
             },
             CatalogState(title: "共有を中止しました（数秒で消える）") { stack(transient: .shareStopped) },
-            // タップや長押しに選んだ項目が使えない。文言は項目の名前で長くなり、押せない理由はその状態の投稿がないと出せない。
+            // タップや長押しに選んだ項目が使えない。文言は項目の名前で長くなり、無効の理由はその状態の投稿がないと出せない。
             CatalogState(title: "タップに選んだ項目が使えない、名前が長い（数秒で消える）") {
                 stack(transient: .objectActionUnavailable(itemTitle: StatusMenuItem.mentionedUsers.title, reason: nil))
             },

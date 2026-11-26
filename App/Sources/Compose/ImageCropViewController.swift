@@ -33,7 +33,7 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
         }
     }
 
-    /// 「完了」を押した。切り抜かないならnil。プレビューは、切り抜いた範囲を表示用の画像から描いたもの。
+    /// 「完了」を選択した。切り抜かないならnil。プレビューは、切り抜いた範囲を表示用の画像から描いたもの。
     var onFinish: ((_ crop: ImageCrop?, _ preview: UIImage?) -> Void)?
 
     private let file: LocalMediaFile
@@ -394,7 +394,7 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
             changes()
             self.overlay.layoutIfNeeded()
         } completion: { _ in
-            // 次の動きに置き換えられた前の動きの完了で、今の動きの途中の印を外さない。
+            // 次の動きに置き換えられた前の動きの完了で、今の動きの途中のフラグを外さない。
             guard generation == self.recenterGeneration else { return }
             self.isRecentering = false
         }
@@ -437,8 +437,8 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
     /// 反時計回りに90度回す。残す範囲も一緒に回し、決めた縦横比は縦と横を入れ替える。
     /// 写真アプリと同じく、画像と枠をまとめて回しながら、回したあとの枠の大きさへ動かす。
     /// 回したあとの並びを先に作り、キャンバスに回す前の見た目へ戻す変形をかけてから、毎コマ変形なしへ近づける。
-    /// UIViewのアニメーションに任せないのは、見た目と当たり判定を毎コマそろえるためと、続けて押して180°を超えても同じ向きに回すため。
-    /// 回している途中に続けて押したら、見えている変形の上に重ねて続けて回す。「視差効果を減らす」がオンなら、回さずにフェードで替える。
+    /// UIViewのアニメーションに任せないのは、見た目と当たり判定を毎コマそろえるためと、続けて選択して180°を超えても同じ向きに回すため。
+    /// 回している途中に続けて選択したら、見えている変形の上に重ねて続けて回す。「視差効果を減らす」がオンなら、回さずにフェードで替える。
     @objc private func rotate() {
         guard baseImage != nil else { return }
         let shown = rotation?.pose ?? .identity
@@ -492,7 +492,7 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
         setCanvasTransform(.identity)
     }
 
-    /// キャンバスに回す途中の変形をかける。枠の線と四隅のハンドルは、キャンバスごと縮めても、画面の上で同じ太さと長さに見えるよう描き直す。
+    /// キャンバスに回す途中の変形をかける。枠の線と四隅のハンドルは、キャンバスごと縮めても、画面の上で同じ太さと長さに見えるよう再描画する。
     /// 縮めたまま描くと、回し始めのコマで線とハンドルが1コマで細く小さくなるため。
     private func setCanvasTransform(_ transform: CGAffineTransform) {
         canvas.transform = transform

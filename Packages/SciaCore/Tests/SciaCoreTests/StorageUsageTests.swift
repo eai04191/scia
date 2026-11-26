@@ -51,7 +51,7 @@ struct StorageUsageTests {
         #expect(StorageUsage.allocatedSize(in: root, addedBefore: .distantFuture) == single)
     }
 
-    /// 同じURLで測り直しても、URLが覚えた前の値ではなく、いまの大きさを返す。
+    /// 同じURLで測り直しても、URLがキャッシュした前の値ではなく、いまの大きさを返す。
     @Test func remeasuringTheSameURLReadsTheCurrentSize() throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let file = try write("a", size: 100_000)
@@ -167,7 +167,7 @@ struct StorageUsageTests {
 
         let media = size("Container/Library/Caches/MediaFiles")
         #expect(breakdown.item(.mediaFiles) == .init(category: .mediaFiles, bytes: media, removableBytes: media))
-        // 先読みした画像は、置き場を分けたので、ストレージでも項目を分ける。
+        // プリフェッチした画像は、置き場を分けたので、ストレージでも項目を分ける。
         let prefetch = size("Container/Library/Caches/MediaPrefetch")
         #expect(breakdown.item(.mediaPrefetch) == .init(category: .mediaPrefetch, bytes: prefetch, removableBytes: prefetch))
         // 絵文字の画像と絵文字のリストは、通信の応答のキャッシュとは別の項目に数える。消せるのは、ほかのサーバーの絵文字の画像（B）だけ。

@@ -3,7 +3,7 @@ import os
 import SciaCore
 
 /// 「フォロー中のハッシュタグ」の読み込みを、TimelineViewControllerの表示へつなぐ。決まりはdocs/tabs.mdの「フォロー中のハッシュタグ」にある。
-/// 行は検索の結果のハッシュタグの行と同じもので、押したときと長押ししたときの動きは、画面を組むセッションが決める。
+/// 行は検索の結果のハッシュタグの行と同じもので、選択したときと長押ししたときの動きは、画面を組むセッションが決める。
 @MainActor
 final class FollowedTagsController {
     private(set) lazy var viewController = TimelineViewController(texts: .followedTags, settings: settings) { [weak self] in await self?.refresh() }
@@ -12,56 +12,56 @@ final class FollowedTagsController {
     /// この画面が始めた処理の持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで止まる。
     private let tasks: TaskScope
     private let logger = SciaLog.logger(category: "followedTags")
-    /// タブで見せているか。見せ始めたときに読み直す。
+    /// タブで見せているか。見せ始めたときに再読み込みする。
     private var isShown = false
 
     /// `session`の部品で作り、`session`に登録する。電波の回復などのやり直しと、トークンが無効と分かったときに止めるのを`session`から受け取る。
-    /// - Parameter followedTags: ハッシュタグのメニューがフォローしているかを決めるのと同じ、フォロー中のハッシュタグ。どちらで読み直しても、もう一方に効く。
+    /// - Parameter followedTags: ハッシュタグのメニューがフォローしているかを決めるのと同じ、フォロー中のハッシュタグ。どちらで再読み込みしても、もう一方に効く。
     private let settings: AppSettings
 
     init(followedTags: LatestValueCache<[Hashtag]>, session: AccountSession) {
         settings = session.settings
         tasks = session.tasks.child()
         self.followedTags = followedTags
-        // 読み直しは、始める側が通信の目的を名乗って始める（`loadNow`）。ここでは、いちばん新しい読み直しの結果を受け取る。
+        // 再読み込みは、始める側が通信の目的を名乗って始める（`loadNow`）。ここでは、いちばん新しい再読み込みの結果を受け取る。
         store = FollowedTagsStore { try await followedTags.latest() }
         viewController.onRetry = { [weak self] in self?.load(purpose: .action) }
         session.register(self)
     }
 
-    /// メニューを開いたときなど、ほかで読み直したハッシュタグを出す。読み込み中なら、その読み込みが出す。
-    /// 読み直した結果を受け取れるのは1つだけなので、画面を組むセッションが受け取って、開いている画面すべてに渡す。
+    /// メニューを開いたときなど、ほかで再読み込みしたハッシュタグを出す。読み込み中なら、その読み込みが出す。
+    /// 再読み込みした結果を受け取れるのは1つだけなので、画面を組むセッションが受け取って、開いている画面すべてに渡す。
     func cacheDidLoad(_ tags: [Hashtag]) {
         guard store.receive(tags) else { return }
         show()
     }
 
-    /// タブで見せ始めたか、見せなくなったかを伝える。見せ始めたら、ほかの端末やwebで変えたフォローを拾うため読み直す。
+    /// タブで見せ始めたか、見せなくなったかを伝える。見せ始めたら、ほかの端末やwebで変えたフォローを拾うため再読み込みする。
     func setShown(_ shown: Bool) {
         defer { isShown = shown }
         guard shown, !isShown else { return }
         load(purpose: .action)
     }
 
-    /// バックグラウンドから戻ったときに呼ぶ。見せていれば読み直す。
+    /// バックグラウンドから戻ったときに呼ぶ。見せていれば再読み込みする。
     func enterForeground() {
         guard isShown else { return }
         load(purpose: .display)
     }
 
-    /// アプリの中でフォローしたタグを、読み直すのを待たずに先頭に入れる。
+    /// アプリの中でフォローしたタグを、再読み込みするのを待たずに先頭に入れる。
     func didFollow(_ tag: Hashtag) {
         store.didFollow(tag)
         if store.isLoaded { show() }
     }
 
-    /// アプリの中でフォローを外したタグを、読み直すのを待たずに除く。使う人の操作で消えるので、閉じる動きで消す。
+    /// アプリの中でフォローを外したタグを、再読み込みするのを待たずに除く。使う人の操作で消えるので、閉じる動きで消す。
     func didUnfollow(_ name: String) {
         store.didUnfollow(name)
         if store.isLoaded { show(animatesRemoval: true) }
     }
 
-    /// まだ読めていなければ読み込み中の表示を出して読む。読めていれば、前に読んだハッシュタグを出したまま読み直す。
+    /// まだ読めていなければ読み込み中の表示を出して読む。読めていれば、前に読んだハッシュタグを出したまま再読み込みする。
     private func load(purpose: RequestPurpose) {
         if !store.isLoaded {
             viewController.setContentState(.loading)
@@ -71,14 +71,14 @@ final class FollowedTagsController {
         }
     }
 
-    /// 画面を引っぱって離したときに読み直す。読めなければ前に読んだものを残す。
+    /// pull to refreshしたときに再読み込みする。読めなければ前に読んだものを残す。
     private func refresh() async {
         logger.info("followedTags refresh")
         await loadNow(purpose: .action, during: "refresh")
     }
 
     private func loadNow(purpose: RequestPurpose, during operation: String) async {
-        // 読み込み中なら、走っている読み込みに任せる。重ねて読み直すと、同じものを2回読むため。
+        // 読み込み中なら、走っている読み込みに任せる。重ねて再読み込みすると、同じものを2回読むため。
         guard !store.isLoading else { return }
         followedTags.reload(purpose: purpose)
         do {
@@ -104,7 +104,7 @@ final class FollowedTagsController {
 }
 
 extension FollowedTagsController: SessionList {
-    /// 電波が戻ったときや、レート制限が明けたときに、読めないままのハッシュタグを読み直す。
+    /// 電波が戻ったときや、レート制限が明けたときに、読めないままのハッシュタグを再読み込みする。
     func recover() {
         guard case .failed = viewController.contentState else { return }
         load(purpose: .display)

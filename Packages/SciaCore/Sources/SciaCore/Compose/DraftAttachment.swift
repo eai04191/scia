@@ -34,7 +34,7 @@ public struct DraftAttachment: Sendable, Equatable, Identifiable {
         /// 変換が済み、`url`が入った。
         case uploaded(MediaAttachment)
         /// 失敗した。サーバーが受け付けた後の失敗なら`serverID`が入る。
-        /// 変換を待つ間の問い合わせの失敗なら、同じIDで待ち直す。サーバーが変換に失敗したのなら、ファイルを送り直す。
+        /// 変換を待つ間の問い合わせの失敗なら、同じIDで待ち直す。サーバーが変換に失敗したのなら、ファイルを再送する。
         case failed(serverID: String?)
     }
 

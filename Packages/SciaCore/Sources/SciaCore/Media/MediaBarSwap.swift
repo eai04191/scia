@@ -5,7 +5,7 @@
 public struct MediaBarSwap: Sendable, Equatable {
     /// タイムラインのバーに隠れない範囲での、最前面の複製からタイムラインの中の複製への受け渡しの度合い。0で最前面の複製だけ、1でタイムラインの中の複製だけを見せる。
     public var handoff: Double
-    /// バーと重なる部分に、最前面の複製を見せる濃さ。0でタイムラインの中の複製だけ、1で最前面の複製だけを見せる。
+    /// バーと重なる部分に、最前面の複製を見せる不透明度。0でタイムラインの中の複製だけ、1で最前面の複製だけを見せる。
     public var overlapOpacity: Double
 
     public init(handoff: Double, overlapOpacity: Double) {
@@ -21,7 +21,7 @@ public struct MediaBarSwap: Sendable, Equatable {
     ///   - progress: 閉じる動きの進み具合。0から1。
     ///   - handoffStart: タイムラインの中の複製へ受け渡し始める進み具合。1なら着地の瞬間に切り替える。
     ///   - overlapFadeEnd: バーと重なっていた部分を奥へ入れ替え終える進み具合。
-    ///   - startOverlapOpacity: 閉じ始めに、バーと重なっていた部分を手前に見せていた濃さ。開く途中から閉じたときは1未満になる。
+    ///   - startOverlapOpacity: 閉じ始めに、バーと重なっていた部分を手前に見せていた不透明度。開く途中から閉じたときは1未満になる。
     public static func closing(progress: Double, handoffStart: Double, overlapFadeEnd: Double, startOverlapOpacity: Double = 1) -> MediaBarSwap {
         let handoff = handoffStart < 1
             ? smoothstep((progress - handoffStart) / (1 - handoffStart))

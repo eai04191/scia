@@ -11,7 +11,7 @@ struct UserMenuTreeTests {
         MenuNodeTests.describe(UserMenuTree.relationNodes(item, relation: UserRelation(accountID: "2", acct: "alice", relationship: relationship)))
     }
 
-    /// - Parameter known: 手元で分かっている相手との関係。渡さなければ、どの相手の関係も覚えていない。
+    /// - Parameter known: 手元で分かっている相手との関係。渡さなければ、どの相手の関係もキャッシュしていない。
     /// - Parameter isExcluded: その人を自動翻訳の対象外にしているか。渡さなければ、自動翻訳の項目を出さない。
     private func actions(
         known: @escaping @MainActor (UserMenuTarget) -> KnownRelation? = { _ in nil },
@@ -130,7 +130,7 @@ struct UserMenuTreeTests {
         }
     }
 
-    /// メモは、なければ「メモを追加」、あれば「メモを編集」にする。ブロックしていても書ける。押すとシートを開く。
+    /// メモは、なければ「メモを追加」、あれば「メモを編集」にする。ブロックしていても書ける。選択するとシートを開く。
     @Test func noteItemAddsOrEditsNote() throws {
         #expect(describe(.note, Relationship(id: "2")) == "メモを追加")
         #expect(describe(.note, Relationship(id: "2", note: "前に会った")) == "メモを編集")
@@ -183,9 +183,9 @@ struct UserMenuTreeTests {
         var loads = 0
     }
 
-    /// 関係を読めなかった知らせは、最初に出る、関係で中身が変わる項目の場所に出す。
-    /// 相手を探せなかった知らせは、最初に出る、相手を探すのを待つ項目の場所に出す。通報は相手のIDが分かっていれば待たないので、探すときだけその場所になる。
-    /// 通報を関係の項目より前に並べても、関係を読めなかった知らせは関係の項目の場所に出る。
+    /// 関係を読めなかった行は、最初に出る、関係で中身が変わる項目の場所に出す。
+    /// 相手を探せなかった行は、最初に出る、相手を探すのを待つ項目の場所に出す。通報は相手のIDが分かっていれば待たないので、探すときだけその場所になる。
+    /// 通報を関係の項目より前に並べても、関係を読めなかった行は関係の項目の場所に出る。
     @Test func failureIsShownAtFirstItemThatWaitsForIt() {
         let reportOnly = layout(visible: [.profile, .report])
         let reportFirst = MenuLayout<UserMenuItem>(elements: [.item(.report, isVisible: true)] + UserMenuItem.allCases.filter { $0 != .report }.map { .item($0, isVisible: true) } + [.more]).groups
@@ -197,7 +197,7 @@ struct UserMenuTreeTests {
         #expect(reportFirst.relationFailureSlots(waitsForReport: true) == RelationFailureSlots(relation: .follow, resolve: .report))
     }
 
-    /// 相手を探せなかったら、知らせる項目の場所にだけ押せない行で知らせる。
+    /// 相手を探せなかったら、知らせる項目の場所にだけ無効の行で知らせる。
     @Test func resolveFailureIsShownOnce() async throws {
         let tree = UserMenuTree(subject: UserMenuSubject(mentionLink: try #require(alice.url), acct: "alice"), actions: actions(), linkBrowser: .inApp)
         let menu = try #require(tree.menu(groups: layout(visible: [.note, .follow]), avatar: nil))
@@ -212,8 +212,8 @@ struct UserMenuTreeTests {
 
     // MARK: - 投稿のメニューのサブメニュー
 
-    /// 既定のユーザーのメニューは、開く・書く操作、フォローとリストに追加、持ち出す操作、ミュート・ブロック・ドメインのブロック・通報でまとまりを分け、ユーザー名とサーバーのコピー、メモ、フォローの設定、プロフィールで紹介は「その他」に入れる。
-    /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
+    /// 既定のユーザーのメニューは、開く・書く操作、フォローとリストに追加、持ち出す操作、ミュート・ブロック・ドメインのブロック・通報でグループを分け、ユーザー名とサーバーのコピー、メモ、フォローの設定、プロフィールで紹介は「その他」に入れる。
+    /// 関係をキャッシュしていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() {
         #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,…,…,…,通報,その他[ユーザー名をコピー,サーバーをコピー,…,…,…,…,カスタマイズ]]")
     }
@@ -236,7 +236,7 @@ struct UserMenuTreeTests {
         #expect(fallback == "person.crop.circle")
     }
 
-    /// 自動翻訳は、対象にしている人にチェックを付けて出し、押すと今と逆にする。自動翻訳を使えないかオフなら出さない。
+    /// 自動翻訳は、対象にしている人にチェックを付けて出し、選択すると今と逆にする。自動翻訳を使えないかオフなら出さない。
     @Test func autoTranslationItemShowsWhetherUserIsTranslated() throws {
         let groups = layout(visible: [.profile, .autoTranslation])
         #expect(try #require(submenu(groups, actions: actions())).contains("自動翻訳") == false)
@@ -260,7 +260,7 @@ struct UserMenuTreeTests {
         #expect(!MenuNodeTests.describe([menu]).contains("自動翻訳"))
     }
 
-    /// カスタマイズは数えない。ほかの中身が1つなら、カスタマイズを出さずに直接並べる。1回余計に押す手間を省くため。
+    /// カスタマイズは数えない。ほかの中身が1つなら、カスタマイズを出さずに直接並べる。1回余計に選択する手間を省くため。
     @Test func customizeDoesNotPreventListingDirectly() {
         #expect(submenu(layout(visible: [.profile, .customize])) == "@alice@remote.exampleのプロフィール")
     }
@@ -270,7 +270,7 @@ struct UserMenuTreeTests {
         #expect(submenu(layout(visible: [.follow]), actions: actions()) == "@alice[…]")
     }
 
-    /// 関係を覚えている相手は、その関係で関係の項目をその場で組み、読み込み中の行を出さない。
+    /// 関係をキャッシュしている相手は、その関係で関係の項目をその場で組み、読み込み中の行を出さない。
     @Test func knownRelationBuildsRelationItemsImmediately() throws {
         let known = actions { target in
             guard case .account(let id, let acct) = target else { return nil }
@@ -282,14 +282,14 @@ struct UserMenuTreeTests {
         #expect(!user.contains("…"))
     }
 
-    /// 自分には、関係の項目のうちメモだけを出し、通報も出さない。自分との関係を覚えていれば、メモの項目をその場で組む。
+    /// 自分には、関係の項目のうちメモだけを出し、通報も出さない。自分との関係をキャッシュしていれば、メモの項目をその場で組む。
     @Test func myselfHasOnlyNoteItem() {
         let me = UserRelation(accountID: "2", acct: "alice", relationship: Relationship(id: "2", note: "TODO"))
         #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[ユーザー名をコピー,サーバーをコピー,メモを編集,カスタマイズ]]")
         #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[ユーザー名をコピー,サーバーをコピー,…,カスタマイズ]]")
     }
 
-    /// 自分との関係を覚えていなければ、読んでからメモの項目を組む。読めなければ、メモの場所に知らせる。自分にはほかに関係の項目を出さないため。
+    /// 自分との関係をキャッシュしていなければ、読んでからメモの項目を組む。読めなければ、メモの場所に知らせる。自分にはほかに関係の項目を出さないため。
     @Test func myselfNoteWaitsForRelation() async throws {
         func loaded(_ loadRelation: @escaping @MainActor (UserMenuTarget, UserIdentity) async throws -> UserRelation?) async throws -> [String] {
             let actions = UserMenuActions(
@@ -334,7 +334,7 @@ struct UserMenuTreeTests {
         #expect(loaded == ["", "メモを追加", ""])
     }
 
-    /// 文字のままのハンドルは、プロフィールのURLが探すまで分からない。URLの項目は押せるまま並べ、押してから探す。ほかのサーバーで探すURLがないので「別のアカウントで」は出さない。
+    /// 文字のままのハンドルは、プロフィールのURLが探すまで分からない。URLの項目は有効のまま並べ、選択してから探す。ほかのサーバーで探すURLがないので「別のアカウントで」は出さない。
     @Test func plainHandleFindsURLAfterChoosing() throws {
         let tree = UserMenuTree(subject: UserMenuSubject(handle: "alice@example.social"), actions: actions(), linkBrowser: .inApp)
         let menu = try #require(tree.menu(groups: layout(visible: [.profile, .copyLink, .openInBrowser, .copyHandle, .otherAccounts]), avatar: nil))
@@ -427,7 +427,7 @@ struct UserMenuTreeTests {
     // MARK: - 単独で出すメニュー
 
     /// 単独で出すメニューは、見出しの2行目にサーバー名を置く。プロフィール画面のメニューは見出しを置かず、「プロフィール」を出さない。
-    /// 関係を読み直すのは、関係で中身が変わる項目を出しているときだけ。
+    /// 関係を再読み込みするのは、関係で中身が変わる項目を出しているときだけ。
     @Test func standaloneAndProfileScreenMenus() throws {
         let tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: nil, linkBrowser: .inApp)
         let standalone = try #require(tree.menu(groups: MenuFixture.user.groups, avatar: .user(.account(alice))))

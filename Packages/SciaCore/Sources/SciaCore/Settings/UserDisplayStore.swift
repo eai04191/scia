@@ -85,7 +85,7 @@ public final class UserDisplayStore {
         let existed = displays[key]?.value != nil
         let display = entry(handle: latest.acct, source: .init(latest, localServer: settings.emojiLocalServer), settings: settings, shows: false)
         let changed = display.receive(latest, localServer: settings.emojiLocalServer, version: sourceVersion)
-        // 画面に出したあと追い出された人は、前に描いた値と比べられないので描き直す。
+        // 画面に出したあと追い出された人は、前に描いた値と比べられないので再描画する。
         if changed || (!existed && wasShown(handle: latest.acct, key: key, settings: settings)) { revision += 1 }
     }
 

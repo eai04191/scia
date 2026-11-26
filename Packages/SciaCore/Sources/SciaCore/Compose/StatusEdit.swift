@@ -14,10 +14,10 @@ public struct StatusSource: Codable, Hashable, Sendable {
     }
 }
 
-/// 下書きが自分の投稿の編集であるときの、元の投稿から引き継いで送り直すもの。
+/// 下書きが自分の投稿の編集であるときの、元の投稿から引き継いで再送するもの。
 ///
 /// Mastodonの編集は、送らなかった添付・投票・注意書きを消す（`StatusesController#update`が、送らなかった項目もnilとして渡すため）。
-/// そのため、投稿欄で変えられない投票も、元の値のまま毎回送り直す。
+/// そのため、投稿欄で変えられない投票も、元の値のまま毎回再送する。
 /// https://github.com/mastodon/mastodon/blob/main/app/services/update_status_service.rb
 public struct StatusEditTarget: Sendable, Equatable {
     public let statusID: Status.ID
@@ -30,7 +30,7 @@ public struct StatusEditTarget: Sendable, Equatable {
     }
 }
 
-/// 編集で送り直す投票。選択肢と複数選べるかを変えなければ、票は残る。
+/// 編集で再送する投票。選択肢と複数選べるかを変えなければ、票は残る。
 public struct PollResubmission: Sendable, Equatable {
     public let options: [String]
     public let expiresAt: Date
@@ -55,7 +55,7 @@ public struct PollResubmission: Sendable, Equatable {
 
 extension Status {
     /// サーバーが受け付ける投票の締め切りの短さの下限（`PollExpirationValidator::MIN_EXPIRATION`）。
-    /// 投票付きの投稿の編集では、残りの時間をそのまま送り直すため、残りがこれより短いと拒まれる。
+    /// 投票付きの投稿の編集では、残りの時間をそのまま再送するため、残りがこれより短いと拒まれる。
     public static let minimumPollDuration: TimeInterval = 5 * 60
 
     /// `accountID`のアカウントの投稿。ブーストなら元の投稿で見る。
@@ -70,7 +70,7 @@ extension Status {
         /// 投票の締め切りまで5分を切った。締め切りの分からない投票もここに入れる。
         case pollTooClose
 
-        /// メニューの押せない「編集」に添える理由。
+        /// メニューの無効の「編集」に添える理由。
         public var menuReason: String {
             switch self {
             case .pollClosed: "投票を締め切った投稿は編集できません"
@@ -79,7 +79,7 @@ extension Status {
         }
     }
 
-    /// 編集を送れる。投票の締め切りまで5分を切った投稿と、締め切った投稿は、送り直すとサーバーが拒むため送れない。
+    /// 編集を送れる。投票の締め切りまで5分を切った投稿と、締め切った投稿は、再送するとサーバーが拒むため送れない。
     /// 自分の投稿かどうかは見ない。
     public func canBeEdited(now: Date) -> Bool {
         editObstacle(now: now) == nil
@@ -101,8 +101,8 @@ extension StatusDraft {
     /// 自分の投稿を編集する下書き。公開範囲と返信先は変えられないため、元の投稿のまま持つ。
     /// 投稿に付いている添付は、アップロードの済んだ添付として並べ、代替テキストは編集と一緒に送る。
     /// 元の投稿で添付を閲覧注意にしていれば、注意書きが空でも注意書きの欄を出す。
-    /// 投票を送り直せない（締め切りまで5分を切った、締め切った）投稿ではnilを返す。投票なしで送ると、サーバーが投票を消すため。
-    /// メニューを出したときは送り直せても、編集を始めるまでの間に締め切りが近づくことがある。
+    /// 投票を再送できない（締め切りまで5分を切った、締め切った）投稿ではnilを返す。投票なしで送ると、サーバーが投票を消すため。
+    /// メニューを出したときは再送できても、編集を始めるまでの間に締め切りが近づくことがある。
     public static func edit(of status: Status, source: StatusSource, now: Date) -> StatusDraft? {
         guard status.canBeEdited(now: now) else { return nil }
         let attachments = status.mediaAttachments.map { attachment in

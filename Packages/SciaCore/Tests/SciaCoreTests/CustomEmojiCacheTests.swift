@@ -27,14 +27,14 @@ struct CustomEmojiCacheTests {
 
     private var file: URL { directory.appending(path: "example.social.json") }
 
-    /// 端末に書き出したファイルを読み直したキャッシュが、書き出した中身を持つまで待つ。
+    /// 端末に書き出したファイルを再読み込みしたキャッシュが、書き出した中身を持つまで待つ。
     private func restored(_ caches: CustomEmojiCaches) async throws -> CustomEmojiCache.Snapshot {
         let cache = caches.cache(for: instance)
         try await waitUntil { cache.snapshot.emojis != nil }
         return cache.snapshot
     }
 
-    /// 書き出したリストと、画像から分かった縦横比は、起動し直しても残る。残したリストは読み直すものとして渡す。
+    /// 書き出したリストと、画像から分かった縦横比は、起動し直しても残る。残したリストは再読み込みするものとして渡す。
     @Test func keepsEmojisAndLearnedAspectRatiosAcrossLaunches() async throws {
         let cache = makeCaches().cache(for: instance)
         cache.remember([emoji("wide"), emoji("square")], loadStartedAt: cache.generation)
@@ -76,7 +76,7 @@ struct CustomEmojiCacheTests {
         #expect(cache.snapshot.learnedAspectRatios == [emoji("wide").staticUrl: 3])
     }
 
-    /// 読み直したリストでは、静止画のURLが同じ絵文字だけ縦横比を引き継ぐ。リストから消えた絵文字と、画像を差し替えた絵文字の分は捨てる。
+    /// 再読み込みしたリストでは、静止画のURLが同じ絵文字だけ縦横比を引き継ぐ。リストから消えた絵文字と、画像を差し替えた絵文字の分は捨てる。
     @Test func carriesOverAspectRatiosOnlyForSameImage() {
         let cache = makeCaches().cache(for: instance)
         cache.remember([emoji("kept"), emoji("replaced"), emoji("removed")], loadStartedAt: cache.generation)
@@ -108,7 +108,7 @@ struct CustomEmojiCacheTests {
         #expect(reopened.snapshot.emojis == nil)
     }
 
-    /// 端末に残したリストで補完を始め、読み直す間もそのリストを出す。パレットには、画像から分かった縦横比を入れて渡す。
+    /// 端末に残したリストで補完を始め、再読み込みする間もそのリストを出す。パレットには、画像から分かった縦横比を入れて渡す。
     @Test func completionStartsWithCachedEmojisAndReloads() async throws {
         let cache = makeCaches().cache(for: instance)
         cache.remember([emoji("wide")], loadStartedAt: cache.generation)
@@ -144,7 +144,7 @@ struct CustomEmojiCacheTests {
     }
 
     /// リストがまだないときに届いた画像の縦横比も、リストが届いたら、リストにある絵文字の分を残す。
-    /// リストより先に投稿の本文で読んだ画像は、メモリに残っている間は読み直さず、大きさをもう一度知る機会がないため。
+    /// リストより先に投稿の本文で読んだ画像は、メモリに残っている間は再読み込みせず、大きさをもう一度知る機会がないため。
     @Test func adoptsAspectRatiosLearnedBeforeList() {
         let cache = makeCaches().cache(for: instance)
         cache.learn(emoji("wide").url, width: 400, height: 100)
@@ -171,7 +171,7 @@ struct CustomEmojiCacheTests {
         #expect(cache.snapshot.emojis == nil)
     }
 
-    /// リストを消したら、リストを持っている補完も、次に絵文字ピッカーを開いたときに読み直す。
+    /// リストを消したら、リストを持っている補完も、次に絵文字ピッカーを開いたときに再読み込みする。
     /// 持ったままにすると、消したリストを出し続け、縦横比も残らなくなるため。
     @Test func completionReloadsAfterCacheIsCleared() async throws {
         let caches = makeCaches()

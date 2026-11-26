@@ -11,11 +11,11 @@ public final class CustomEmojiCache {
     public struct Snapshot: Sendable, Equatable {
         /// 残しているリスト。端末にもなく、まだ読めていなければnil。
         public let emojis: [ServerEmoji]?
-        /// この起動のうちにサーバーから読んだリストか。falseなら端末に残したリストで、読み直す。
+        /// この起動のうちにサーバーから読んだリストか。falseなら端末に残したリストで、再読み込みする。
         public let isFresh: Bool
         /// サーバーが縦横比を返さない絵文字の、画像から分かった縦横比（幅/高さ）。静止画のURLで引く。
         public let learnedAspectRatios: [URL: Double]
-        /// リストを消した回数。補完は、持っているリストを受け取ったときと違えば、そのリストも捨てて読み直す。
+        /// リストを消した回数。補完は、持っているリストを受け取ったときと違えば、そのリストも捨てて再読み込みする。
         public let generation: Int
     }
 
@@ -32,7 +32,7 @@ public final class CustomEmojiCache {
     /// サーバーが縦横比を返さない絵文字の、アニメーション版と静止画のURLから、静止画のURLを引く。どちらの画像が届いても縦横比を残すため。
     private var staticURLs: [URL: URL] = [:]
     /// リストがまだないときに届いた画像の縦横比。リストが届いたら、リストにある絵文字の分を残す。
-    /// リストより先に投稿の本文で読んだ画像は、メモリに残っている間は読み直さず、大きさをもう一度知る機会がないため。
+    /// リストより先に投稿の本文で読んだ画像は、メモリに残っている間は再読み込みせず、大きさをもう一度知る機会がないため。
     /// ほかのサーバーの絵文字も入るので、`pendingLimit`を超えたら捨てる。
     private var pendingAspectRatios: [URL: Double] = [:]
     static let pendingLimit = 1_000
@@ -160,7 +160,7 @@ public final class CustomEmojiCache {
         }
     }
 
-    /// リストと分かっている縦横比を書き出す。端末から読んだリストのままでも書く。読み直す前にタイムラインで分かった縦横比を、次の起動に残すため。
+    /// リストと分かっている縦横比を書き出す。端末から読んだリストのままでも書く。再読み込みする前にタイムラインで分かった縦横比を、次の起動に残すため。
     /// 書き出す処理を返す。書かなければnil。
     @discardableResult
     private func save() -> Task<Void, Never>? {
@@ -188,7 +188,7 @@ public final class CustomEmojiCaches {
     private let clock: any Clock<Duration>
     private var caches: [String: CustomEmojiCache] = [:]
     /// どれかのサーバーのリストを、サーバーから読んで書き出したときと、消したときに呼ぶ。
-    /// 端末に置く絵文字の画像を、リストに載っているか（docs/animated-custom-emoji.mdの「端末に置く画像の分け方」）で分け直し、先読みするのに使う。
+    /// 端末に置く絵文字の画像を、リストに載っているか（docs/animated-custom-emoji.mdの「端末に置く画像の分け方」）で分け直し、プリフェッチするのに使う。
     public var onListsChanged: (@MainActor () -> Void)?
 
     /// - Parameter directory: リストを書き出すフォルダー。サーバーの応答から作れるので、OSが空き容量に応じて消してよい`Caches`に置く。
@@ -296,18 +296,18 @@ struct StoredCustomEmojis: Codable, Sendable {
             visibleInPicker = try container.decode(Bool.self, forKey: .visibleInPicker)
             category = try container.decodeIfPresent(String.self, forKey: .category)
             aspectRatio = try container.decodeIfPresent(Double.self, forKey: .aspectRatio).flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
-            // エイリアスを書く前のファイルにはない。端末に残したリストは起動のたびに読み直すので、それまでは空のままにする。
+            // エイリアスを書く前のファイルにはない。端末に残したリストは起動のたびに再読み込みするので、それまでは空のままにする。
             aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
         }
 
-        /// 縦横比は、サーバーが返したものと見分けずに、画像から分かったものとして持つ。読み直したリストでサーバーが返せば、そちらを使う。
+        /// 縦横比は、サーバーが返したものと見分けずに、画像から分かったものとして持つ。再読み込みしたリストでサーバーが返せば、そちらを使う。
         var emoji: ServerEmoji {
             ServerEmoji(shortcode: shortcode, url: url, staticUrl: staticUrl, visibleInPicker: visibleInPicker, category: category, aliases: aliases)
         }
     }
 
-    /// 書き方を変えたら上げる。読んだファイルの値が違えば、読まずにサーバーから読み直す。
-    /// 2は、先読みが別の絵文字の画像から覚えた縦横比を捨てるために上げた（書き方は1と同じ）。
+    /// 書き方を変えたら上げる。読んだファイルの値が違えば、読まずにサーバーから再読み込みする。
+    /// 2は、プリフェッチが別の絵文字の画像からキャッシュした縦横比を捨てるために上げた（書き方は1と同じ）。
     static let currentVersion = 2
 
     let version: Int
@@ -332,7 +332,7 @@ actor CustomEmojiFiles {
         directory.appending(fileName: SafeFileName("\(server).json"))
     }
 
-    /// 読めないか、書き方の違うファイルはnil。サーバーから読み直せば書き直す。
+    /// 読めないか、書き方の違うファイルはnil。サーバーから再読み込みすれば書き直す。
     func read(server: String) -> StoredCustomEmojis? {
         let file = file(server: server)
         guard let data = try? Data(contentsOf: file) else { return nil }
@@ -381,7 +381,7 @@ actor CustomEmojiFiles {
 }
 
 extension CompletionModel.Sources {
-    /// カスタム絵文字のリストを読めたら、`cache`に残させ、補完が作られたときと読み直す前に、残したリストを渡させる。
+    /// カスタム絵文字のリストを読めたら、`cache`に残させ、補完が作られたときと再読み込みする前に、残したリストを渡させる。
     /// 読めなかったときは、前に読めたリストを残す。
     public func remembering(customEmojisIn cache: CustomEmojiCache) -> Self {
         var sources = self

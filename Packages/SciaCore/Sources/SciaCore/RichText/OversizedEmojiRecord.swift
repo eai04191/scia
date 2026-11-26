@@ -19,14 +19,14 @@ public final class OversizedEmojiRecord: Sendable {
 
     /// 端末に書き出す形。
     private struct Stored: Codable {
-        /// 書き方を変えたら上げる。2は、先読みが別の絵文字の画像として置いたファイルから残した大きさを捨てるために付けた。
+        /// 書き方を変えたら上げる。2は、プリフェッチが別の絵文字の画像として置いたファイルから残した大きさを捨てるために付けた。
         static let currentVersion = 2
 
         let version: Int
         let entries: [Entry]
     }
 
-    /// 残す数の上限。超えたら古いものから消す。消したものは、次に描くときに元の画像を読み直して、また残す。
+    /// 残す数の上限。超えたら古いものから消す。消したものは、次に描くときに元の画像を再読み込みして、また残す。
     static let maxCount = 1_000
 
     public let file: URL

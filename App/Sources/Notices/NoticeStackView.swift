@@ -23,7 +23,7 @@ final class NoticeStackView: UIView {
     private var isChromeHidden = false
     /// 出たままのチップが、前に出ている画面の中だけのものか。画面と一緒に薄くするため。
     private var persistentBelongsToScreen = false
-    /// 画面だけのチップの濃さ。画面をスワイプして閉じる途中は、背景に合わせて薄くする。呼んだ側のアニメーションに任せて変える。
+    /// 画面だけのチップの不透明度。画面をスワイプして閉じる途中は、背景に合わせて薄くする。呼んだ側のアニメーションに任せて変える。
     var screenAlpha: CGFloat = 1 {
         didSet {
             guard screenAlpha != oldValue, let chip = persistentChip, persistentBelongsToScreen else { return }
@@ -53,7 +53,7 @@ final class NoticeStackView: UIView {
         // 処理中のインジケーターは、ほかのアイコンより背が高い。
         // 2行に折り返したチップが2枚並んでも収まる高さを取るため、2行の文言で測る。
         sizingChip.apply(Notice(id: "sizing", kind: .progress, title: NoticeTexts.sizingSample))
-        // 文字の大きさの設定が変われば、高さを測り直す。
+        // Dynamic Typeが変われば、高さを測り直す。
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.invalidateIntrinsicContentSize()
             self.setNeedsLayout()
@@ -67,14 +67,14 @@ final class NoticeStackView: UIView {
 
     // MARK: 出す、消す
 
-    /// 出たままのチップを出すか、中身を替える。nilなら消す。同じ見た目のままなら、描き直さずに押したときの処理だけを替える。
+    /// 出たままのチップを出すか、中身を替える。nilなら消す。同じ見た目のままなら、再描画せずに選択したときの処理だけを替える。
     /// - Parameter belongsToScreen: 前に出ている画面の中だけのものなら、`screenAlpha`に合わせて薄くする。
     func setPersistent(_ notice: Notice?, belongsToScreen: Bool = false) {
         let belongsChanged = persistentBelongsToScreen != belongsToScreen
         persistentBelongsToScreen = belongsToScreen
         if let notice, let chip = persistentChip, let shown = chip.notice, shown.looksSame(as: notice) {
             chip.apply(notice)
-            // 描き直すと押せるかが中身から決め直されるため、ボタン類と一緒に隠している間は押せないままにする。
+            // 再描画すると選択できるかが中身から決め直されるため、ボタン類と一緒に隠している間は無効のままにする。
             chip.isUserInteractionEnabled = !isHiddenWithChrome(chip)
             if belongsChanged {
                 chip.alpha = targetAlpha(of: chip)
@@ -100,7 +100,7 @@ final class NoticeStackView: UIView {
     }
 
     /// 数秒で消えるチップを出す。出していれば差し替え、消えるまでの時計を数え直す。
-    /// - Parameter persistentID: 出たままのチップがこのidの知らせなら、それを消してその場所で入れ替える（ダウンロード中から保存しましたへ）。
+    /// - Parameter persistentID: 出たままのチップがこのidのチップなら、それを消してその場所で入れ替える（ダウンロード中から保存しましたへ）。
     func showTransient(_ notice: Notice, duration: TimeInterval, replacingPersistent persistentID: String? = nil) {
         if let persistentID, let chip = persistentChip, chip.notice?.id == persistentID {
             if let old = transientChip {
@@ -165,7 +165,7 @@ final class NoticeStackView: UIView {
         defer { chip.announce(changingFrom: previous) }
         // 文言や種類が変わったときと、値、件数、「›」が付いたり外れたり、値の桁数が変わったりしたときは、中身だけを薄く入れ替え、広げる動きも動かす。
         // 値が付くだけのとき（「処理中」に「1%」が付くなど）や、桁が増えるだけのとき（8%から10%）にすぐ広げると、ガラスが1コマで広がるため。
-        // 数字の幅はそろえてあるので、桁数が同じまま数字が変わるだけなら幅は変わらず、そのまま描き直す。
+        // 数字の幅はそろえてあるので、桁数が同じまま数字が変わるだけなら幅は変わらず、そのまま再描画する。
         if Self.changesShape(from: chip.notice, to: notice) {
             chip.crossfade(to: notice, duration: animationDuration)
             relayout(growingWithAnimation: chip)
@@ -196,7 +196,7 @@ final class NoticeStackView: UIView {
             chip.removeFromSuperview()
             self.removingChips.removeAll { $0 === chip }
         }
-        // 触れている間に消えたら、触れ終わりの知らせが届かないため、ここで知らせる。
+        // 触れている間に消えたら、触れ終わりのイベントが届かないため、ここで知らせる。
         if chip.isHeld {
             onHoldChange?()
         }
@@ -245,7 +245,7 @@ final class NoticeStackView: UIView {
         let isReturning = chip.layer.animation(forKey: "transform") != nil
         chip.panStartOffset = isReturning ? chip.layer.presentation()?.affineTransform().ty ?? chip.transform.ty : chip.transform.ty
         chip.layer.removeAnimation(forKey: "transform")
-        // 戻る途中の濃さの動きも止める。残すと、指に合わせた濃さの代わりに動きの濃さを描き続け、動きが終わったコマで指に合わせた濃さへ替わる。
+        // 戻る途中の不透明度の動きも止める。残すと、指に合わせた不透明度の代わりに動きの不透明度を描き続け、動きが終わったコマで指に合わせた不透明度へ替わる。
         chip.layer.removeAnimation(forKey: "opacity")
         chip.isPanning = true
     }
@@ -304,7 +304,7 @@ final class NoticeStackView: UIView {
 
     // MARK: 消えるまでの時計
 
-    /// 押せる数秒で消えるチップは、指が触れている間とVoiceOverの読み上げ位置が乗っている間、時計を止める。
+    /// 選択できる数秒で消えるチップは、指が触れている間とVoiceOverの読み上げ位置が乗っている間、時計を止める。
     private var isTransientClockPaused: Bool {
         guard let chip = transientChip else { return false }
         return chip.isHeld && chip.notice?.isActionable == true
@@ -444,7 +444,7 @@ final class NoticeStackView: UIView {
             }
         }
         for chip in chips {
-            // 押せないチップも、上へスワイプしてしまえるよう触れたものを受ける。
+            // 選択できないチップも、上へスワイプしてしまえるよう触れたものを受ける。
             chip.isUserInteractionEnabled = !isHiddenWithChrome(chip)
         }
         if animated {
@@ -456,7 +456,7 @@ final class NoticeStackView: UIView {
 
     // MARK: 触れたもの
 
-    /// チップの上だけを受け、ほかは下の画面へ通す。チップは44pt四方まで外側も押せるため、並べた範囲の外でも受ける。
+    /// チップの上だけを受け、ほかは下の画面へ通す。チップは44pt四方までヒット領域を外側に広げるため、並べた範囲の外でも受ける。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         guard !isHidden, alpha > 0.01, isUserInteractionEnabled else { return nil }
         for chip in chips.reversed() where chip.isUserInteractionEnabled {

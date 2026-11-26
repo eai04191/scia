@@ -69,7 +69,7 @@ struct StatusEditTests {
         #expect(draft.editing == StatusEditTarget(statusID: "10", poll: nil))
     }
 
-    /// 言語は元の投稿のまま始め、送り直す。言語の分からない投稿では送らず、サーバーに今の言語を残させる。
+    /// 言語は元の投稿のまま始め、再送する。言語の分からない投稿では送らず、サーバーに今の言語を残させる。
     @Test(arguments: ["en", nil] as [String?])
     func editKeepsLanguage(language: String?) throws {
         let draft = try #require(StatusDraft.edit(of: status(language: language), source: StatusSource(id: "10", text: "本文", spoilerText: ""), now: Self.now))
@@ -139,21 +139,21 @@ struct StatusEditTests {
         #expect(try body(draft).mediaAttributes == nil)
     }
 
-    /// 投票は、選択肢、複数選べるか、票数を隠すかを元のまま、残りの時間で送り直す。
+    /// 投票は、選択肢、複数選べるか、票数を隠すかを元のまま、残りの時間で再送する。
     @Test func bodyResendsPollAsIs() throws {
         let draft = try #require(StatusDraft.edit(of: status(poll: poll(expiresIn: 3600.4)), source: StatusSource(id: "10", text: "どっち？", spoilerText: ""), now: Self.now))
 
         #expect(try body(draft).poll == StatusRequestBody.Poll(options: ["はい", "いいえ"], expiresIn: 3601, multiple: true, hideTotals: false))
     }
 
-    /// 締め切る前に選択肢の票数がnullなら、票数を隠す投票として送り直す。
+    /// 締め切る前に選択肢の票数がnullなら、票数を隠す投票として再送する。
     @Test func hiddenTotalsAreInferredFromNullVotes() {
         let resubmission = PollResubmission(poll(expiresIn: 3600, votes: nil), now: Self.now)
 
         #expect(resubmission?.hideTotals == true)
     }
 
-    /// 投票を送り直せない投稿は、編集の下書きを作らない。投票なしで送ると、サーバーが投票を消すため。
+    /// 投票を再送できない投稿は、編集の下書きを作らない。投票なしで送ると、サーバーが投票を消すため。
     @Test func editDraftIsNilWhenPollCannotBeResent() {
         #expect(StatusDraft.edit(of: status(poll: poll(expiresIn: 299)), source: StatusSource(id: "10", text: "", spoilerText: ""), now: Self.now) == nil)
     }
@@ -174,7 +174,7 @@ struct StatusEditTests {
         #expect(!boost.isAuthored(by: "2"))
     }
 
-    /// 投票の締め切りまで5分を切った投稿と、締め切った投稿は編集できない。送り直すとサーバーが拒むため。
+    /// 投票の締め切りまで5分を切った投稿と、締め切った投稿は編集できない。再送するとサーバーが拒むため。
     @Test func pollCloseToDeadlineCannotBeEdited() {
         #expect(status().canBeEdited(now: Self.now))
         #expect(status(poll: poll(expiresIn: 300)).canBeEdited(now: Self.now))

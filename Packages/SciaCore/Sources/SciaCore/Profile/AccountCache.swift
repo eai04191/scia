@@ -3,21 +3,21 @@ import os
 
 /// ログイン中のセッションで受け取ったアカウントの、IDごとに一番新しいもの。
 /// メンションのように、IDしか分からない相手のアイコンを出すのと、プロフィール画面を開くときに最初に出すのに使う。
-/// プロフィールのURLやハンドルで探したアカウントも、探した値ごとに覚える。探すのは検索のAPIで、相手のサーバーへの問い合わせも起きるため、同じ相手を何度も探さない。
+/// プロフィールのURLやハンドルで探したアカウントも、探した値ごとにキャッシュする。探すのは検索のAPIで、相手のサーバーへの問い合わせも起きるため、同じ相手を何度も探さない。
 ///
-/// 覚えるのは`ReceivedAccounts`で、自分で読んだものに加え、タイムラインの投稿や通知、プロフィールなど、セッションのクライアントとストリーミングが受け取ったアカウントをすべて覚える。
+/// キャッシュするのは`ReceivedAccounts`で、自分で読んだものに加え、タイムラインの投稿や通知、プロフィールなど、セッションのクライアントとストリーミングが受け取ったアカウントをすべてキャッシュする。
 /// 新しいものを決める番号の決まりは`ReceivedAccounts`にある。
 ///
 /// 足りないアカウントは、相手ごとにリクエストを送らず、`MastodonClient.multipleAccountsLimit`件ずつまとめて1回で読む。
 /// メンションが何人いても、メニューを開くたびのリクエストは1回で済み、トークンごとのレート制限を削らない。
-/// IDはサーバーごとに違うため、セッション（ログイン中のアカウント）ごとに持つ。起動している間だけ覚え、覚える人数の上限は`ReceivedAccounts.limit`。
+/// IDはサーバーごとに違うため、セッション（ログイン中のアカウント）ごとに持つ。起動している間だけキャッシュし、キャッシュする人数の上限は`ReceivedAccounts.limit`。
 @MainActor
 public final class AccountCache {
     public typealias Fetch = @Sendable ([String]) async throws -> [Account]
 
     private let fetch: Fetch
     private let limit: Int
-    /// 覚えているアカウント。セッションのクライアントとストリーミングと共有する。
+    /// キャッシュしたアカウント。セッションのクライアントとストリーミングと共有する。
     private let received: ReceivedAccounts
     /// 読み込み中のIDと、それを読んでいる読み込み。同じIDを続けて求められても、二重に送らない。読み込みは読めたアカウントを返す。
     private var inFlight: [String: Task<[Account], Never>] = [:]
@@ -30,14 +30,14 @@ public final class AccountCache {
 
     /// - Parameters:
     ///   - limit: 1回のリクエストで読む数。
-    ///   - received: 覚える先。セッションのクライアントとストリーミングに渡したものと同じものを渡す。
+    ///   - received: キャッシュする先。セッションのクライアントとストリーミングに渡したものと同じものを渡す。
     public init(limit: Int = MastodonClient.multipleAccountsLimit, received: ReceivedAccounts = ReceivedAccounts(), fetch: @escaping Fetch) {
         self.fetch = fetch
         self.limit = limit
         self.received = received
     }
 
-    /// 覚えているアカウント。受け取っていなければnil。
+    /// キャッシュしたアカウント。受け取っていなければnil。
     public func account(_ id: String) -> Account? {
         received.account(id)
     }
@@ -46,18 +46,18 @@ public final class AccountCache {
         received.account(acct: acct, localDomain: localDomain)
     }
 
-    /// `account`と同じ人の、覚えている一番新しいアカウント。覚えていなければ`account`を返す。
+    /// `account`と同じ人の、キャッシュした一番新しいアカウント。キャッシュになければ`account`を返す。
     /// プロフィール画面を開くときに渡るアカウントは、前に受け取った投稿に付いてきたものなどで、そのあとに受け取ったものより古いことがあるため、これで出す。
     public func latest(of account: Account) -> Account {
         received.account(account.id) ?? account
     }
 
     /// `ids`のアカウントを読み、読めたものを返す。読み込み済みのものは読まず、読み込み中のものはその読み込みを待つ。
-    /// 読めなかったアカウント（見つからない、承認されていない、リクエストが失敗した）は返さず、覚えもしないので、次に求められたときに読み直す。
+    /// 読めなかったアカウント（見つからない、承認されていない、リクエストが失敗した）は返さず、キャッシュもしないので、次に求められたときに再読み込みする。
     public func load(_ ids: [String]) async -> [String: Account] {
         var seen = Set<String>()
         let unique = ids.filter { seen.insert($0).inserted }
-        // 待つ間に、ほかの経路で受け取った人で上限を超えて消えても返せるよう、覚えていた人と読めた人を手元にも持つ。
+        // 待つ間に、ほかの経路で受け取った人で上限を超えて消えても返せるよう、キャッシュしていた人と読めた人を手元にも持つ。
         var loaded: [String: Account] = unique.reduce(into: [:]) { loaded, id in
             loaded[id] = received.account(id)
         }
@@ -102,14 +102,14 @@ public final class AccountCache {
         }
     }
 
-    /// 文字のままのハンドル`handle`（`user@domain`）の人を探す。覚えている人も含め、書かれたハンドルと同じ人だけを返す。ほかの経路が同じハンドルで覚えた、似た名前の人を受け取らないため。
+    /// 文字のままのハンドル`handle`（`user@domain`）の人を探す。キャッシュした人も含め、書かれたハンドルと同じ人だけを返す。ほかの経路が同じハンドルでキャッシュした、似た名前の人を受け取らないため。
     public func resolve(handle: String, localServer: String, search: @escaping @Sendable () async throws -> Account?) async throws -> Account? {
         guard let account = try await resolve(.acct(handle), search: search), account.hasHandle(handle, localServer: localServer) else { return nil }
         return account
     }
 
     /// `lookup`で探したアカウント。前に見つけていればそれを返し、探している途中ならその検索を待ち、どちらでもなければ`search`で探す。
-    /// 見つからなかったときと、検索が失敗したときは覚えず、次に求められたときに探し直す。
+    /// 見つからなかったときと、検索が失敗したときはキャッシュせず、次に求められたときに探し直す。
     public func resolve(_ lookup: AccountLookup, search: @escaping @Sendable () async throws -> Account?) async throws -> Account? {
         let lookup = lookup.normalized
         if let id = resolvedIDs[lookup], let account = received.account(id) {
@@ -138,7 +138,7 @@ public enum AccountLookup: Hashable, Sendable {
     /// `user@domain`の形のハンドル。大文字と小文字を区別しない。
     case acct(String)
 
-    /// 同じ相手を同じ値として覚えるため、ハンドルは小文字にそろえる。
+    /// 同じ相手を同じ値としてキャッシュするため、ハンドルは小文字にそろえる。
     var normalized: AccountLookup {
         switch self {
         case .profileURL: self

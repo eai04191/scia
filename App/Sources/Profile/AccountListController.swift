@@ -21,12 +21,12 @@ final class AccountListController {
     var onChangeRelation: ((UserRelationChange, Account) -> Void)?
     /// リストのメンバーを並べているなら、そのリスト。
     private let listID: String?
-    /// リストのメンバーを外したり足したりできなかったときに呼ぶ。知らせ方はセッションが決める。
+    /// リストのメンバーを外したり足したりできなかったときに呼ぶ。伝え方はセッションが決める。
     var onMemberFailure: ((_ title: String, _ error: any Error) -> Void)?
     /// 人のリストに並んでいる人。リストのメンバーの画面で、足す人を探す画面に、もう入っているかを出すのに使う。
     var accountIDs: Set<String> { Set(store.accounts.map(\.id)) }
     /// 人のリストを読めたかが変わったときに呼ぶ。リストのメンバーの画面では、読めるまで足す人を探す画面を開かせない。
-    /// 読む前に開くと、もう入っている人を入っていないものとして出し、押すと足し直してしまうため。
+    /// 読む前に開くと、もう入っている人を入っていないものとして出し、選択すると足し直してしまうため。
     var onLoadedChange: ((Bool) -> Void)?
 
     /// - Parameter emojiReactionStyle: リアクションした人を読むときの、サーバーのAPIの形。ほかのリストでは呼ばれても使わない。
@@ -117,7 +117,7 @@ final class AccountListController {
         }
     }
 
-    /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    /// - Parameter purpose: 使う人が開いたり再試行を選択したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
     @discardableResult
     func start(purpose: RequestPurpose) -> Task<Void, Never>? {
         viewController?.setContentState(.loading)
@@ -136,7 +136,7 @@ final class AccountListController {
         }
     }
 
-    /// 人のリストを引っぱって離したときに、最初のページから読み直して置き換える。人のリストは新しい人が上に来るとは限らず、上に足せないため。
+    /// 人のリストでpull to refreshしたときに、最初のページから再読み込みして置き換える。人のリストは新しい人が上に来るとは限らず、上に足せないため。
     /// 読めなかったら、前の人のリストのまま残す。最初の読み込みに失敗したままなら、それをやり直す。
     private func refresh() async {
         logger.info("accountList refresh")
@@ -185,7 +185,7 @@ final class AccountListController {
         }
     }
 
-    /// 人を足したり外したりしたあとに描き直す。末尾の「メンバーはいません」などは、行の有無で出し分けるので、描き直させる。
+    /// 人を足したり外したりしたあとに再描画する。末尾の「メンバーはいません」などは、行の有無で出し分けるので、再描画させる。
     private func showMemberChange(animatesRemoval: Bool = false) {
         showEntries(animatesRemoval: animatesRemoval)
         viewController?.setContentState(.loaded)

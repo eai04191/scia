@@ -39,18 +39,18 @@ class EmojiLabel: TextKitLabel {
             let isEdit = expectsTextEdit
             expectsTextEdit = false
             if let assignedText, Self.hasSameContent(assignedText, newValue) {
-                // 入れ替えていれば、そこで読めなかったアニメーション版を読み直していた。入れ替えなくても読み直す。
+                // 入れ替えていれば、そこで読めなかったアニメーション版を再読み込みしていた。入れ替えなくても再読み込みする。
                 animatedEmojis?.reloadMissingAnimations()
                 return
             }
-            // UILabelは受け取った文字列を写し替えて持ち、絵文字の画像も同じものではなくなるため、置く側が渡したもの同士で比べる。
+            // UILabelは受け取った文字列をコピーして持ち、絵文字の画像も同じものではなくなるため、置く側が渡したもの同士で比べる。
             let filled = Self.filledEmojiIndices(from: assignedText, to: newValue)
             if !filled.isEmpty {
                 prepareEmojiArrival(filling: filled)
             } else if isEdit, let newValue, prepareEditArrival(to: newValue) {
                 // 編集の前後で変わらない文字を、前の位置から動かす。
             } else if assignedText?.string != newValue?.string {
-                // 絵文字を入れている途中に、使い回された行で別の文字列に替わったら、前の文字列の像を重ねない。
+                // 絵文字を入れている途中に、使い回された行で別の文字列に替わったら、前の文字列のスナップショットを重ねない。
                 cancelEmojiArrival()
             }
             truncationCache = nil
@@ -64,7 +64,7 @@ class EmojiLabel: TextKitLabel {
     }
 
     /// 2つの文字列の、描いたときの中身が同じか。文字と属性を比べ、カスタム絵文字の添付は、画像が同じものかと大きさで比べる。
-    /// 添付は描き直すたびに新しく作られ、`NSTextAttachment`同士はものが同じでないと等しくならないため。
+    /// 添付は再描画するたびに新しく作られ、`NSTextAttachment`同士はものが同じでないと等しくならないため。
     static func hasSameContent(_ old: NSAttributedString?, _ new: NSAttributedString?) -> Bool {
         guard let old, let new else { return old == nil && new == nil }
         guard old !== new else { return true }
@@ -133,7 +133,7 @@ class EmojiLabel: TextKitLabel {
     /// 前の並びを測り、まだ動かし始めていない。
     private var pendingEmojiArrival = false
 
-    /// 文字列を入れ替える前に、動き始めるときの文字の見え方を測る。動いている途中なら、いま見えている位置と濃さから動かし直す。
+    /// 文字列を入れ替える前に、動き始めるときの文字の見え方を測る。動いている途中なら、いま見えている位置と不透明度から動かし直す。
     private func prepareEmojiArrival(filling filled: Set<Int>) {
         cancelTextReplacement()
         let running = emojiArrival?.isRunning == true ? emojiArrival : nil
@@ -153,7 +153,7 @@ class EmojiLabel: TextKitLabel {
         }
         let start = running?.currentPlacements(filling: filled) ?? EmojiArrivalTransition.placements(of: shown, in: self, filling: filled)
         let startBars = running?.currentBars() ?? quoteBarFrames()
-        // 前の動きの層は、次の動きを始めるまで残す。同じ描き直しの中で入れ替わるので、そのあいだのコマは描かれない。
+        // 前の動きの層は、次の動きを始めるまで残す。同じ再描画の中で入れ替わるので、そのあいだのコマは描かれない。
         let previous = emojiArrival
         emojiArrival = EmojiArrivalTransition(label: self, start: start, startBars: startBars, duration: duration)
         previous?.finish()
@@ -172,7 +172,7 @@ class EmojiLabel: TextKitLabel {
         expectsTextEdit = true
     }
 
-    /// 編集の前の並びを測り、変わらない文字を新しい文字列の位置へ写して、動かす準備をする。動かさないときはfalse。
+    /// 編集の前の並びを測り、変わらない文字を新しい文字列の位置に対応付けて、動かす準備をする。動かさないときはfalse。
     private func prepareEditArrival(to new: NSAttributedString) -> Bool {
         let duration = textEditDuration()
         guard duration > 0, window != nil, bounds.width > 0, !UIAccessibility.isReduceMotionEnabled, let shown = attributedText, shown.string != new.string else { return false }
@@ -181,10 +181,10 @@ class EmojiLabel: TextKitLabel {
         let before = running?.currentPlacements(filling: []) ?? EmojiArrivalTransition.placements(of: shown, in: self, filling: [])
         let start = Self.remappingUnchanged(before, from: shown.string, to: new.string)
         let startBars = running?.currentBars() ?? quoteBarFrames()
-        // なくなった文字は、前の描画の像から切り出して薄くする。前の位置を新しい位置へ写せなかった文字が、なくなった文字になる。
+        // なくなった文字は、前の描画のスナップショットから切り出して薄くする。前の位置を新しい位置に対応付けられなかった文字が、なくなった文字になる。
         let kept = Set(Self.remappingUnchanged(Dictionary(uniqueKeysWithValues: before.keys.map { ($0, $0) }), from: shown.string, to: new.string).values)
         let leavingFrames = before.filter { !kept.contains($0.key) }.map(\.value.frame)
-        // 文字が動いている途中なら、枠は動いている途中の位置なので、像も、いま見えている描画から取る。並べ終えた描画から取ると、枠と像がずれて、別の文字を切り出す。
+        // 文字が動いている途中なら、枠は動いている途中の位置なので、スナップショットも、いま見えている描画から取る。並べ終えた描画から取ると、枠とスナップショットがずれて、別の文字を切り出す。
         let image = leavingFrames.isEmpty ? nil : running == nil ? TextReplacementTransition.render(self) : TextReplacementTransition.shownImage(of: self)
         let leaving = image.map { EmojiArrivalTransition.Leaving(image: $0, size: bounds.size, frames: leavingFrames) }
         let previous = emojiArrival
@@ -204,7 +204,7 @@ class EmojiLabel: TextKitLabel {
         return true
     }
 
-    /// 文字の先頭の位置（UTF-16）をキーにした値を、編集のあとの文字列の位置へ写す。前後で変わらない先頭と末尾の文字と、そのあいだで変わらない行を残し、ほかの文字は除く。
+    /// 文字の先頭の位置（UTF-16）をキーにした値を、編集のあとの文字列の位置に対応付ける。前後で変わらない先頭と末尾の文字と、そのあいだで変わらない行を残し、ほかの文字は除く。
     /// 先頭と末尾の変わらない範囲は、編集の前の文字列の、文字（書記素クラスタ）の切れ目に合わせる。
     static func remappingUnchanged<Value>(_ values: [Int: Value], from old: String, to new: String) -> [Int: Value] {
         let old = old as NSString
@@ -317,7 +317,7 @@ class EmojiLabel: TextKitLabel {
     private var hasCustomEmoji = false
     /// 描いているのが、絵文字を差し替えた文字列。
     private var showsReplacedText = false
-    /// ウィンドウにない間に、アニメーション版が届いたか読み直してよくなった。ウィンドウに入ったら差し替え直す。
+    /// ウィンドウにない間に、アニメーション版が届いたか再読み込みしてよくなった。ウィンドウに入ったら差し替え直す。
     private var needsAnimatedEmojiUpdate = false
     /// 動かさず、文字の中の静止画のまま描く絵文字の位置。並べてみるまで分からないため、`layoutSubviews`で決める。
     private var stillEmojiIndices: Set<Int> = []
@@ -350,12 +350,12 @@ class EmojiLabel: TextKitLabel {
         }
     }
 
-    /// 置く側が渡した文字列から、アニメーション版が届いている絵文字を透明な画像に差し替えて描き直す。
+    /// 置く側が渡した文字列から、アニメーション版が届いている絵文字を透明な画像に差し替えて再描画する。
     /// 差し替えた画像は元と同じ大きさなので、ラベルの大きさは変わらない。
-    /// ウィンドウにない間（ほかのタブ、上に重ねた画面の下）は、ウィンドウに入るまで待つ。
-    /// ストアは、読めなかったアニメーション版を読み直してよくなったときにも知らせ、求め直したラベルの分を読みに行くため（docs/network.md）。
-    /// 隠したビュー（折りたたんだ注意書きの下、使い回しを待つセル）は待たない。隠すのを解くときに知らせがないため、待つと、
-    /// 読み終えたアニメーション版も、次に文字列が替わるまで動かない。これらは、隠れたまま読み直しの知らせを受けると読みに行く。
+    /// ウィンドウにない間（ほかのタブ、モーダルビューの下）は、ウィンドウに入るまで待つ。
+    /// ストアは、読めなかったアニメーション版を再読み込みしてよくなったときにも知らせ、求め直したラベルの分を読みに行くため（docs/network.md）。
+    /// 隠したビュー（折りたたんだ注意書きの下、使い回しを待つセル）は待たない。隠すのを解くときに通知がないため、待つと、
+    /// 読み終えたアニメーション版も、次に文字列が替わるまで動かない。これらは、隠れたまま再読み込みの通知を受けると読みに行く。
     private func animatedEmojisDidChange() {
         guard window != nil else {
             needsAnimatedEmojiUpdate = true
@@ -437,7 +437,7 @@ class EmojiLabel: TextKitLabel {
     /// `index`の文字（並べた枠は`frame`）が、UILabelが末尾を「…」に置き換えた部分に入るかもしれないか。
     /// 「…」で切られていないときと、見える最後の行より上の文字はfalse。置き換えた部分の文字は描かれないので、動かす層を重ねない。
     /// 並べ直しでも最後の行を「…」で切るので、置き換わった文字はふつう並びから外れるが、絵文字の層が「…」の上に残ると目立つため、位置の分からない行はまとめて止める。
-    /// リンクの当たり判定には使わない。位置の分からない行で、見えているリンクまで押せなくなるため。
+    /// リンクの当たり判定には使わない。位置の分からない行で、見えているリンクまで選択できなくなるため。
     private func mayBeReplacedByEllipsis(_ frame: CGRect, at index: Int, in layout: TextLayout) -> Bool {
         guard let attributedText, isTruncatedWithEllipsis(), let lastLineMinY = lastVisibleLineMinY(in: layout), frame.midY >= lastLineMinY else { return false }
         return !staysBeforeEllipsis(frame, at: index, in: attributedText)
@@ -579,8 +579,8 @@ class EmojiLabel: TextKitLabel {
     }
 
     /// Unicodeの絵文字の枠。ラベルの座標で返す。「投稿の見た目」のプレビューで、絵文字の場所を示すのに使う。
-    /// 大きさを変えた印（`scaledUnicodeEmoji`）は1倍では付かないので、描くときと同じ判定で絵文字を探す。
-    /// 印から探すと、既定の1倍で絵文字が見つからず、示す範囲が名前の行や本文の全体に替わってしまうため。
+    /// 大きさを変えた属性（`scaledUnicodeEmoji`）は1倍では付かないので、描くときと同じ判定で絵文字を探す。
+    /// 属性から探すと、既定の1倍で絵文字が見つからず、示す範囲が名前の行や本文の全体に替わってしまうため。
     final func previewUnicodeEmojiFrames() -> [CGRect] {
         guard let attributedText, attributedText.length > 0 else { return [] }
         let layout = textLayout(of: attributedText)
@@ -618,8 +618,8 @@ class EmojiLabel: TextKitLabel {
         return frames
     }
 
-    /// 並べた行ごとの、行の枠と、段落の最初の行か、行の字下げ。ラベルの座標で返す。
-    /// 「投稿の見た目」のプレビューで、行間、段落のあいだ、字下げの場所を示すのに使う。
+    /// 並べた行ごとの、行の枠と、段落の最初の行か、行のインデント。ラベルの座標で返す。
+    /// 「投稿の見た目」のプレビューで、行間、段落のあいだ、インデントの場所を示すのに使う。
     final func previewLines() -> [(frame: CGRect, startsParagraph: Bool, indent: CGFloat)] {
         guard let attributedText, attributedText.length > 0 else { return [] }
         let layout = textLayout(of: attributedText)

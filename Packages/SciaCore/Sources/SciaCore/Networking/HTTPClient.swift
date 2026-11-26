@@ -5,9 +5,9 @@ import os
 ///
 /// - 目的（`RequestPurpose`）を名乗っていない通信は、送らずに`UndeclaredRequestPurpose`を投げる
 /// - 自動の通信（`RequestPurpose.isAutomatic`）は、止められている間は送らずに`AutomaticRequestsPaused`を投げる
-/// - 質を上げると先読みの通信は、目的に合わせて、低データモードやモバイル通信ではOSに送らせない
+/// - 質を上げるとプリフェッチの通信は、目的に合わせて、低データモードやモバイル通信ではOSに送らせない
 /// - 429や503が再開の時刻を示したら、その単位（`Scope`）の自動の通信を時刻まで止める
-/// - GETと`Idempotency-Key`付きは、一時的な失敗（502、504、再開の時刻のない503、通信の失敗）で、その場で送り直す
+/// - GETと`Idempotency-Key`付きは、一時的な失敗（502、504、再開の時刻のない503、通信の失敗）で、その場で再送する
 /// - 応答は、用途ごとに決めた大きさ（`ResponseLimit`）までしか読まない
 ///
 /// ストリーミングの接続は`StreamingClient`が、同じ門と分け方で開く。
@@ -30,7 +30,7 @@ public struct HTTPClient: Sendable {
 
     /// - Parameters:
     ///   - hosts: ホストごとに止める門。アプリで1つを共有する。
-    ///   - clock: 送り直すまで待つ。テストでは手で進める時計を渡す。
+    ///   - clock: 再送するまで待つ。テストでは手で進める時計を渡す。
     ///   - now: 応答の`X-RateLimit-Reset`のような再開の時刻を、待つ長さに直すための今の日付。
     public init(
         transport: any HTTPTransport,
@@ -48,8 +48,8 @@ public struct HTTPClient: Sendable {
 
     /// 本文を`limit`バイトまで読み、ステータスを問わず返す。2xx以外の本文を読む呼び出し（REST APIのエラーの理由など）が使う。
     /// - Parameters:
-    ///   - retries: falseなら、GETでも送り直さない。
-    ///   - beforeAttempt: 送るたび（送り直しを含む）の前に呼ぶ。投げたら送らない。
+    ///   - retries: falseなら、GETでも再送しない。
+    ///   - beforeAttempt: 送るたび（再送を含む）の前に呼ぶ。投げたら送らない。
     public func response(
         for request: URLRequest,
         limit: Int,
@@ -63,11 +63,11 @@ public struct HTTPClient: Sendable {
         let canRetry = allowsRetry && RetryPolicy.canRetry(request)
         var retries = 0
         while true {
-            // 送り直しを待っている間に、並行する別の呼び出しが止めていることがある。
+            // 再送を待っている間に、並行する別の呼び出しが止めていることがある。
             try await beforeAttempt()
             try await checkBeforeSending(gate, for: purpose)
             let reason: String
-            // 再開の時刻を示した429や503は、止める門がなくても（`/media_proxy`）、本文が途中で切れても、その場では送り直さない。
+            // 再開の時刻を示した429や503は、止める門がなくても（`/media_proxy`）、本文が途中で切れても、その場では再送しない。
             var toldToWait = false
             do {
                 let (body, response) = try await transport.open(request, limit: limit)
@@ -100,7 +100,7 @@ public struct HTTPClient: Sendable {
     }
 
     /// 応答の頭を受け取ったら返し、本文は届いた分から渡す。読むのをやめれば通信も止まる。範囲指定や、ページの頭だけを読むときに使う。
-    /// 本文が`limit`バイトを超えたら、列を`ResponseTooLarge`で終える。2xx以外は`HTTPStatusError`を投げる。読む途中でやめられるよう、送り直さない。
+    /// 本文が`limit`バイトを超えたら、列を`ResponseTooLarge`で終える。2xx以外は`HTTPStatusError`を投げる。読む途中でやめられるよう、再送しない。
     public func open(_ request: URLRequest, limit: Int, scope: Scope) async throws -> (HTTPResponseBody, HTTPURLResponse) {
         let purpose = try RequestPurpose.declared()
         let request = Self.restrictingNetworkAccess(of: request, for: purpose)
@@ -114,7 +114,7 @@ public struct HTTPClient: Sendable {
         return (body, response)
     }
 
-    /// 本文をファイルへ落とす。2xx以外は、落としたファイルを消して`HTTPStatusError`を投げる。大きいので送り直さない。
+    /// 本文をファイルへ落とす。2xx以外は、落としたファイルを消して`HTTPStatusError`を投げる。大きいので再送しない。
     public func download(
         _ request: URLRequest,
         limit: Int,

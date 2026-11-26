@@ -18,7 +18,7 @@ public enum SavedStatusesKind: Sendable, Hashable {
 
     /// このタイムラインに入る状態（ブックマークやお気に入り）か。
     /// 引用した投稿は、投稿の中身からは決めない。サーバーは、引用元の人をミュートかブロックしていると、認められた引用にもその状態（`muted_account`など）を返すので、
-    /// 引用の状態で外れたとみなすと、取り消していない行まで消すため。取り消した引用は、`SavedStatusesModel.quoteWasRevoked(by:)`で知らせを受けて除く。
+    /// 引用の状態で外れたとみなすと、取り消していない行まで消すため。取り消した引用は、`SavedStatusesModel.quoteWasRevoked(by:)`の呼び出しを受けて除く。
     public func isSaved(_ status: Status) -> Bool {
         switch self {
         case .bookmarks: status.bookmarked
@@ -87,7 +87,7 @@ public final class SavedStatusesStore {
     private var settledUnsavedIDs: Set<Status.ID> = []
     /// 読み込み中のギャップのID。
     public private(set) var loadingGapIDs: Set<String> = []
-    /// 直近の読み込みに失敗したギャップと、その理由。読み直し始めたら外す。
+    /// 直近の読み込みに失敗したギャップと、その理由。再読み込みを始めたら外す。
     private var failedGaps: [String: ErrorPresentation] = [:]
     private let fetch: Fetch
 
@@ -148,7 +148,7 @@ public final class SavedStatusesStore {
     ///
     /// 重なりは、サーバーのページで読んだ手元の行で探す。その行がページに1つもなく、ページの先がまだあれば、手元との間が埋まらないので、
     /// 読んだページを先頭に足し、手元との間にギャップを置く。手元を置き換えると、下まで読んでいた位置を失うため。
-    /// 手元の先頭にギャップが残っていれば（前の読み直しで、上に並べる行がなかった）、その間は新しいギャップに含まれるので、新しいギャップ1つにまとめる。
+    /// 手元の先頭にギャップが残っていれば（前の再読み込みで、上に並べる行がなかった）、その間は新しいギャップに含まれるので、新しいギャップ1つにまとめる。
     /// ページの先がなければ、手元の行はもうサーバーの並びにないので、タイムラインを読んだページで置き換える。サーバーのページで読んだ行が手元に1つもないときも置き換える。
     /// 先頭の行は外したまま残した行のことがあり、サーバーの並びにはないため、先頭に限らず探す。
     /// 重なりより前にある、アプリの中で先頭に入れた行は、サーバーの順の位置へ移す。

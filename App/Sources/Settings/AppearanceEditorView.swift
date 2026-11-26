@@ -3,11 +3,11 @@ import SwiftUI
 import UIKit
 
 /// 「投稿の見た目」。上にプレビューを固定し、下に投稿の部品ごとの分類を、投稿の上から下への並びで置く。
-/// 分類を押すと、その分類の画面（`AppearanceGroupEditorView`）を重ねる。決まりはdocs/appearance.mdにある。
+/// 分類を選択すると、その分類の画面（`AppearanceGroupEditorView`）をプッシュする。決まりはdocs/appearance.mdにある。
 struct AppearanceEditorView: View {
     @Bindable var settings: AppSettings
     @State private var samples: AppearanceSamples
-    /// 開いたときに重ねておく分類の画面。
+    /// 開いたときにプッシュしておく分類の画面。
     @State private var opened: AppearanceGroup.ID?
     @State private var confirmsReset = false
     /// すべて既定に戻した回数。戻すと値がまとめて変わるので、プレビューの高さを合わせ直す。
@@ -181,7 +181,7 @@ struct AppearanceGroupEditorView: View {
     private func choiceRow(_ choice: AppearanceChoice) -> some View {
         switch choice.control {
         case .toggle(let keyPath):
-            // スイッチは押すとすぐ切り替わるので、切り替えたときに触っている項目にする。メニューで選ぶ項目は、メニューを開いたときにする。
+            // スイッチは選択するとすぐ切り替わるので、切り替えたときに触っている項目にする。メニューで選ぶ項目は、メニューを開いたときにする。
             let isOn = Binding {
                 settings[keyPath: keyPath]
             } set: { newValue in
@@ -231,7 +231,7 @@ extension AppearanceFocus {
     }
 }
 
-/// 部品の見出し。既定値から変えた項目があれば、印を添える。
+/// 部品の見出し。既定値から変えた項目があれば、インジケーターを添える。
 struct GroupLabel: View {
     let title: String
     let isModified: Bool
@@ -466,7 +466,7 @@ final class AppearanceSamples {
     }
 
     /// 見本の行の中身。タイムラインに並べたときと同じく、返信でつながった隣の行と線でつなぐ。テストで、見本の部品の位置を測るのに使う。
-    /// - Parameter revision: 描き直しのきっかけ。中身は使わない。
+    /// - Parameter revision: 再描画のきっかけ。中身は使わない。
     func configurations(colorScheme: ColorScheme, revision _: Int, groups: Set<AppearanceGroup.ID>? = nil, focus: AppearanceFocus? = nil) -> [PostContentConfiguration] {
         let entries = entries(colorScheme: colorScheme, groups: groups, focus: focus)
         let connections = ReplyConnection.connections(in: entries)

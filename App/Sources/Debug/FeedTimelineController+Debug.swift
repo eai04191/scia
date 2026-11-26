@@ -166,7 +166,7 @@ extension FeedTimelineController {
     }
 
     /// 投票の付いたダミーの投稿を、新着と同じ経路で流す。複数選べない投票、複数選べる投票、締め切るまで票数を隠す投票、締め切った投票の4件。
-    /// 投票と読み直しは通信せず、`DummyPolls`が答える。
+    /// 投票と再読み込みは通信せず、`DummyPolls`が答える。
     private func streamDummyPolls() {
         let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
         func poll(_ key: String, multiple: Bool = false, expiresIn: TimeInterval = 86_400, options: [(String, Int?)], votesCount: Int? = nil, votersCount: Int? = nil) -> Poll {
@@ -209,7 +209,7 @@ extension FeedTimelineController {
     }
 
     /// 引用のあるダミーの投稿を、新着と同じ経路で流す。引用元に画像と入れ子の引用、引用元に注意書き、承認待ち、ミュートしている人の4件。
-    /// 引用元もサーバーにないため、囲みを押して開くスレッドは読み込めずに失敗する。
+    /// 引用元もサーバーにないため、カードを選択して開くスレッドは読み込めずに失敗する。
     private func streamDummyQuotes() {
         let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
         let quotedAccount = Account(id: "dummy-quoted", username: "quoted", acct: "quoted", displayName: "ダミー（引用元）", avatar: avatar)
@@ -297,7 +297,7 @@ extension FeedTimelineController {
     }
 
     /// Xの投稿へのリンクだけのダミーの投稿を流し、`dummyLinkCardDelay`のあとに、fxtwitterに頼まずに4枚の画像付きで、ほかの投稿を引用したXの投稿を届ける。
-    /// リンクカードから囲みに替わるときの動きを、何度でも同じ条件で確かめるため。囲みは、チューニングで出すようにしているときだけ出る。
+    /// リンクカードからカードに替わるときの動きを、何度でも同じ条件で確かめるため。カードは、チューニングで出すようにしているときだけ出る。
     private func streamDummyXPost() {
         let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
         let base = Self.dummyStatus(number: 1, avatar: avatar, now: model.now())
@@ -337,7 +337,7 @@ extension FeedTimelineController {
     }
 
     /// 注意書きのある3件を流す。4枚の画像、画像のないXの投稿、4枚の画像付きのXの投稿。Xの投稿は流す前に届けておく。
-    /// 中身の違う投稿で、注意書きを開閉する動きを見比べるため。Xの投稿の囲みは、設定で展開をオンにしているときだけ出る。
+    /// 中身の違う投稿で、注意書きを開閉する動きを見比べるため。Xの投稿のカードは、設定で展開をオンにしているときだけ出る。
     private func streamDummySpoilers() {
         let avatar = model.debugStore.statuses.first?.account.avatar ?? client.credential.instance
         let now = model.now()
@@ -458,7 +458,7 @@ extension FeedTimelineController {
         }
     }
 
-    /// 補完で続けて読む上限より多い数の最新の投稿を忘れてからつなぎ直し、実データで補完とギャップを起こす。
+    /// 補完で続けて読む上限より多い数の最新の投稿を忘れてから再接続し、実データで補完とギャップを起こす。
     /// 補完の基準が残るよう、先に古いページを読み足し、少なくとも1件は残す。読み足しは接続を止める前に行い、失敗しても接続は止めない。
     private func simulateMissedWhileDisconnected() {
         let targetCount = FeedTimelineModel.pageSize * Int(tuning.value(of: TuningCatalog.fillPageLimit)) + 10

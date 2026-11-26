@@ -15,7 +15,7 @@ struct StreamingURLTests {
                 username: "alice"
             ),
             transport: transport,
-            // v2とv1の切り替えを確かめる。一時的な失敗の送り直しはRetryTestsで確かめる。
+            // v2とv1の切り替えを確かめる。一時的な失敗の再送はRetryTestsで確かめる。
             retry: RetryPolicy(maxRetries: 0, initialDelay: .zero)
         )
     }
@@ -72,7 +72,7 @@ struct StreamingURLTests {
         #expect(try await makeClient(transport).streamingURL().absoluteString == "wss://v1.example.social")
     }
 
-    /// 通信の失敗などで読めなかったときは覚えず、次につなぐときに調べ直す。v2が404でなければ、v1は読まない。
+    /// 通信の失敗などで読めなかったときはキャッシュせず、次につなぐときに調べ直す。v2が404でなければ、v1は読まない。
     @Test func retriesAfterFailure() async throws {
         let transport = StubTransport([
             .json("<html>Bad Gateway</html>", statusCode: 502),

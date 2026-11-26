@@ -3,7 +3,7 @@ import os
 
 /// 保留中の通知のリストの読み込みと、受け入れと無視の通信を受け持ち、結果を画面（`TimelineDisplay`）へ命令として伝える。決まりはdocs/notification-filter.mdにある。
 ///
-/// ストリームがないため購読せず、開いたときと、引っぱって読み直したときに読む。
+/// ストリームがないため購読せず、開いたときと、pull to refreshしたときに読む。
 @MainActor
 public final class NotificationRequestsModel {
     /// 1回に読む件数。APIの上限は80件。
@@ -11,18 +11,18 @@ public final class NotificationRequestsModel {
 
     /// 結果を伝える画面。
     public weak var display: (any TimelineDisplay)?
-    /// 受け入れか無視に失敗したときに呼ぶ。知らせ方は作る側が決める。
+    /// 受け入れか無視に失敗したときに呼ぶ。どう伝えるかは作る側が決める。
     public var onFailure: (NotificationRequestDecision, ErrorPresentation) -> Void = { _, _ in }
-    /// 受け入れか無視が済んだときに呼ぶ。保留の人数の読み直しと、受け入れた通知の取り込みを待つのに使う。
+    /// 受け入れか無視が済んだときに呼ぶ。保留の人数の再読み込みと、受け入れた通知の取り込みを待つのに使う。
     public var onAnswered: (NotificationRequestDecision) -> Void = { _ in }
     /// サーバーが返す順。
     public private(set) var requests: [NotificationRequest] = []
     private var reachedEnd = false
     private var isLoading = false
     private var nextMaxID: String?
-    /// 答えを送っている途中のまとまり。重ねて送らない。
+    /// 答えを送っている途中のグループ。重ねて送らない。
     private var answeringIDs: Set<String> = []
-    /// 答えたまとまり。答える前に送った読み込みの応答に入っていても、並べ直さない。
+    /// 答えたグループ。答える前に送った読み込みの応答に入っていても、並べ直さない。
     private var answeredIDs: Set<String> = []
     private let client: MastodonClient
     /// このリストが始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
@@ -36,7 +36,7 @@ public final class NotificationRequestsModel {
         self.tasks = tasks
     }
 
-    /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。
+    /// - Parameter purpose: 使う人が開いたり再試行を選択したりしたときは`.action`。
     @discardableResult
     public func start(purpose: RequestPurpose) -> Task<Void, Never>? {
         display?.setContentState(.loading)
@@ -51,7 +51,7 @@ public final class NotificationRequestsModel {
         }
     }
 
-    /// 引っぱって離したときに、最初のページから読み直して置き換える。読めなかったら前のリストのまま残す。
+    /// pull to refreshしたときに、最初のページから再読み込みして置き換える。読めなかったら前のリストのまま残す。
     public func refresh() async {
         if requests.isEmpty {
             await start(purpose: .action)?.value
@@ -72,7 +72,7 @@ public final class NotificationRequestsModel {
         loadOlder(purpose: .display)
     }
 
-    /// 失敗の表示の再試行が押されたときに呼ぶ。
+    /// 失敗の表示の再試行が選択されたときに呼ぶ。
     public func retry() {
         if requests.isEmpty {
             start(purpose: .action)
@@ -129,7 +129,7 @@ public final class NotificationRequestsModel {
     // MARK: - 答える
 
     /// 受け入れるか無視する。確かめずにすぐ送る。済んだら行を消す。済んだかは、終えてから`isAnswered(_:)`で分かる。
-    /// 送っている途中のまとまりには、重ねて送らずnilを返す。
+    /// 送っている途中のグループには、重ねて送らずnilを返す。
     @discardableResult
     public func answer(_ request: NotificationRequest, _ decision: NotificationRequestDecision) -> Task<Void, Never>? {
         guard !answeringIDs.contains(request.id), !answeredIDs.contains(request.id) else { return nil }
@@ -160,7 +160,7 @@ public final class NotificationRequestsModel {
         return task
     }
 
-    /// 受け入れたか無視したまとまりか。
+    /// 受け入れたか無視したグループか。
     public func isAnswered(_ id: NotificationRequest.ID) -> Bool {
         answeredIDs.contains(id)
     }
@@ -208,7 +208,7 @@ public final class AccountNotificationsModel {
         }
     }
 
-    /// 引っぱって離したときに、最新のページから読み直して置き換える。読めなかったら前の通知のまま残す。
+    /// pull to refreshしたときに、最新のページから再読み込みして置き換える。読めなかったら前の通知のまま残す。
     public func refresh() async {
         if store.isEmpty {
             await start(purpose: .action)?.value

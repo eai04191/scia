@@ -51,7 +51,7 @@ final class ProfileTabLoadingViewController: UIViewController {
         view.backgroundColor = .systemBackground
     }
 
-    /// アカウントを読み始める。読めなかったときは読み直し、読めていたら`onAccount`にもう一度渡す。読んでいる途中なら何もしない。
+    /// アカウントを読み始める。読めなかったときは再読み込みし、読めていたら`onAccount`にもう一度渡す。読んでいる途中なら何もしない。
     func loadAccount() {
         switch state {
         case .idle, .failed:
@@ -63,7 +63,7 @@ final class ProfileTabLoadingViewController: UIViewController {
         }
     }
 
-    /// 読めていたら、プロフィール画面に差し替えさせる。並びに出たときに読めなかったら、初めて開いたときに読み直す。
+    /// 読めていたら、プロフィール画面に差し替えさせる。並びに出たときに読めなかったら、初めて開いたときに再読み込みする。
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
         let isFirst = !hasAppeared

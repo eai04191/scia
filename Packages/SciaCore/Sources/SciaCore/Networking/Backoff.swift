@@ -1,4 +1,4 @@
-/// 失敗が続くたびに、次に試すまでの長さを倍にし、上限で止める。送り直し、つなぎ直し、読み直しのどれも、この決まりで間隔を決める。
+/// 失敗が続くたびに、次に試すまでの長さを倍にし、上限で止める。再送、再接続、再読み込みのどれも、この決まりで間隔を決める。
 public struct Backoff: Sendable {
     /// 1回目の失敗のあとに待つ長さ。
     public var initial: Duration
@@ -32,7 +32,7 @@ public struct Backoff: Sendable {
     }
 }
 
-/// 待つ長さに、乱数で幅を持たせる。サーバーが戻った直後に、つなぎ直しや読み直しが同じ時刻に重ならないようにする。
+/// 待つ長さに、乱数で幅を持たせる。サーバーが戻った直後に、再接続や再読み込みが同じ時刻に重ならないようにする。
 public struct Jitter: Sendable {
     /// 長さを、1からこの割合だけ上下に散らす。0.2なら0.8倍から1.2倍。
     public var spread: Double
@@ -46,7 +46,7 @@ public struct Jitter: Sendable {
 
     /// 散らさない。テストで間隔をそのまま確かめるときに使う。
     public static let none = Jitter(spread: 0) { 0.5 }
-    /// 送り直し、つなぎ直し、読み直しの既定。2割ずつ散らせば、同じ間隔で失敗した処理どうしが、次も同じ時刻に重なることはまずない。
+    /// 再送、再接続、再読み込みの既定。2割ずつ散らせば、同じ間隔で失敗した処理どうしが、次も同じ時刻に重なることはまずない。
     public static let standard = Jitter(spread: 0.2)
 
     func apply(to delay: Duration) -> Duration {

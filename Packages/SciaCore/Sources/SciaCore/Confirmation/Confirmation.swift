@@ -1,7 +1,7 @@
 public import Foundation
 
 /// 操作の前に使う人に確かめる中身。題、説明、ボタンを持ち、描く側がアラートやアクションシートにする。
-/// `Choice`は、押されたボタンが選んだもの。キャンセルのボタンは、閉じたときに片付けるものがなければ選ばない。
+/// `Choice`は、選択されたボタンが選んだもの。キャンセルのボタンは、閉じたときに片付けるものがなければ選ばない。
 public struct Confirmation<Choice: Hashable & Sendable>: Equatable, Sendable {
     public enum Role: Sendable {
         case cancel
@@ -12,7 +12,7 @@ public struct Confirmation<Choice: Hashable & Sendable>: Equatable, Sendable {
     public struct Button: Equatable, Sendable {
         public let title: String
         public let role: Role
-        /// 押したときに選ぶもの。選ばずに閉じるボタンではnil。
+        /// 選択したときに選ぶもの。選ばずに閉じるボタンではnil。
         public let choice: Choice?
 
         public init(_ title: String, role: Role, choice: Choice?) {
@@ -38,7 +38,7 @@ public struct Confirmation<Choice: Hashable & Sendable>: Equatable, Sendable {
     }
 }
 
-/// 確かめるボタンが1つだけの確認で、押されたことを表す。
+/// 確かめるボタンが1つだけの確認で、選択されたことを表す。
 public enum Proceed: Hashable, Sendable {
     case proceed
 }
@@ -134,7 +134,7 @@ extension Confirmation where Choice == Proceed {
 
     // MARK: - ユーザーとの関係
 
-    /// フォローを外す、リクエストを取り消す、ブロックは、押し間違えに備えて確かめる。フォローとミュートなどは確かめない（nil）。
+    /// フォローを外す、リクエストを取り消す、ブロックは、誤って選択したときに備えて確かめる。フォローとミュートなどは確かめない（nil）。
     /// ユーザーのメニューとプロフィールのフォローのボタンで同じ文言を使う。
     /// - Parameter endorsed: 相手を自分のプロフィールで紹介している。サーバーはフォローを外すと紹介も消すので、フォローを外すときに添える。
     /// - Parameter actor: 「別のアカウントで」で、ほかのアカウントとして行うときの、そのアカウントの名前（`@username`）。見出しの初めに「@usernameで」と入れる。
@@ -201,12 +201,12 @@ extension Confirmation where Choice == Proceed {
 
     /// 書きかけの投稿欄で`start`を始める前に、そのまま進むか、確かめるか、断るかを決める。
     /// 始める操作と下書きの状態の組み合わせは、ここだけで決める。画面は結果に従い、投稿欄のモデルの入口（`setReplyTarget`や`beginEditing`など）は、
-    /// ここで進むと決めたものを受け付ける。別々に決めると、確かめずに進めたのにモデルが受け付けず、押しても何も起きなくなるため。
+    /// ここで進むと決めたものを受け付ける。別々に決めると、確かめずに進めたのにモデルが受け付けず、選択しても何も起きなくなるため。
     /// 共有されたもので書き始めるときは、下書きに足すかも選ぶので、`shared(_:draft:)`で決める。
     /// - Parameter now: 編集で、投票の締め切りまでの残りを見る今の日付。
     @MainActor
     public static func starting<Thumbnail>(_ start: ComposeStart, draft: ComposeModel<Thumbnail>, now: Date) -> ComposeStartDecision {
-        // 送っている間は、失敗したときに送り直せるよう下書きを残すので、どれも始められない。
+        // 送っている間は、失敗したときに再送できるよう下書きを残すので、どれも始められない。
         // 待てば済むので、アラートで操作を止めず、チップで伝える。
         guard !draft.isPosting else { return .waitUntilPosted }
         switch start {
@@ -250,7 +250,7 @@ extension Confirmation where Choice == Proceed {
         return .destructive(title: "書き直しをやめて\(starting)しますか？", message: discardedDraftMessage(draft), action: "書き直しをやめる")
     }
 
-    /// 削除して書き直している途中でラベルの×を押したとき、元の投稿を削除した（かもしれない）なら、捨ててよいか確かめる。
+    /// 削除して書き直している途中でラベルの×を選択したとき、元の投稿を削除した（かもしれない）なら、捨ててよいか確かめる。
     /// 削除する前は、元の投稿が残るので確かめない（nil）。
     @MainActor
     public static func discardingRedraft<Thumbnail>(draft: ComposeModel<Thumbnail>) -> Confirmation? {
@@ -315,7 +315,7 @@ extension Confirmation where Choice == Proceed {
 
     /// 書きかけの下書きがあれば捨ててよいかを、投票の付いた投稿なら締め切りがずれることを、確かめてから編集を始める。
     /// 投票の締め切りが近くて編集できなければ、そのことを知らせる。
-    /// 押されたあとも、聞いている間に締め切りが近づいていないかを`Status.canBeEdited(now:)`で確かめ直し、近づいていれば`RefusalText.cannotEdit`を知らせる。
+    /// 選択されたあとも、聞いている間に締め切りが近づいていないかを`Status.canBeEdited(now:)`で確かめ直し、近づいていれば`RefusalText.cannotEdit`を知らせる。
     /// - Parameter actor: ほかのアカウントとして編集するときの、そのアカウントの`@username`。見出しの初めに「〜で」と入れる。
     @MainActor
     private static func editing<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>, now: Date, actor: String?) -> ConfirmationDecision<Proceed> {
@@ -442,7 +442,7 @@ extension RefusalText {
         }
     }
 
-    /// 読み直して確かめたら、引用できない投稿だったとき。
+    /// 再読み込みして確かめたら、引用できない投稿だったとき。
     /// - Parameter followersOnly: フォロワーだけが引用できる投稿。そうでなければ、投稿者が引用を許していない。
     public static func quoteDenied(followersOnly: Bool) -> RefusalText {
         RefusalText(title: "この投稿は引用できません", message: followersOnly ? "フォロワーだけが引用できる投稿です。" : "投稿者が引用を許していない投稿です。")
@@ -450,7 +450,7 @@ extension RefusalText {
 }
 
 extension FollowState {
-    /// プロフィールのフォローのボタンを押したときに送る変更。フォローしていなければフォローし、
+    /// プロフィールのフォローのボタンを選択したときに送る変更。フォローしていなければフォローし、
     /// フォローしているか承認を待っていれば、外すか取り消す。ボタンを出さない状態ではnil。
     public var toggleChange: UserRelationChange? {
         switch self {

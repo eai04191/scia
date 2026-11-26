@@ -1,6 +1,6 @@
 public import Foundation
 
-/// 絵文字のシートに並べる絵文字。サーバーのカスタム絵文字か、Unicodeの絵文字。
+/// 絵文字ピッカーに並べる絵文字。サーバーのカスタム絵文字か、Unicodeの絵文字。
 public enum PaletteEmoji: Hashable, Sendable {
     case custom(ServerEmoji)
     case standard(StandardEmoji)
@@ -15,7 +15,7 @@ public enum PaletteEmoji: Hashable, Sendable {
     }
 }
 
-/// 投稿欄の絵文字のパレットに並べる、絵文字のまとまり。
+/// 投稿欄の絵文字のパレットに並べる、絵文字のグループ。
 public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
     public enum Kind: Hashable, Sendable {
         case recent
@@ -24,14 +24,14 @@ public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
         /// カテゴリーの付いていない絵文字。
         case uncategorized
         case category(String)
-        /// Unicodeの絵文字のまとまり。名前を持つ。
+        /// Unicodeの絵文字のグループ。名前を持つ。
         case standard(String)
-        /// 検索の結果。パレットで検索している間だけ、ほかのまとまりの代わりに出す。
+        /// 検索の結果。パレットで検索している間だけ、ほかのグループの代わりに出す。
         case searchResults
-        /// カスタム絵文字のリストを読んでいる間か、読めなかったとき、カスタム絵文字のまとまりの場所に置く状態の段。絵文字は持たない。
+        /// カスタム絵文字のリストを読んでいる間か、読めなかったとき、カスタム絵文字のグループの場所に置く状態の段。絵文字は持たない。
         case customEmojiStatus
 
-        /// まとまりの見出し。
+        /// グループの見出し。
         public var title: String {
             switch self {
             case .recent: "最近使った絵文字"
@@ -47,7 +47,7 @@ public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
 
     public let kind: Kind
     public let emojis: [PaletteEmoji]
-    /// 個人セットのカテゴリーの見出し。まとまりのボタンのアイコンにする。ほかのまとまりではnil。
+    /// 個人セットのカテゴリーの見出し。グループのボタンのアイコンにする。ほかのグループではnil。
     public let heading: PersonalEmojiSet.Heading?
     public var id: Kind { kind }
 
@@ -60,11 +60,11 @@ public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
 
 /// パレットに並べるものを決める。
 public enum EmojiPalette {
-    /// 最近使ったもの、個人セットのカテゴリーごと（サーバーが返す順）、カテゴリーのないもの、カテゴリーごと（名前の順）、Unicodeの絵文字のまとまりの順に分ける。
-    /// 最近使ったものは新しい順、個人セットの中はサーバーが返す順、カスタム絵文字のまとまりの中はショートコードを小文字にそろえて比べた順、Unicodeの絵文字はデータの順。
+    /// 最近使ったもの、個人セットのカテゴリーごと（サーバーが返す順）、カテゴリーのないもの、カテゴリーごと（名前の順）、Unicodeの絵文字のグループの順に分ける。
+    /// 最近使ったものは新しい順、個人セットの中はサーバーが返す順、カスタム絵文字のグループの中はショートコードを小文字にそろえて比べた順、Unicodeの絵文字はデータの順。
     /// ピッカーに出さないカスタム絵文字は除く。個人セットには、ピッカーに出さないカスタム絵文字も、肌の色を付けたUnicodeの絵文字も入るので、そのまま並べる。
-    /// 最近使ったもののうち、サーバーの絵文字のリストにも、Unicodeの絵文字のリストにも、個人セットにもないものは除く。空のまとまりは作らない。
-    /// カスタム絵文字を先に置くのは、サーバーにしかない絵文字を探しに来ることが多いため。カテゴリーのないものを先にすることと、まとまりの中の順は、Mastodonのweb UIと同じ。
+    /// 最近使ったもののうち、サーバーの絵文字のリストにも、Unicodeの絵文字のリストにも、個人セットにもないものは除く。空のグループは作らない。
+    /// カスタム絵文字を先に置くのは、サーバーにしかない絵文字を探しに来ることが多いため。カテゴリーのないものを先にすることと、グループの中の順は、Mastodonのweb UIと同じ。
     public static func sections(emojis: [ServerEmoji], personal: PersonalEmojiSet? = nil, standardGroups: [StandardEmojiGroup], recentKeys: [String], recentLimit: Int) -> [EmojiPaletteSection] {
         let visible = emojis.filter(\.visibleInPicker).sorted { $0.shortcode.lowercased() < $1.shortcode.lowercased() }
         var byKey: [String: PaletteEmoji] = [:]
@@ -85,7 +85,7 @@ public enum EmojiPalette {
             }
             return toned?[key]
         }
-        // Unicodeの絵文字のリストにある絵文字は、そのリストのものにそろえる。同じ絵文字が、個人セットとUnicodeの絵文字のまとまりとで別のものにならないようにするため。
+        // Unicodeの絵文字のリストにある絵文字は、そのリストのものにそろえる。同じ絵文字が、個人セットとUnicodeの絵文字のグループとで別のものにならないようにするため。
         // カスタム絵文字は、個人セットの応答の画像のまま並べる。端末に残した古いリストの画像に替えないため。
         let personalCategories = (personal?.categories ?? []).map { category in
             (category, category.entries.map { entry in
@@ -93,7 +93,7 @@ public enum EmojiPalette {
                 return listed
             })
         }
-        // 最近使ったものでも、個人セットのカスタム絵文字は個人セットの応答の画像で出す。同じ絵文字が、まとまりによって別の画像にならないようにするため。
+        // 最近使ったものでも、個人セットのカスタム絵文字は個人セットの応答の画像で出す。同じ絵文字が、グループによって別の画像にならないようにするため。
         for (_, emojis) in personalCategories {
             for emoji in emojis {
                 if case .custom = emoji {
@@ -111,7 +111,7 @@ public enum EmojiPalette {
         }
         var personalIDs: Set<String> = []
         for (category, emojis) in personalCategories where !emojis.isEmpty && personalIDs.insert(category.id).inserted {
-            // 見出しの絵文字も、まとまりの中の絵文字と同じものにそろえる。
+            // 見出しの絵文字も、グループの中の絵文字と同じものにそろえる。
             let heading: PersonalEmojiSet.Heading = if case .emoji(let emoji) = category.heading, let listed = emojis.first(where: { $0.recentKey == emoji.recentKey }) {
                 .emoji(listed)
             } else {

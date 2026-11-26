@@ -3,7 +3,7 @@ import UIKit
 
 extension TimelineViewController {
     /// プロフィールの表示名、自己紹介、補足情報の行を長押ししたときのメニュー。決まりはdocs/menus.mdの「プロフィールの文章のメニュー」にある。
-    /// 見出しは置かない。押した文章を持ち上げて見せるため。出す項目がなければnil。
+    /// 見出しは置かない。長押しした文章を持ち上げて見せるため。出す項目がなければnil。
     /// - Parameter omitting: その文章では使わないため、並びの設定によらず出さない項目。
     func profileTextMenu(for text: ProfileText, omitting: Set<ProfileTextMenuItem> = []) -> UIMenu? {
         let children = settings.profileTextMenuLayout.groups.menuElements { item in
@@ -48,7 +48,7 @@ extension TimelineViewController {
 
 /// プロフィールの表示名、自己紹介、補足情報の行に付ける、文章のメニューの長押し。
 /// リンク、メンション、ハッシュタグの上は、手前に重ねた`LinkHitArea`が長押しを受け、その行き先のメニューを出す。
-/// 押した文章のビューを、余白を付けて今の見た目のまま持ち上げる。
+/// 長押しした文章のビューを、余白を付けて今の見た目のまま持ち上げる。
 @MainActor
 final class ProfileTextMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     private weak var view: UIView?

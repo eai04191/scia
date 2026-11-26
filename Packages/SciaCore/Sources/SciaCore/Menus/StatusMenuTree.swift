@@ -10,7 +10,7 @@ public enum StatusAction: Sendable {
     case bookmark
     /// 投稿欄で投稿を引用して書き始める。
     case quote
-    /// 絵文字のシートを開き、選んだ絵文字で投稿にリアクションする。
+    /// 絵文字ピッカーを開き、選んだ絵文字で投稿にリアクションする。
     case react
     case muteConversation
     case pin
@@ -29,7 +29,7 @@ public enum StatusAction: Sendable {
     case delete
     /// 投稿欄に戻して書き直し、送るときに元の投稿を削除する。
     case redraft
-    /// 投稿をサーバーから読み直し、APIの応答のJSONを出す。
+    /// 投稿をサーバーから再読み込みし、APIの応答のJSONを出す。
     case viewAPIResponse
 }
 
@@ -45,7 +45,7 @@ public enum FollowRequestDecision: Sendable {
     case reject
 }
 
-/// 投稿のメニューの項目を押したときの操作。対象の投稿や通知は、メニューを出した場所が知っている。
+/// 投稿のメニューの項目を選択したときの操作。対象の投稿や通知は、メニューを出した場所が知っている。
 public enum StatusMenuCommand {
     /// 投稿への操作。サーバーに送るものと、画面を開くもの。
     case status(StatusAction)
@@ -98,14 +98,14 @@ public struct OtherAccountCommand {
 }
 
 /// 投稿のメニュー。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
-/// 項目ごとの出す条件、名前とアイコンの切り替え、押せない理由はここだけが知る。画面の状態に頼る条件（スレッドを開けるか、ぼかしているか、本文を選べるか）は、メニューを出す場所が渡す。
+/// 項目ごとの出す条件、名前とアイコンの切り替え、無効にする理由はここだけが知る。画面の状態に頼る条件（スレッドを開けるか、ぼかしているか、本文を選べるか）は、メニューを出す場所が渡す。
 @MainActor
 public struct StatusMenuTree {
     /// メニューを出した要素の投稿。通知なら対象の投稿。投稿のない通知ではnil。
     public let status: Status?
     /// 通知のメニューなら、その通知。
     public let notification: MastodonNotification?
-    /// メニューを出した行の投稿。通報に添える投稿を、この投稿から決める。引用の囲みのメニューでは、囲みの投稿ではなく行の投稿になる。
+    /// メニューを出した行の投稿。通報に添える投稿を、この投稿から決める。引用のカードのメニューでは、カードの投稿ではなく行の投稿になる。
     public var rowStatus: Status?
     /// 自分のアカウントのID。分からないタイムラインではnilで、自分の投稿でだけ出る項目と、ブーストに関わる項目を出さない。
     public var myAccountID: String?
@@ -123,7 +123,7 @@ public struct StatusMenuTree {
     public var translationDisplay: TranslationDisplay?
     /// タイムラインで投稿を選び始められるか。投稿を選べるタイムラインの行でだけ選べる。
     public var canSelectPosts = false
-    /// サーバーの、Mastodonにない機能の有無。絵文字のリアクションと引用の項目を、出すか、押せるかを決める。
+    /// サーバーの、Mastodonにない機能の有無。絵文字のリアクションと引用の項目を、出すか、有効にするかを決める。
     public var capabilities = ServerCapabilities.mastodon
     /// ログインしているサーバーのカスタム絵文字を、ショートコードで引くもの。リアクションに画像のURLを付けないサーバーで、行に出している画像と同じ絵文字を「カスタム絵文字」に並べるのに使う。
     public var localReactionEmojis: [String: CustomEmoji] = [:]
@@ -165,15 +165,15 @@ public struct StatusMenuTree {
     /// 組んだメニュー。出す項目がなければ`root`はnil。
     public struct Built {
         public let root: MenuNode<StatusMenuCommand>?
-        /// ユーザーのメニューを出した人のID。メニューを開いたときに、関係をまとめて1回で読み直す。
+        /// ユーザーのメニューを出した人のID。メニューを開いたときに、関係をまとめて1回で再読み込みする。
         public let shownUserIDs: [String]
         /// 「別のアカウントで」を組んだか。組んだときだけ、前に見つけた投稿を探し直す。
         public let showsOtherAccounts: Bool
-        /// 「別のアカウントで」の中で、そのアカウントから見た投稿に、関係の項目を出す人のID。探し直したあとに、関係をまとめて読み直す。
+        /// 「別のアカウントで」の中で、そのアカウントから見た投稿に、関係の項目を出す人のID。探し直したあとに、関係をまとめて再読み込みする。
         public let otherAccountRelationIDs: @MainActor (_ found: Status, OtherAccount) -> [String]
         /// 「別のアカウントで」の中で、見つけた投稿のほかに出す人（ブーストした人、通知した人）。探し直すときに、まだ見つけていない人をそのサーバーで探す。
         public let otherAccountPeople: [Account]
-        /// ユーザーのメニューの「別のアカウントで」の、ほかのアカウントのアイコンと、前に見つけた人との関係を読み直す。メニューを開くときに呼ぶ。
+        /// ユーザーのメニューの「別のアカウントで」の、ほかのアカウントのアイコンと、前に見つけた人との関係を再読み込みする。メニューを開くときに呼ぶ。
         public let refreshOtherAccountUsers: @MainActor () -> Void
     }
 
@@ -216,7 +216,7 @@ public struct StatusMenuTree {
         )
     }
 
-    /// 保留中の通知の行のメニュー。「受け入れる」と「無視」を1つのまとまりで置き、その下にその人のユーザーのメニューを並べる。
+    /// 保留中の通知の行のメニュー。「受け入れる」と「無視」を1つのグループで置き、その下にその人のユーザーのメニューを並べる。
     /// 2つは並びの設定に載せない固定の項目。決まりはdocs/notification-filter.mdにある。
     /// - Parameter user: その人のユーザーのメニュー。出す項目がなければnil。
     public static func notificationRequestMenu(user: MenuNode<StatusMenuCommand>?) -> MenuNode<StatusMenuCommand> {
@@ -280,7 +280,7 @@ public struct StatusMenuTree {
         let shown = status.displayed
         let icon = MenuIcon.symbol(item.symbolName)
         if let action = item.urlAction {
-            // `url`はMastodonのAPIでnullを取りうるため、ないときは押せないまま並べる。`uri`はActivityPubのIDで、ブラウザで開けるページとは限らないため代わりにしない。
+            // `url`はMastodonのAPIでnullを取りうるため、ないときは無効のまま並べる。`uri`はActivityPubのIDで、ブラウザで開けるページとは限らないため代わりにしない。
             // ブーストなら元の投稿のページを指す。
             return action.node(url: shown.url, linkBrowser: linkBrowser).map(StatusMenuCommand.url)
         }
@@ -330,7 +330,7 @@ public struct StatusMenuTree {
             return .action(item.title, icon: icon, isDestructive: true, .status(.revokeQuote))
         case .edit:
             guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
-            // 投票の締め切りが近い投稿は、送り直すとサーバーが拒むので、押せないまま理由を添える。
+            // 投票の締め切りが近い投稿は、再送するとサーバーが拒むので、無効のまま理由を添える。
             let obstacle = status.editObstacle(now: now)
             return .action(item.title, subtitle: obstacle?.menuReason, icon: icon, isEnabled: obstacle == nil, .status(.edit))
         case .delete:
@@ -386,12 +386,12 @@ public struct StatusMenuTree {
         }
     }
 
-    /// 引用の項目。引用に対応していないサーバー（Mastodonの形で`quote_approval`がない）では出さない。押せるかを決められないため。
+    /// 引用の項目。引用に対応していないサーバー（Mastodonの形で`quote_approval`がない）では出さない。有効にするかを決められないため。
     /// 投稿者の承認が要るときと、引用できないときは、そのことをサブタイトルに添える。決まりはdocs/quote.mdの「引用して投稿する」にある。
     private func quoteNode(_ item: StatusMenuItem, on status: Status) -> MenuNode<StatusMenuCommand>? {
         guard let availability = capabilities.quotes.availability(of: status) else { return nil }
         let subtitle: String? = switch availability {
-        // ログインしていない人向けに届いた投稿は、押してから確かめる。
+        // ログインしていない人向けに届いた投稿は、選択してから確かめる。
         case .automatic, .unverified: nil
         case .manual: "投稿者が承認すると表示されます"
         case .denied(followersOnly: true): "フォロワーだけが引用できます"
@@ -414,7 +414,7 @@ public struct StatusMenuTree {
 
     /// 自分の投稿を引用できる人を変えるサブメニュー。今の値にチェックマークを付け、項目のサブタイトルにも出す。
     /// 引用に対応していないサーバーの投稿（`quote_approval`がない）と、ほかの人の投稿では出さない。
-    /// フォロワーのみとメンションした相手のみの投稿は、サーバーがいつも「自分のみ」にするので、押せない形で理由を添える。
+    /// フォロワーのみとメンションした相手のみの投稿は、サーバーがいつも「自分のみ」にするので、無効にして理由を添える。
     private func quotePolicyMenu(for status: Status, item: StatusMenuItem) -> MenuNode<StatusMenuCommand>? {
         guard let myAccountID, status.isAuthored(by: myAccountID), let approval = status.displayed.quoteApproval else { return nil }
         let icon = MenuIcon.symbol(item.symbolName)
@@ -447,7 +447,7 @@ public struct StatusMenuTree {
         }
     }
 
-    /// `account`から見た投稿のメニュー。覚えている投稿があればすぐ組み、なければ開いてから探す。
+    /// `account`から見た投稿のメニュー。キャッシュしている投稿があればすぐ組み、なければ開いてから探す。
     private func otherAccountNodes(for status: Status, as account: OtherAccount) -> [MenuNode<StatusMenuCommand>] {
         // まだ探していない人がいれば、その人を出せるよう、開いてから探す。
         if let known = account.known(status), !otherAccountPeople.contains(where: account.needsResolving) {
@@ -498,7 +498,7 @@ public struct StatusMenuTree {
         guard let status else { return [] }
         let tree = otherAccountTree(for: found, original: status, as: account)
         guard tree.userMenu.needsRelationship else { return [] }
-        // 人を集めるだけなので、ハッシュタグは組まない。組むと、ハッシュタグのリストの読み直しを、メニューを組んだときと重ねて送るため。
+        // 人を集めるだけなので、ハッシュタグは組まない。組むと、ハッシュタグのリストの再読み込みを、メニューを組んだときと重ねて送るため。
         return tree.menu(groups: otherAccountStatusGroups.excluding([.hashtags]), includesFollowRequest: false).shownUserIDs
     }
 

@@ -1,14 +1,14 @@
 import SciaCore
 import UIKit
 
-/// 知らせを1件描くガラスのカプセル。並べ方と消えるまでの時計は`NoticeStackView`が持つ。
+/// アプリ内通知を1件描くガラスのカプセル。並べ方と消えるまでの時計は`NoticeStackView`が持つ。
 ///
 /// UIButtonの構成では、先頭の処理中のインジケーターと末尾の「›」を両方置けず、文言が切れたときに件数と「›」を残せないため、自前で組む。
 final class NoticeChip: UIControl {
-    /// 押せる範囲の最小の大きさ。見た目より小さければ、外側まで広げる。
+    /// ヒット領域の最小の大きさ。見た目より小さければ、外側まで広げる。
     static let minimumHitSize: CGFloat = 44
 
-    /// 出てくるときの濃さと大きさを動かすための包み。ガラスの濃さを変えても、アニメーションにならないため。
+    /// 出てくるときの不透明度と大きさを動かすための包み。ガラスの不透明度を変えても、アニメーションにならないため。
     private let appearanceView = UIView()
     private let effectView = UIVisualEffectView(effect: UIGlassEffect())
     private let iconView = UIImageView()
@@ -121,8 +121,8 @@ final class NoticeChip: UIControl {
         effectView.contentView.layer.cornerRadius = bounds.height / 2
     }
 
-    /// 薄く少し小さい状態から出てくる。チップそのものの濃さと変形は、並べる側がスワイプや隠すのに使うため、ガラスの包みに付けて動かす。
-    /// チップに付けると、出てくる途中に指で触れたとき、指に合わせる変形で出てくる動きが止まり、大きさや濃さが1コマで替わる。
+    /// 薄く少し小さい状態から出てくる。チップそのものの不透明度と変形は、並べる側がスワイプや隠すのに使うため、ガラスの包みに付けて動かす。
+    /// チップに付けると、出てくる途中に指で触れたとき、指に合わせる変形で出てくる動きが止まり、大きさや不透明度が1コマで替わる。
     func animateAppearance(duration: TimeInterval) {
         appearanceView.alpha = 0
         // 視差効果を減らす設定では、大きさを変えずに薄くするだけにする。
@@ -142,7 +142,7 @@ final class NoticeChip: UIControl {
         }
     }
 
-    /// 中身を描き直す。読み上げは並べる側が`announce`で行う。
+    /// 中身を再描画する。読み上げは並べる側が`announce`で行う。
     func apply(_ notice: Notice) {
         self.notice = notice
         titleLabel.text = notice.text
@@ -176,7 +176,7 @@ final class NoticeChip: UIControl {
             hint = text
             disclosureView.isHidden = true
         }
-        // 「›」は読ませず、押すと何が起きるかをヒントで伝える。
+        // 「›」は読ませず、選択すると何が起きるかをヒントで伝える。
         accessibilityLabel = notice.additionalCount > 0 ? NoticeTexts.accessibilityLabel(title: notice.title, additionalCount: notice.additionalCount) : notice.title
         accessibilityValue = notice.value
         accessibilityHint = hint
@@ -238,7 +238,7 @@ final class NoticeChip: UIControl {
         isTouching = false
     }
 
-    /// 押せないチップも、上へスワイプしてしまえるよう触れたものは受ける。押したときに薄くするのは、押せるときだけ。
+    /// 無効のチップも、上へスワイプしてしまえるよう触れたものは受ける。押されている状態で薄くするのは、有効なときだけ。
     override var isHighlighted: Bool {
         didSet {
             guard isHighlighted != oldValue, notice?.isActionable == true || !isHighlighted else { return }
@@ -255,7 +255,7 @@ final class NoticeChip: UIControl {
         onHoldChange?()
     }
 
-    /// 見た目が44ptに満たなくても、44pt四方までは押せるようにする。
+    /// 見た目が44ptに満たなくても、44pt四方まではヒット領域にする。
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         let dx = max(0, (Self.minimumHitSize - bounds.width) / 2)
         let dy = max(0, (Self.minimumHitSize - bounds.height) / 2)

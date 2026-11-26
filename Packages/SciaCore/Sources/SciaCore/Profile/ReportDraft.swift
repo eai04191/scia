@@ -85,7 +85,7 @@ public final class ReportDraft {
         }
     }
 
-    /// サーバーのルールを読む。読み直すときも、読み終えるまで読み込み中にする。
+    /// サーバーのルールを読む。再読み込みするときも、読み終えるまで読み込み中にする。
     public func loadRules() async {
         rules = .loading
         do {

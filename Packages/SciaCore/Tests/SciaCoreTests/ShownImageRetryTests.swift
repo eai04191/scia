@@ -7,7 +7,7 @@ import Testing
 import UniformTypeIdentifiers
 @testable import SciaCore
 
-/// 画面に描いている画像が読めなかったとき、描き直されなくても、読み直してよくなった時刻に読み直す（docs/image-loading.md）。
+/// 画面に描いている画像が読めなかったとき、再描画されなくても、再読み込みしてよくなった時刻に再読み込みする（docs/image-loading.md）。
 @MainActor
 @Suite(.scratch)
 struct ShownImageRetryTests {
@@ -83,7 +83,7 @@ struct ShownImageRetryTests {
         MediaThumbnailRequest(url: url, maxPixelSize: 64, purpose: .display)
     }
 
-    /// 待てば直る失敗は、描き直されなくても、間隔が過ぎたら読み直して画像を返す。
+    /// 待てば直る失敗は、再描画されなくても、間隔が過ぎたら再読み込みして画像を返す。
     @Test func thumbnailIsReloadedWhenTheDelayPasses() async throws {
         let store = makeMediaStore()
         let image = try url("https://example.social/media_proxy/1/small")
@@ -128,7 +128,7 @@ struct ShownImageRetryTests {
         #expect(fetcher.count(of: image) == 1)
     }
 
-    /// 待っている間に描く画像が替わったら、読み直さずにやめる。
+    /// 待っている間に描く画像が替わったら、再読み込みせずにやめる。
     @Test func stopsWhenNoLongerWanted() async throws {
         let store = makeMediaStore()
         let image = try url("https://example.social/media_proxy/1/small")
@@ -159,7 +159,7 @@ struct ShownImageRetryTests {
         #expect(fetcher.count(of: image) == 1)
     }
 
-    /// 添付ファイルの画像（リンクのカード、ヘッダー画像など）も、間隔が過ぎたら読み直す。
+    /// 添付ファイルの画像（リンクのカード、ヘッダー画像など）も、間隔が過ぎたら再読み込みする。
     @Test func mediaImageIsReloadedWhenTheDelayPasses() async throws {
         let store = makeMediaStore()
         let image = try url("https://example.social/media_proxy/1/original")
@@ -172,7 +172,7 @@ struct ShownImageRetryTests {
         #expect(fetcher.count(of: image) == 2)
     }
 
-    /// アイコンも、間隔が過ぎたら読み直す。
+    /// アイコンも、間隔が過ぎたら再読み込みする。
     @Test func avatarIsReloadedWhenTheDelayPasses() async throws {
         let store = makeAvatarStore()
         let key = AvatarImageKey(url: try url("https://example.social/media_proxy/1/original"), maxPixelSize: 64, animates: false)
@@ -188,7 +188,7 @@ struct ShownImageRetryTests {
         #expect(fetcher.count(of: key.url) == 3)
     }
 
-    /// 最初の1回は隠れていても読み、読み直しは見えるまで待つ。見えたら、次に確かめたときに読む。
+    /// 最初の1回は隠れていても読み、再読み込みは見えるまで待つ。見えたら、次に確かめたときに読む。
     @Test func retriesOnlyWhileVisible() async throws {
         let store = makeMediaStore()
         let image = try url("https://example.social/media_proxy/1/small")
@@ -210,7 +210,7 @@ struct ShownImageRetryTests {
         #expect(fetcher.count(of: image) == 2)
     }
 
-    /// 同じ画像を待ち合わせた行も、読み直しをやめずに待つ。待ち合わせた側が、失敗を覚える前に結果を受け取らないため。
+    /// 同じ画像を待ち合わせた行も、再読み込みをやめずに待つ。待ち合わせた側が、失敗を覚える前に結果を受け取らないため。
     @Test func coalescedLoadsAllRetry() async throws {
         let store = makeMediaStore()
         let image = try url("https://example.social/media_proxy/1/small")
@@ -228,7 +228,7 @@ struct ShownImageRetryTests {
         }
     }
 
-    /// アイコンも、待ち合わせた行が読み直しをやめずに待つ。
+    /// アイコンも、待ち合わせた行が再読み込みをやめずに待つ。
     @Test func coalescedAvatarLoadsAllRetry() async throws {
         let store = makeAvatarStore()
         let key = AvatarImageKey(url: try url("https://example.social/media_proxy/1/original"), maxPixelSize: 64, animates: false)

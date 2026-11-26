@@ -19,10 +19,10 @@ extension MediaViewerFit {
     }
 
     /// 予約領域のAPIがないiOSで避ける幅。ホームボタンのないiPhoneでは、アイランドかノッチのある辺を避ける。
-    /// アイランドの位置を測ってある機種（`IslandModel`）では、アイランドの端までを避ける。ほかの機種では、その辺の安全領域の幅を避ける。
+    /// アイランドの位置を測ってある機種（`IslandModel`）では、アイランドの端までを避ける。ほかの機種では、その辺のセーフエリアの幅を避ける。
     /// ホームインジケータの辺は避けない。
-    /// 切り欠きのない機種（iPhone SE、iPad）では避けない。安全領域の上端はステータスバーの分で、隠すと縮むため、使うと画面の部品を出し入れするたびに画像が動く。
-    /// ホームボタンのないiPhoneは、どれもアイランドかノッチがあり、ステータスバーを隠しても安全領域は変わらない。
+    /// 切り欠きのない機種（iPhone SE、iPad）では避けない。セーフエリアの上端はステータスバーの分で、隠すと縮むため、使うと画面の部品を出し入れするたびに画像が動く。
+    /// ホームボタンのないiPhoneは、どれもアイランドかノッチがあり、ステータスバーを隠してもセーフエリアは変わらない。
     @MainActor
     private static func edgesWithoutReservedRegions(in window: UIWindow?) -> Edges {
         guard let window, window.traitCollection.userInterfaceIdiom == .phone else { return .zero }

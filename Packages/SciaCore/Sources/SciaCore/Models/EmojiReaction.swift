@@ -245,7 +245,7 @@ extension Status {
     }
 
     /// `other`と、表示している投稿の絵文字のリアクションとお気に入りのほかは同じか。リアクションが同じならfalse。
-    /// タイムラインで、リアクションが変わった行を、ボタンの出入りと行の高さを動かして描き直すために使う（docs/emoji-reaction.md）。
+    /// タイムラインで、リアクションが変わった行を、ボタンの出入りと行の高さを動かして再描画するために使う（docs/emoji-reaction.md）。
     /// お気に入りがリアクションとして保存されるサーバー（Sharkeyなど）では、リアクションの結果でお気に入りの数と状態も変わるので、お気に入りの違いは見ない。
     public func differsOnlyInEmojiReactions(from other: Status) -> Bool {
         guard displayed.emojiReactions != other.displayed.emojiReactions else { return false }

@@ -1,7 +1,7 @@
 import Network
 public import Observation
 
-/// 回線の状態を見張る。変化はObservationで購読できる。OSの知らせ（`NWPathMonitor`）を`NetworkPathTracker`に渡し、その結果を出すだけにする。
+/// 回線の状態を見張る。変化はObservationで購読できる。OSのコールバック（`NWPathMonitor`）を`NetworkPathTracker`に渡し、その結果を出すだけにする。
 /// 回線で送るかを決めるのは`NetworkUsePolicy`なので、回線の状態は`usePolicy(settings:)`を通して渡す。
 /// アプリで1つ作り、どのアカウントでも共有する。電波が戻った回数（`recoveryCount`）は`AccountSession.observeRecoveries(networkRecoveryCount:)`に渡す。
 @MainActor
@@ -26,18 +26,18 @@ public final class NetworkConditionsMonitor {
         monitor.start(queue: .main)
     }
 
-    /// テストで、OSの知らせの代わりに`receive(isSatisfied:conditions:)`で状態を渡すときは、`monitor`をnilにして作る。
+    /// テストで、OSのコールバックの代わりに`receive(isSatisfied:conditions:)`で状態を渡すときは、`monitor`をnilにして作る。
     init(monitor: NWPathMonitor?) {
         self.monitor = monitor
     }
 
-    /// 今の回線と設定で、質を上げると先読みの通信を送ってよいかの決まり。Observationの中で読めば、回線か設定が変わったときに知らされる。
+    /// 今の回線と設定で、質を上げるとプリフェッチの通信を送ってよいかの決まり。Observationの中で読めば、回線か設定が変わったときに知らされる。
     public func usePolicy(settings: AppSettings) -> NetworkUsePolicy {
         NetworkUsePolicy(conditions: conditions, sendsEnhancementOnExpensiveNetwork: settings.usesOriginalThumbnailsOnExpensiveNetwork)
     }
 
     /// タイムラインのサムネイルに、プレビュー画像と元の画像のどちらを読むかを決めるときの条件（`MediaThumbnailSelection`）。
-    /// 今の回線と設定で、元の画像を読んでよいかと先読みしてよいかを決め、プレビュー画像を引き伸ばしてよい倍率はチューニングから読む。
+    /// 今の回線と設定で、元の画像を読んでよいかとプリフェッチしてよいかを決め、プレビュー画像を引き伸ばしてよい倍率はチューニングから読む。
     /// Observationの中で読めば、回線、設定、チューニングが変わったときに知らされる。
     public func thumbnailPolicy(settings: AppSettings, tuning: TuningStore) -> MediaThumbnailPolicy {
         MediaThumbnailPolicy(usePolicy: usePolicy(settings: settings), tuning: tuning)

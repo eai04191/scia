@@ -20,7 +20,7 @@ public struct BodyTruncation: Sendable, Equatable {
 
 /// 「続きを読む」で広げた本文。
 ///
-/// 投稿は元の投稿のIDで覚え、同じ投稿のブーストや通知の行、引用の囲みもそろえる。Xの投稿は投稿のIDで覚える。覚えるのはアプリを起動している間だけ。
+/// 投稿は元の投稿のIDで覚え、同じ投稿のブーストや通知の行、引用のカードもそろえる。Xの投稿は投稿のIDで覚える。覚えるのはアプリを起動している間だけ。
 public struct LongBodyExpansion: Sendable, Equatable {
     /// 広げたものを見分けるキー。
     public enum Key: Hashable, Sendable {
@@ -40,7 +40,7 @@ public struct LongBodyExpansion: Sendable, Equatable {
         expanded.insert(key)
     }
 
-    /// 投稿の本文（引用の囲みに出す引用元の本文も）に当てる行数。切らないならnil。
+    /// 投稿の本文（引用のカードに出す引用元の本文も）に当てる行数。切らないならnil。
     /// スレッドの画面で開いている投稿、注意書きのある投稿、広げた投稿は切らない。ブーストなら元の投稿で決める。
     public func truncation(forBodyOf status: Status, isThreadFocus: Bool, rule: BodyTruncation?) -> BodyTruncation? {
         let shown = status.displayed
@@ -48,8 +48,8 @@ public struct LongBodyExpansion: Sendable, Equatable {
         return rule
     }
 
-    /// Xの投稿の囲みの本文に当てる行数。切らないならnil。
-    /// - Parameter isThreadFocus: 囲みを出している投稿が、スレッドの画面で開いている投稿か。
+    /// Xの投稿のカードの本文に当てる行数。切らないならnil。
+    /// - Parameter isThreadFocus: カードを出している投稿が、スレッドの画面で開いている投稿か。
     public func truncation(forXPost id: String, isThreadFocus: Bool, rule: BodyTruncation?) -> BodyTruncation? {
         guard !isThreadFocus, !isExpanded(.xPost(id)) else { return nil }
         return rule

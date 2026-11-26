@@ -29,7 +29,7 @@ struct MediaMenuTreeTests {
         return menu
     }
 
-    /// 既定の並びは、開く・共有・保存、読む、持ち出す、投稿の順にまとまりを分け、メディアの情報は「その他」に入れる。
+    /// 既定の並びは、開く・共有・保存、読む、持ち出す、投稿の順にグループを分け、メディアの情報は「その他」に入れる。
     @Test func defaultMenuGroupsItemsByPurpose() {
         let nodes = timelineMenu(for: attachment(.image, description: "夕焼け")).nodes(groups: MenuFixture.media.groups)
 
@@ -45,7 +45,7 @@ struct MediaMenuTreeTests {
         #expect(described.contains("共有"))
     }
 
-    /// ビューアのように、開く項目と投稿のメニューがなければ、その項目を出さない。開く項目は、URLを扱えなければ出さない。押せない項目は押せないまま並べる。
+    /// ビューアのように、開く項目と投稿のメニューがなければ、その項目を出さない。開く項目は、URLを扱えなければ出さない。無効の項目は無効のまま並べる。
     @Test func omitsItemsWithoutHandlers() {
         var menu = MediaMenuTree(kind: .image, attachment: attachment(.image))
         menu.share = false
@@ -92,7 +92,7 @@ struct MediaMenuTreeTests {
         #expect(described.hasSuffix("|その他[メディアの情報[640×480,PNG],カスタマイズ,共有]"))
     }
 
-    /// メディアの情報の行は、値を名前に、何の値かをサブタイトルに置き、押すと値をコピーする。
+    /// メディアの情報の行は、値を名前に、何の値かをサブタイトルに置き、選択すると値をコピーする。
     @Test func infoRowCopiesItsValue() throws {
         let nodes = timelineMenu(for: attachment(.image)).nodes(groups: MenuFixture.media.groups)
         let info = try #require(nodes.last?.flattenedChildren.first)

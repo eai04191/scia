@@ -59,7 +59,7 @@ extension TimelineViewController {
         return target
     }
 
-    /// アクションバーのボタンを押したときに、その項目を行う。投稿のメニューの項目は、タップに割り当てた1項目と同じ組み方で行い、「メニュー」は行の投稿のメニューをボタンから出す。
+    /// アクションバーのボタンを選択したときに、その項目を行う。投稿のメニューの項目は、タップに割り当てた1項目と同じ組み方で行い、「メニュー」は行の投稿のメニューをボタンから出す。
     /// 決まりはdocs/post-action-bar.mdの「ボタン」にある。
     func performActionBarItem(_ item: PostActionBarItem, id: ItemID, from button: UIView) {
         guard let entry = entry(for: id) else { return }
@@ -99,8 +99,8 @@ extension TimelineViewController {
         )
     }
 
-    /// 引用の囲み。対象は引用元の投稿で、メニューは引用元の投稿の投稿のメニュー。
-    /// - Parameter openThread: 主な操作（スレッドを開く）で行う、今のタップの処理。押した囲みを渡す。
+    /// 引用のカード。対象は引用元の投稿で、メニューは引用元の投稿の投稿のメニュー。
+    /// - Parameter openThread: 主な操作（スレッドを開く）で行う、今のタップの処理。選択したカードを渡す。
     func statusTarget(for status: Status, id: ItemID, openThread: @escaping (UIView) -> Void) -> ObjectTarget<StatusMenuItem, StatusMenuCommand> {
         let entry = TimelineEntry.status(status)
         return ObjectTarget(
@@ -126,7 +126,7 @@ extension TimelineViewController {
         )
     }
 
-    /// Xの投稿の囲みのような、ほかのサービスの投稿。
+    /// Xの投稿のカードのような、ほかのサービスの投稿。
     /// - Parameters:
     ///   - url: 元の投稿のURL。
     ///   - text: コピーや翻訳に渡す本文。本文がなければnil。
@@ -195,7 +195,7 @@ extension TimelineViewController {
     }
 
     /// 投稿の行のスワイプで出すボタン。投稿のほかの行と、出せるボタンがない行ではnil。決まりはdocs/object-actions.mdの「投稿のスワイプ」にある。
-    /// ボタンを出せるかと今の名前は、アクションバーのボタンと同じく、組むだけで通信しない投稿のメニューの木で決める。押したら、タップに割り当てた1項目と同じ組み方で行う。
+    /// ボタンを出せるかと今の名前は、アクションバーのボタンと同じく、組むだけで通信しない投稿のメニューのツリーで決める。選択したら、タップに割り当てた1項目と同じ組み方で行う。
     func postSwipe(at indexPath: IndexPath, side: PostSwipeSide) -> UISwipeActionsConfiguration? {
         guard !isSelectingPosts, let id = itemID(at: indexPath), let entry = entry(for: id) else { return nil }
         guard let status = entry.operatedPost else { return nil }
@@ -222,7 +222,7 @@ extension TimelineViewController {
         return UISwipeActionsConfiguration(actions: actions)
     }
 
-    /// スワイプのボタンの名前とアイコン。その投稿で出ないか押せなければnil。
+    /// スワイプのボタンの名前とアイコン。その投稿で出ないか無効ならnil。
     private func swipeButton(for item: PostSwipeItem, entry: TimelineEntry, id: ItemID, tree: StatusMenuTree) -> PostSwipeButton? {
         switch item {
         case .menu:
@@ -249,7 +249,7 @@ extension TimelineViewController {
         }
     }
 
-    /// スワイプのボタンを押したときに、その操作を行う。メニューを出すものは、押したボタンの位置に出す。
+    /// スワイプのボタンを選択したときに、その操作を行う。メニューを出すものは、選択したボタンの位置に出す。
     private func performSwipeItem(_ item: PostSwipeItem, id: ItemID, from button: UIView) {
         guard let entry = entry(for: id) else { return }
         let point = CGPoint(x: button.bounds.midX, y: button.bounds.midY)

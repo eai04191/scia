@@ -18,7 +18,7 @@ final class TextInputCompletion {
     var kinds: (any UITextInput) -> Set<CompletionKind> = { _ in Set(CompletionKind.allCases) }
     /// 入力欄の文字を変えられない間（投稿を送っている間など）はtrueを返す。
     var isLocked: () -> Bool = { false }
-    /// 補完やパレットで入力欄の文字を変えたあとに呼ぶ。入力欄の知らせが来なくても、持っている文字を入力欄に合わせられるようにする。
+    /// 補完やパレットで入力欄の文字を変えたあとに呼ぶ。入力欄のコールバックが来なくても、持っている文字を入力欄に合わせられるようにする。
     var onApply: (any UITextInput) -> Void = { _ in }
     /// 候補を選んだときに、入力欄に入れる前に呼ぶ。trueを返したら入力欄に入れない。
     /// プロフィールの編集の追加の行のように、選んだものを文字ではなく項目として足す入力欄で使う。
@@ -76,7 +76,7 @@ final class TextInputCompletion {
 
     func selectionDidChange(in input: any UITextInput) {
         guard self.input === input else { return }
-        // 変換を確定しただけでは本文が変わったことにならないことがあるため、確定したらここで語を読み直す。
+        // 変換を確定しただけでは本文が変わったことにならないことがあるため、確定したらここで語を取得し直す。
         if inputHadMarkedText, input.markedTextRange == nil {
             textDidChange(in: input)
             return
@@ -173,7 +173,7 @@ final class TextInputCompletion {
         recentEmojis?.keys ?? []
     }
 
-    /// パレットを出した時点のカスタム絵文字のリストと、そのときの探すサーバー。出している間は、読み直したリストが届いても、
+    /// パレットを出した時点のカスタム絵文字のリストと、そのときの探すサーバー。出している間は、再読み込みしたリストが届いても、
     /// 画像から横長の絵文字の縦横比が分かっても並べ直さない。押そうとしている絵文字が指の下から動かないようにするため。
     /// 出した時点でリストがなければ、最初に届いたリストにする。投稿するアカウントを替えて探すサーバーが変わったら、替えた先のリストに並べ直す。
     private var paletteEmojis: (emojis: [ServerEmoji], sourceGeneration: Int)?
@@ -190,7 +190,7 @@ final class TextInputCompletion {
         paletteEmojis = completion.emojisForPalette().map { ($0, completion.emojiSourceGeneration) }
     }
 
-    /// 検索語があれば、補完と同じ順で並べた結果を出す。なければまとまりごとに並べる。
+    /// 検索語があれば、補完と同じ順で並べた結果を出す。なければグループごとに並べる。
     func updatePalette(_ palette: EmojiPaletteView, recentKeys: [String]) {
         takePaletteEmojis()
         palette.cellSize = tuning.value(of: TuningCatalog.composeEmojiPaletteCellSize)
@@ -214,7 +214,7 @@ final class TextInputCompletion {
         let standardGroups = StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle, skinTone: settings.emojiSkinTone)
         // カスタム絵文字のリストがまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
         let emojis = paletteEmojis?.emojis ?? []
-        // 個人セットは、カスタム絵文字のリストと違い、出している間に読み直したものが届いたら並べ直す。使う人が自分で変えた並びなので、
+        // 個人セットは、カスタム絵文字のリストと違い、出している間に再読み込みしたものが届いたら並べ直す。使う人が自分で変えた並びなので、
         // 押そうとしている絵文字が動かないことより、変えたとおりに並ぶことを優先する（docs/personal-emoji-set.md）。
         let personal = completion.personalEmojiSet
         let customStatus: EmojiPaletteView.CustomEmojiStatus? = if paletteEmojis != nil {

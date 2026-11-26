@@ -93,7 +93,7 @@ struct FeatureAvailabilityTests {
         #expect(await features.disabled.map(\.feature) == [.preferences])
     }
 
-    /// v2のinstanceがないサーバーでは、v2を送り直さず、投稿欄の上限もストリーミングの接続先もv1から読む。
+    /// v2のinstanceがないサーバーでは、v2を再送せず、投稿欄の上限もストリーミングの接続先もv1から読む。
     @Test func unsupportedInstanceV2FallsBackToV1WithoutRequestingAgain() async throws {
         let features = FeatureAvailability()
         let transport = StubTransport([
@@ -109,7 +109,7 @@ struct FeatureAvailabilityTests {
         #expect(await transport.requests.map { $0.url?.path() } == ["/api/v2/instance", "/api/v1/instance"])
     }
 
-    /// ホームと通知は既読位置を並行して読む。片方が送り直しを待っている間にもう片方が止めたら、送り直さない。
+    /// ホームと通知は既読位置を並行して読む。片方が再送を待っている間にもう片方が止めたら、再送しない。
     @Test func retryStopsWhenFeatureIsDisabledWhileWaiting() async throws {
         let features = FeatureAvailability()
         let clock = TestClock()
@@ -130,7 +130,7 @@ struct FeatureAvailabilityTests {
         )
 
         let loading = Task { try await client.marker(for: .home) }
-        // 実際の時間で待つと、止める前に待ちが明けて送り直すことがあるため、送り直しの待ちに入ったのを確かめてから止め、時計を進める。
+        // 実際の時間で待つと、止める前に待ちが明けて再送することがあるため、再送の待ちに入ったのを確かめてから止め、時計を進める。
         try await waitUntil { clock.sleeperCount == 1 }
         await features.disable(.markers, statusCode: 404)
         clock.advance(by: .milliseconds(100))
@@ -178,7 +178,7 @@ struct FeatureAvailabilityTests {
         #expect(await features.disabled.map(\.feature) == [.groupedNotifications])
     }
 
-    /// v2で読めているサーバーでは、v2のまとまりのキーで消す。
+    /// v2で読めているサーバーでは、v2のグループのキーで消す。
     @Test func dismissUsesV2WhileGroupedNotificationsAreAvailable() async throws {
         let transport = StubTransport([.json("{}", statusCode: 200)])
         let client = try makeClient(transport, features: FeatureAvailability())

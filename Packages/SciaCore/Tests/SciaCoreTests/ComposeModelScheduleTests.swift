@@ -202,7 +202,7 @@ struct ComposeModelScheduleTests {
         #expect(model.visibility == .direct)
     }
 
-    /// 付け替えで決まった公開範囲は、あとから届いた既定の公開範囲で広げない。投稿欄は書き始めるたびに既定を読み直す。
+    /// 付け替えで決まった公開範囲は、あとから届いた既定の公開範囲で広げない。投稿欄は書き始めるたびに既定を再読み込みする。
     @Test func laterDefaultsDoNotWidenRetargetedRewrite() {
         let model = makeModel { _ in }
         model.beginRewriting(ScheduledStatus(id: "71", scheduledAt: Self.now.addingTimeInterval(3 * 60 * 60), params: ScheduledStatus.Params(text: "既定の範囲")))

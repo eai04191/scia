@@ -3,7 +3,7 @@ import SciaCore
 import UIKit
 
 /// 予約した投稿の画面を組み立て、読み込みと操作を受け持つ`ScheduledStatusesModel`と`ScheduledStatusesViewController`をつなぐ。決まりはdocs/tabs.mdの「予約投稿」にある。
-/// 日時を選ぶシート、取り消しの確認、失敗の知らせはここで出す。
+/// 日時を選ぶシート、取り消しの確認、失敗のアラートはここで出す。
 @MainActor
 final class ScheduledStatusesController {
     let viewController: ScheduledStatusesViewController
@@ -36,7 +36,7 @@ final class ScheduledStatusesController {
         viewController.onCancel = { [weak self] scheduled in self?.confirmCancel(scheduled) }
     }
 
-    /// 読み直す。読んでいる途中なら、その読み込みに任せる。
+    /// 再読み込みする。読んでいる途中なら、その読み込みに任せる。
     @discardableResult
     func reload(purpose: RequestPurpose) -> Task<Void, Never>? {
         model.reload(purpose: purpose)

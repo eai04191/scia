@@ -17,7 +17,7 @@ struct HashtagMenuTreeTests {
         HashtagMenuActions(mute: HashtagMuteActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, mute: { _, _ in }, unmute: { _ in }))
     }
 
-    /// 見出しに`#名前`を置き、ほかのサーバーのユーザーの「@名前の投稿」には、サーバー名をサブタイトルに添える。URLが分からなければ、URLの項目を押せない。
+    /// 見出しに`#名前`を置き、ほかのサーバーのユーザーの「@名前の投稿」には、サーバー名をサブタイトルに添える。URLが分からなければ、URLの項目を無効にする。
     @Test func headingAndItems() throws {
         let tree = HashtagMenuTree(name: "cat", url: nil, account: alice, linkBrowser: .inApp, actions: nil)
         let menu = try #require(tree.menu(groups: all))
@@ -30,8 +30,8 @@ struct HashtagMenuTreeTests {
         #expect(tree.submenu(groups: all)?.icon?.symbolName == "number")
     }
 
-    /// 「ミュート」は、フィルターを覚えていれば、その場でミュートしているかを決め、読み込み中の行を出さない。
-    /// まだ読めていなければ、読んでから中身を決める。どちらでも、メニューを組むたびにフィルターを読み直す。
+    /// 「ミュート」は、フィルターをキャッシュしていれば、その場でミュートしているかを決め、読み込み中の行を出さない。
+    /// まだ読めていなければ、読んでから中身を決める。どちらでも、メニューを組むたびにフィルターを再読み込みする。
     @Test func muteUsesKnownFiltersAndRefreshes() async throws {
         let recorder = Recorder()
         func describe(_ known: Bool?) throws -> String {
@@ -45,7 +45,7 @@ struct HashtagMenuTreeTests {
         #expect(recorder.refreshes == 3)
     }
 
-    /// 読めなかったら、押せない行で知らせる。
+    /// 読めなかったら、無効の行で知らせる。
     @Test func muteLoadFailureIsShownAsDisabledRow() async throws {
         let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: muteActions(known: nil) { _ in throw URLError(.notConnectedToInternet) })
         let menu = try #require(tree.menu(groups: .single(.mute)))
@@ -72,8 +72,8 @@ struct HashtagMenuTreeTests {
         HashtagMenuActions(mute: nil, feature: HashtagToggleActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, turnOn: { _ in }, turnOff: { _ in }))
     }
 
-    /// 「プロフィールで紹介する」は、覚えている自分の注目のハッシュタグで、その場で載せているかを決め、載せていれば「プロフィールから外す」にする。
-    /// まだ読めていなければ、読んでから決める。どちらでも、メニューを組むたびに読み直す。
+    /// 「プロフィールで紹介する」は、キャッシュしている自分の注目のハッシュタグで、その場で載せているかを決め、載せていれば「プロフィールから外す」にする。
+    /// まだ読めていなければ、読んでから決める。どちらでも、メニューを組むたびに再読み込みする。
     @Test func featureUsesKnownTagsAndRefreshes() async throws {
         let recorder = Recorder()
         func describe(_ known: Bool?) throws -> String {
@@ -87,7 +87,7 @@ struct HashtagMenuTreeTests {
         #expect(recorder.refreshes == 3)
     }
 
-    /// 読んでから決めるときは、読んだ結果で載せているかを決める。読めなかったら、押せない行で知らせる。
+    /// 読んでから決めるときは、読んだ結果で載せているかを決める。読めなかったら、無効の行で知らせる。
     @Test func featureDecidesAfterLoadingOrShowsFailure() async throws {
         func loaded(_ load: @escaping @MainActor (String) async throws -> Bool) async throws -> String {
             let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: featureActions(known: nil, load: load))
@@ -107,8 +107,8 @@ struct HashtagMenuTreeTests {
         HashtagMenuActions(mute: nil, follow: HashtagToggleActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, turnOn: { _ in }, turnOff: { _ in }))
     }
 
-    /// 「フォロー」は、覚えているフォローしているハッシュタグで、その場でフォローしているかを決め、フォローしていれば「フォローを外す」にする。
-    /// まだ読めていなければ、読んでから決め、読めなかったら押せない行で知らせる。どちらでも、メニューを組むたびに読み直す。
+    /// 「フォロー」は、キャッシュしているフォローしているハッシュタグで、その場でフォローしているかを決め、フォローしていれば「フォローを外す」にする。
+    /// まだ読めていなければ、読んでから決め、読めなかったら無効の行で知らせる。どちらでも、メニューを組むたびに再読み込みする。
     @Test func followUsesKnownTagsAndRefreshes() async throws {
         let recorder = Recorder()
         func menu(_ known: Bool?, load: @escaping @MainActor (String) async throws -> Bool = { _ in false }) throws -> MenuNode<HashtagMenuCommand> {
@@ -128,7 +128,7 @@ struct HashtagMenuTreeTests {
         #expect(MenuNodeTests.describe(await failing()) == "フォローしているハッシュタグを読み込めませんでした(押せない)")
     }
 
-    /// 押したときに送る操作は、フォローしているかで決まる。
+    /// 選択したときに送る操作は、フォローしているかで決まる。
     @Test func followCommands() throws {
         func command(_ known: Bool) throws -> HashtagMenuCommand? {
             let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: followActions(known: known))

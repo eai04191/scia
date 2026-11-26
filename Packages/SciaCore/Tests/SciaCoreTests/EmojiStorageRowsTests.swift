@@ -16,7 +16,7 @@ struct EmojiStorageRowsTests {
         MediaFileCache.folderName(for: url)
     }
 
-    /// サーバーの行には、そのサーバーの応答に載っている画像を、AとBのどちらに置いたものも数え、小さい静止画、応答のファイル、記録も足す。
+    /// サーバーの行には、そのサーバーの応答に載っている画像を、AとBのどちらに置いたものも数え、サムネイル、応答のファイル、記録も足す。
     /// 応答に載っていないBの画像は、「ほかのサーバーの絵文字」の行に数える。
     @Test func countsByURL() throws {
         let own = try emoji("own.example", "blob")

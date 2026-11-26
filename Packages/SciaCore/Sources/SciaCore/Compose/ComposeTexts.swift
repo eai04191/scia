@@ -5,7 +5,7 @@ import Foundation
 public struct ComposeContextChip: Equatable, Sendable {
     public let title: String
     public let symbolName: String
-    /// ラベルを押すと何が起きるかの、読み上げのヒント。押しても見せるものがなければ空。
+    /// ラベルを選択すると何が起きるかの、読み上げのヒント。選択しても見せるものがなければ空。
     public let hint: String
     /// ラベルを外すボタンの名前。
     public let clearLabel: String
@@ -15,7 +15,7 @@ extension ComposeModel {
     /// 本文の上に出すラベル。新しい投稿を書いていればnil。
     public var contextChip: ComposeContextChip? {
         if let title = redraftChipTitle {
-            // 削除したあとは、押しても見せる元の投稿がない。
+            // 削除したあとは、選択しても見せる元の投稿がない。
             let deleted = redraft?.mayHaveDeleted == true
             return ComposeContextChip(title: title, symbolName: "square.and.pencil", hint: deleted ? "" : "タイムラインの元の投稿を表示します。", clearLabel: "書き直しをやめる")
         }
@@ -33,7 +33,7 @@ extension ComposeModel {
         return ComposeContextChip(title: ReplyLabel.toAccount(acct: replyTo.displayed.account.acct).title, symbolName: "arrowshape.turn.up.left.fill", hint: "タイムラインの返信先の投稿を表示します。", clearLabel: "返信をやめる")
     }
 
-    /// 投稿ボタンの名前。予約している間は予約に、メディアの準備を待っている間は、押すと待つのをやめることが分かる名前にする。
+    /// 投稿ボタンの名前。予約している間は予約に、メディアの準備を待っている間は、選択すると待つのをやめることが分かる名前にする。
     public var sendButtonTitle: String {
         switch (isWaitingForMedia, scheduledAt != nil) {
         case (true, true): "予約をやめる"
@@ -113,7 +113,7 @@ public enum ComposeTexts {
         "@\(username)で投稿"
     }
 
-    /// 押せない項目に添える理由。
+    /// 無効の項目に添える理由。
     public static let unavailableWithQuote = "引用とは一緒に付けられません"
     public static let unavailableWithPoll = "投票とは一緒に付けられません"
     public static let unavailableWithMedia = "メディアとは一緒に付けられません"
@@ -154,7 +154,7 @@ public enum ComposeTexts {
     public static let scheduleDate = "予約の日時"
     public static let cancelSchedule = "予約をやめる"
 
-    /// 予約の行。日時を押せるラベルにし、続く文を添えるので、日時の範囲を添える。
+    /// 予約の行。日時を選択できるラベルにし、続く文を添えるので、日時の範囲を添える。
     public static func scheduledPost(date: String) -> PostTexts.EmphasizedText {
         let text = "\(date)に投稿"
         let start = text.range(of: date)?.lowerBound ?? text.startIndex
@@ -256,7 +256,7 @@ public enum ComposeTexts {
             }
         }
 
-        /// 結果を見せるかのボタンを押すと何が起きるかの、読み上げのヒント。
+        /// 結果を見せるかのボタンを選択すると何が起きるかの、読み上げのヒント。
         public static func hidesTotalsHint(_ hidesTotals: Bool) -> String {
             hidesTotals ? "投票した人に票数を表示します。" : "締め切るまで票数を隠します。"
         }

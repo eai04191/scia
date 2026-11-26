@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// 投稿欄のカスタム絵文字のパレット（`EmojiPaletteView`）の状態。
-/// 押しても何も起きない。シートに載せたときの見え方、引き上げたときや検索欄にキーボードを出したときの並び、投稿欄のバーとの重なりは、実物で確かめる。
+/// 選択しても何も起きない。シートに載せたときの見え方、引き上げたときや検索欄にキーボードを出したときの並び、投稿欄のバーとの重なりは、実物で確かめる。
 /// 背景はシートが描くので、ここでは白い地に置く。
 enum EmojiPaletteCatalog {
     @MainActor
@@ -83,7 +83,7 @@ enum EmojiPaletteCatalog {
                 palette.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
                 palette.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
                 palette.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
-                // メディアを選ぶシートの決めた高さ（336pt）から、画面の下の安全領域の分を引いた高さ。
+                // メディアを選ぶシートの決めた高さ（336pt）から、画面の下のセーフエリアの分を引いた高さ。
                 palette.heightAnchor.constraint(equalToConstant: 302),
             ]
         }

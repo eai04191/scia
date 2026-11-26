@@ -11,7 +11,7 @@ public struct NetworkConditions: Equatable, Sendable {
     }
 }
 
-/// 回線と設定から、質を上げると先読みの通信を送ってよいかを決める（docs/network.mdの「通信の目的」）。
+/// 回線と設定から、質を上げるとプリフェッチの通信を送ってよいかを決める（docs/network.mdの「通信の目的」）。
 /// 回線の状態を読んで送るかを分けるのは、ここだけにする（`make lint`の`network_conditions_outside_policy`で止める）。
 /// 経路ごとに分けると、控える経路と控えない経路が混ざり、新しく足した経路が決まりから漏れるため。
 public struct NetworkUsePolicy: Equatable, Sendable {
@@ -30,14 +30,14 @@ public struct NetworkUsePolicy: Equatable, Sendable {
         return .enhancement(onExpensiveNetwork: sendsEnhancementOnExpensiveNetwork)
     }
 
-    /// 大きく描くカスタム絵文字を、端末にない元の画像を取得して読み直す通信を今送ってよいなら、その目的。
+    /// 大きく描くカスタム絵文字を、端末にない元の画像を取得して再読み込みする通信を今送ってよいなら、その目的。
     /// 「高画質のサムネイル」はメディアのサムネイルの設定なので見ず、モバイル通信でも送る。低データモードでは送らない（docs/network.md）。
     public var emojiUpgrade: RequestPurpose? {
         guard !conditions.isConstrained else { return nil }
         return .enhancement(onExpensiveNetwork: true)
     }
 
-    /// 先読みを今送ってよいなら、その目的。Wi-Fiのように、通信量に限りがなく低データモードでもない回線でだけ送る。
+    /// プリフェッチを今送ってよいなら、その目的。Wi-Fiのように、通信量に限りがなく低データモードでもない回線でだけ送る。
     public var prefetch: RequestPurpose? {
         guard !conditions.isConstrained, !conditions.isExpensive else { return nil }
         return .prefetch

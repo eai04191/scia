@@ -3,7 +3,7 @@ import os
 import SciaCore
 
 /// 「別のアカウントで」のハッシュタグのメニューで、ほかのアカウントのフォロー、ミュート、プロフィールでの紹介を読んで変える。決まりはdocs/other-accounts.mdにある。
-/// 状態は今のアカウントと同じく、そのアカウントのハッシュタグを覚えてメニューを組み、開くたびに読み直す。
+/// 状態は今のアカウントと同じく、そのアカウントのハッシュタグを覚えてメニューを組み、開くたびに再読み込みする。
 /// 今のアカウントのハッシュタグやタブ、投稿欄の補完、プロフィールは変えない。失敗は、このセッションのログインし直しの案内につなげずに知らせる。
 @MainActor
 final class OtherAccountHashtags {
@@ -15,8 +15,8 @@ final class OtherAccountHashtags {
     private let filters: ServerFilterCache
     private let logger = SciaLog.logger(category: "otherAccountHashtags")
 
-    /// 済んだことと失敗の知らせ先。文言の初めに、どのアカウントで行ったかは入れていない。
-    /// 状態はウィンドウをまたいで共有するが、知らせは操作したウィンドウに出すので、操作ごとに渡す。
+    /// 済んだことと失敗を伝えるコールバック。文言の初めに、どのアカウントで行ったかは入れていない。
+    /// 状態はウィンドウをまたいで共有するが、結果は操作したウィンドウに出すので、操作ごとに渡す。
     struct Report {
         var done: @MainActor (String) -> Void
         var failure: @MainActor (String, any Error) -> Void
@@ -49,7 +49,7 @@ final class OtherAccountHashtags {
         return HashtagMenuActions(
             mute: HashtagMuteActions(
                 known: { name in filters.value.map { HashtagMute.find(name, in: $0, now: now()) != nil } },
-                // まだ読めていなければ、開いたメニューがこの読み直しを待つので、操作として送る。
+                // まだ読めていなければ、開いたメニューがこの再読み込みを待つので、操作として送る。
                 refresh: { filters.refresh(purpose: .action) },
                 load: { name in HashtagMute.find(name, in: try await filters.latest(), now: now()) != nil },
                 mute: { [weak self] name, duration in self?.mute(name, duration: duration, report: report) },
@@ -90,7 +90,7 @@ final class OtherAccountHashtags {
         }
     }
 
-    /// 外すIDは、外すときに読み直したハッシュタグで決める。今のアカウントで外すときと同じく、別の端末で足し直したタグを古いIDで消さないため。
+    /// 外すIDは、外すときに再読み込みしたハッシュタグで決める。今のアカウントで外すときと同じく、別の端末で足し直したタグを古いIDで消さないため。
     private func unfeature(_ name: String, report: Report) {
         let featured = featured
         send(key: "feature:\(name)", done: HashtagChangeTexts.unfeatured(name), failure: HashtagChangeTexts.featureFailure, reloading: featured, report: report) { client in
@@ -107,7 +107,7 @@ final class OtherAccountHashtags {
         }
     }
 
-    /// 解く条件は、解除するときにフィルターを読み直して決める。今のアカウントで解除するときと同じく、ほかで足した条件まで消さないため。
+    /// 解く条件は、解除するときにフィルターを再読み込みして決める。今のアカウントで解除するときと同じく、ほかで足した条件まで消さないため。
     private func unmute(_ name: String, report: Report) {
         let filters = filters
         let now = now
@@ -119,7 +119,7 @@ final class OtherAccountHashtags {
         }
     }
 
-    /// 送り終える前にメニューを開き直して押しても、同じ要求を重ねて送らない。済んでも失敗しても、覚えているハッシュタグを読み直す。
+    /// 送り終える前にメニューを開き直して選択しても、同じ要求を重ねて送らない。済んでも失敗しても、キャッシュしているハッシュタグを再読み込みする。
     /// 失敗しても、応答が届かなかっただけで変わっていることがあるため。
     private func send<Value>(key: String, done: String, failure: String, reloading cache: LatestValueCache<Value>, report: Report, _ operation: @escaping @MainActor (MastodonClient) async throws -> Void) {
         let client = client

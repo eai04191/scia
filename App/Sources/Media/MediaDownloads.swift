@@ -69,7 +69,7 @@ final class MediaDownloads {
     }
 
     /// 通信の入口（`HTTPClient`）で落とす。共有先でファイル名として見えるため、名前はURLのものを残し、拡張子がなければ応答の形式から付ける。
-    /// 使う人が押した操作なので、自動の通信が止められている間も送る。2xx以外の応答は、本文を添付ファイルとして残さずに`HTTPStatusError`で失敗させる。
+    /// 使う人が選択した操作なので、自動の通信が止められている間も送る。2xx以外の応答は、本文を添付ファイルとして残さずに`HTTPStatusError`で失敗させる。
     nonisolated static let network: Download = { url, folder, onProgress in
         #if DEBUG
         if let delay = DebugFaults.slowDownloadDelay {

@@ -91,7 +91,7 @@ public enum StorageUsage {
     }
 
     private static func entry(at url: URL) -> Entry? {
-        // URLは一度読んだリソースの値を覚えていて、同じURLで読み直すと前の値を返す。消したあとに測り直しても大きさが変わらないため、忘れさせてから読む。
+        // URLは一度読んだリソースの値をキャッシュしていて、同じURLで再読み込みすると前の値を返す。消したあとに測り直しても大きさが変わらないため、忘れさせてから読む。
         var url = url
         url.removeAllCachedResourceValues()
         guard let values = try? url.resourceValues(forKeys: keys) else { return nil }

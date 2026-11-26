@@ -15,7 +15,7 @@ final class InAppBrowserSheet: UIViewController {
     /// シートの上端からSafariのバーの真ん中までに重ねる、シートを引ける範囲。そこで触れたことは、シートのジェスチャーが受ける。
     let barGrabArea: InAppBrowserBarGrabView
     private let grabber = InAppBrowserGrabberView()
-    /// ステータスバーを押したことを受けるスクロールビュー。UIKitは、手前に出した画面の配下のスクロールビューにしか問い合わせないため、後ろの画面にはここから渡す。
+    /// ステータスバーのタップを受けるスクロールビュー。UIKitは、手前に出した画面の配下のスクロールビューにしか問い合わせないため、後ろの画面にはここから渡す。
     /// 最上部にいるスクロールビューには問い合わせないので、最上部からずらしておく。`isUserInteractionEnabled`か`isScrollEnabled`を切ると問い合わせる対象に入らないので（シミュレーターで確かめた）、触れて動かないようにパンのジェスチャーだけを切る。
     private let scrollToTopReceiver = UIScrollView()
     private let clock: any Clock<Duration>
@@ -82,7 +82,7 @@ final class InAppBrowserSheet: UIViewController {
         view.insertSubview(scrollToTopReceiver, at: 0)
     }
 
-    /// UIKitは、押したところの真下にあるスクロールビューにだけ問い合わせる。シートがウインドウより狭い（iPad）ときも、シートの左右で押したことを受けられるよう、受け手はウインドウの幅に広げる。
+    /// UIKitは、タップしたところの真下にあるスクロールビューにだけ問い合わせる。シートがウインドウより狭い（iPad）ときも、シートの左右でタップを受けられるよう、受け手はウインドウの幅に広げる。
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         let width = view.window.map { view.convert($0.bounds, from: $0) } ?? view.bounds
@@ -109,7 +109,7 @@ final class InAppBrowserSheet: UIViewController {
         return visible.minY - view.frame.minY
     }
 
-    /// シートの形。画面の上の枠と、角の丸み。動いている途中なら、いま描かれている形。
+    /// シートの形。画面の上の枠と、radius。動いている途中なら、いま描かれている形。
     var shapeOnScreen: InAppBrowserSheetShape? {
         guard let window = view.window, let superview = view.superview else { return nil }
         let visible = view.layer.presentation()?.frame ?? view.frame
@@ -160,7 +160,7 @@ final class InAppBrowserSheet: UIViewController {
     }
 }
 
-/// シートのグラバー。VoiceOverでは押すと次の段へ動かす。
+/// シートのグラバー。VoiceOverでは選択すると次の段へ動かす。
 private final class InAppBrowserGrabberView: UIView {
     weak var presentation: InAppBrowserPresentationController?
 
@@ -191,7 +191,7 @@ private final class InAppBrowserGrabberView: UIView {
 }
 
 extension InAppBrowserSheet: UIScrollViewDelegate {
-    /// 後ろの画面が見えている間は、後ろの画面でステータスバーを押したときと同じく、見えているスクロールビューを最上部へ動かす。全画面では何もしない。
+    /// 後ろの画面が見えている間は、後ろの画面でステータスバーをタップしたときと同じく、見えているスクロールビューを最上部へ動かす。全画面では何もしない。
     func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
         guard sheetPresentation?.passesTouchesOutsideSheet == true, let behind = presentingViewController?.viewIfLoaded else { return false }
         for target in behind.scrollViewsScrollingToTop() where target.delegate?.scrollViewShouldScrollToTop?(target) ?? true {

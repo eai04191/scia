@@ -2,7 +2,7 @@ public import Foundation
 public import UIKit
 
 /// UILabelの代わりに、TextKit 2で文字を並べて描けるラベル。`drawsWithTextKit`がfalseなら、UILabelのまま描く。
-/// どちらで描くときも、UILabelと同じ位置に文字が並ぶTextKit 2の並び（`textLayout(of:)`）を出し、押した文字や文字の枠を求められる。
+/// どちらで描くときも、UILabelと同じ位置に文字が並ぶTextKit 2の並び（`textLayout(of:)`）を出し、選択した文字や文字の枠を求められる。
 /// UILabelは文字の配置を公開しないため、同じ文字列と幅でTextKit 2に並べ直して位置を求める。
 /// 並べる手順は`TextKitLabelLayout`に置く。
 open class TextKitLabel: UILabel {
@@ -14,7 +14,7 @@ open class TextKitLabel: UILabel {
         set {
             assignedText = newValue
             preparedLayout = nil
-            // 測った結果は、文字列を入れる前に捨てる。UILabelは文字列を入れる中で大きさを測り直して覚えるため、
+            // 測った結果は、文字列を入れる前に捨てる。UILabelは文字列を入れる中で大きさを測り直してキャッシュするため、
             // あとで捨てると、使い回したラベルが前の文字列で測った大きさのままになる。
             invalidateTextLayout()
             attributedTextWillChange()
@@ -23,7 +23,7 @@ open class TextKitLabel: UILabel {
     }
 
     /// 置く側が中身の違う文字列を入れる前に呼ぶ。文字列から測った結果を持つ派生のラベルが、ここで捨てる。
-    /// UILabelは文字列を入れる中で大きさを測り直して覚えるため、入れたあとに捨てると、前の文字列で測った結果を使われる。
+    /// UILabelは文字列を入れる中で大きさを測り直してキャッシュするため、入れたあとに捨てると、前の文字列で測った結果を使われる。
     open func attributedTextWillChange() {}
 
     /// TextKit 2で描くときは、UILabelが持つ空白1文字ではなく、描いている文字列を読み書きする。
@@ -137,7 +137,7 @@ open class TextKitLabel: UILabel {
 
     /// 描いている文字列を替える。置く側が渡した文字列（`assignedText`）は変えない。派生のラベルが、渡された文字列を差し替えて描くときにも使う。
     /// TextKit 2で描くときは、UILabelには空白1文字だけを渡す。
-    /// 空にするとUILabelが描画を省くため、1文字にする。同じ1文字を渡し直してもUILabelは大きさを測り直さないので、測り直しと描き直しは自分で頼む。
+    /// 空にするとUILabelが描画を省くため、1文字にする。同じ1文字を渡し直してもUILabelは大きさを測り直さないので、測り直しと再描画は自分で頼む。
     public final func setDisplayedText(_ text: NSAttributedString?) {
         guard drawsWithTextKit else {
             super.attributedText = text
@@ -280,7 +280,7 @@ open class TextKitLabel: UILabel {
               let paragraphStart = fragment.textElement?.elementRange?.location
         else { return nil }
         let pointInFragment = CGPoint(x: point.x - fragment.layoutFragmentFrame.minX, y: point.y - fragment.layoutFragmentFrame.minY)
-        // 行末より右や最終行より下を押しても、いちばん近い文字が返るため、文字の枠の中かを確かめる。
+        // 行末より右や最終行より下を選択しても、いちばん近い文字が返るため、文字の枠の中かを確かめる。
         guard let line = fragment.textLineFragments.first(where: { $0.typographicBounds.contains(pointInFragment) }),
               pointInFragment.x <= line.typographicBounds.minX + line.typographicBounds.width
         else { return nil }
@@ -290,7 +290,7 @@ open class TextKitLabel: UILabel {
               let boundary = contentStorage.location(paragraphStart, offsetBy: indexInLine)
         else { return nil }
         let boundaryIndex = contentStorage.offset(from: contentStorage.documentRange.location, to: boundary)
-        // 返るのは文字と文字の境目で、押した文字の前か後ろかは書く向きで変わる。境目の前後の文字のうち、描かれた枠に押した点が入るほうを選ぶ。
+        // 返るのは文字と文字の境目で、選択した文字の前か後ろかは書く向きで変わる。境目の前後の文字のうち、描かれた枠に選択した点が入るほうを選ぶ。
         let candidates = [boundaryIndex, boundaryIndex - 1].filter { 0 <= $0 && $0 < attributedText.length }
         return candidates.first {
             characterFrame(at: $0, in: attributedText, contentStorage: contentStorage, layoutManager: layoutManager)?.contains(point) ?? false
@@ -299,7 +299,7 @@ open class TextKitLabel: UILabel {
 
     /// `index`（UTF-16の位置）を含む文字が描かれる枠。ラベルの座標で返す。
     /// 枠はUTF-16の1単位ではなく、`index`を含む書記素クラスタ全体で測る。🅰のようにサロゲートペアで書く絵文字や、
-    /// `U+FE0F`の付いた絵文字は1単位では描かれる枠がなく、絵文字のリンクを押しても当たらなかったため。
+    /// `U+FE0F`の付いた絵文字は1単位では描かれる枠がなく、絵文字のリンクを選択しても当たらなかったため。
     public final func characterFrame(
         at index: Int, in text: NSAttributedString, contentStorage: NSTextContentStorage, layoutManager: NSTextLayoutManager
     ) -> CGRect? {

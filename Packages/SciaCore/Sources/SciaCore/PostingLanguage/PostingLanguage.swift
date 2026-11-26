@@ -53,7 +53,7 @@ public struct PostingLanguageRow: Hashable, Sendable, Identifiable {
     }
 }
 
-/// 言語を選ぶシートのまとまり。
+/// 言語を選ぶシートのグループ。
 public struct PostingLanguageSection: Hashable, Sendable {
     public enum Kind: Hashable, Sendable {
         /// アカウントの既定の言語。既定がなければ、サーバーに任せる行。
@@ -72,12 +72,12 @@ public struct PostingLanguageSection: Hashable, Sendable {
         self.rows = rows
     }
 
-    /// 並べるまとまり。空のまとまりは除く。
+    /// 並べるグループ。空のグループは除く。
     /// - Parameters:
     ///   - defaultCode: アカウントの既定の言語。なければnil。
     ///   - offersServerDecision: 既定の言語がないときに、サーバーに任せる行を出す。編集では出さない（言語を送らなければ、サーバーは今の言語を残すため）。
     ///   - recentCodes: 最近選んだ言語。新しい順。
-    ///   - languages: サーバーが受け付ける言語。読んでいる間と読めなかったときはnilで、すべての言語のまとまりを出さない。
+    ///   - languages: サーバーが受け付ける言語。読んでいる間と読めなかったときはnilで、すべての言語のグループを出さない。
     ///   - query: 名前で探す語。空なら絞らない。端末の言語の名前、サーバーの返す名前、コードのどれかに含まれる行だけを残す。ひらがなとカタカナ、全角と半角、大文字と小文字は区別しない。
     public static func sections(defaultCode: String?, offersServerDecision: Bool = true, recentCodes: [String], languages: [PostingLanguage]?, query: String, locale: Locale) -> [PostingLanguageSection] {
         let serverNames = Dictionary((languages ?? []).map { ($0.code, $0.name) }, uniquingKeysWith: { first, _ in first })
@@ -174,7 +174,7 @@ public final class PostingLanguagePicker {
         self.load = load
     }
 
-    /// サーバーが受け付ける言語を読む。読み直すときも、読み込み中に戻してから読む。
+    /// サーバーが受け付ける言語を読む。再読み込みするときも、読み込み中に戻してから読む。
     public func loadLanguages() async {
         languages = .loading
         do {
@@ -184,7 +184,7 @@ public final class PostingLanguagePicker {
         }
     }
 
-    /// 並べるまとまり。
+    /// 並べるグループ。
     public func sections(locale: Locale) -> [PostingLanguageSection] {
         let loaded: [PostingLanguage]? = if case .loaded(let languages) = languages { languages } else { nil }
         return PostingLanguageSection.sections(defaultCode: defaultCode, offersServerDecision: offersServerDecision, recentCodes: recentCodes, languages: loaded, query: query, locale: locale)

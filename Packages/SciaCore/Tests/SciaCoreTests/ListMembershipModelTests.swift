@@ -79,7 +79,7 @@ struct ListMembershipModelTests {
         #expect(model.availability == .available)
     }
 
-    /// 押したらすぐチェックマークを変え、サーバーが受け付けたらそのまま残す。
+    /// 選択したらすぐチェックマークを変え、サーバーが受け付けたらそのまま残す。
     @Test func addsOptimistically() async throws {
         let gate = Gate()
         let server = Server(addGate: gate)
@@ -118,7 +118,7 @@ struct ListMembershipModelTests {
         #expect(failures == ["リストに追加できませんでした"])
     }
 
-    /// 送っている途中に押し直したら、押し直した方を最後の状態にし、先の結果で戻さない。
+    /// 送っている途中に選択し直したら、選択し直した方を最後の状態にし、先の結果で戻さない。
     @Test func laterToggleWinsOverEarlierResult() async throws {
         let gate = Gate()
         let server = Server(addGate: gate)
@@ -134,7 +134,7 @@ struct ListMembershipModelTests {
         #expect(server.sent.suffix(2) == ["add 1", "remove 1"])
     }
 
-    /// 送り終える前にシートを閉じてモデルを捨てても、押した足し外しは最後まで送る。
+    /// 送り終える前にシートを閉じてモデルを捨てても、選択した足し外しは最後まで送る。
     @Test func sendingOutlivesTheSheet() async throws {
         let gate = Gate()
         let server = Server(addGate: gate)

@@ -1,12 +1,12 @@
 public import Foundation
 
-/// ビューアで出す知らせの中身。カタログでも同じ文言を並べるため、ビューアの外に置く。
+/// ビューアで出すチップの中身。カタログでも同じ文言を並べるため、ビューアの外に置く。
 extension Notice {
     /// 写真に保存したこと。数秒で消える。
     public static let savedToPhotos = Notice(id: "media.saved", kind: .success, title: "写真に保存しました")
 
     /// 投稿欄から開いたビューアの、アップロードや代替テキストの送信の状態。済んでいればnil。
-    /// 失敗したときだけ押せ、押すと理由と、再試行か削除を出す。
+    /// 失敗したときだけ選択でき、選択すると理由と、再試行か削除を出す。
     /// - Parameter status: 投稿欄から開いていなければnil。
     /// - Parameter progress: 送っている間の進み具合。
     /// - Parameter reduction: サーバーの上限のために縮めたときの前と後。済んでいれば、縮めたことと理由を出す。
@@ -59,13 +59,13 @@ extension Notice {
 
     public static let downloadIDPrefix = "media.download."
 
-    /// `url`を落としている途中の知らせのid。
+    /// `url`を落としている途中のチップのid。
     public static func downloadID(of url: URL) -> String {
         downloadIDPrefix + url.absoluteString
     }
 
-    /// 共有や保存のために落としている途中。押すと止めるかの確認を出す。全体の大きさが分かるまでは`fraction`が0のため、割合を出さない。
-    /// - Parameter onStop: nilなら押せない。落とし終えて保存している間など、止められないとき。
+    /// 共有や保存のために落としている途中。選択すると止めるかの確認を出す。全体の大きさが分かるまでは`fraction`が0のため、割合を出さない。
+    /// - Parameter onStop: nilなら無効。落とし終えて保存している間など、止められないとき。
     public static func download(of url: URL, fraction: Double, onStop: (@MainActor () -> Void)?) -> Notice {
         Notice(
             id: downloadID(of: url),
@@ -91,7 +91,7 @@ extension Notice {
     /// ビューアを閉じたため、共有のために落としている途中のものを止めた。数秒で消える。
     public static let shareStopped = Notice(id: "media.shareStopped", kind: .info, title: "共有を中止しました")
 
-    /// 共有や保存の失敗。数秒で消え、押すと理由が出る。
+    /// 共有や保存の失敗。数秒で消え、選択すると理由が出る。
     public static func transferFailure(title: String, showReason: @escaping @MainActor () -> Void) -> Notice {
         Notice(id: "media.transferFailure", kind: .failure, title: title, action: .disclosure(hint: "理由を見られます。", handler: showReason))
     }

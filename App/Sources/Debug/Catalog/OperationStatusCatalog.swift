@@ -3,7 +3,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「操作の状況」のシート。失敗を起こさずに、空のとき、件数が多いとき、文言が長いときを並べる。行を押しても何も起きない。
+/// 「操作の状況」のシート。失敗を起こさずに、空のとき、件数が多いとき、文言が長いときを並べる。行を選択しても何も起きない。
 enum OperationStatusCatalog {
     @MainActor
     static func states() -> [CatalogState] {

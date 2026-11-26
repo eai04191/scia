@@ -71,7 +71,7 @@ struct MediaThumbnailSelectionTests {
         #expect(request(attachment(small: nil), tile: CGSize(width: 50, height: 50))?.url == original)
     }
 
-    /// 元の画像がプレビューと同じ大きさなら、読み直しても細かくならない。
+    /// 元の画像がプレビューと同じ大きさなら、再読み込みしても細かくならない。
     @Test func readsPreviewWhenOriginalIsNoLargerThanPreview() {
         #expect(request(attachment(original: (400, 300), small: (400, 300)))?.url == preview)
     }
@@ -191,7 +191,7 @@ struct MediaThumbnailSelectionTests {
         #expect(small?.purpose == .display)
     }
 
-    /// 元の画像は、ビューアで開くのと同じものとして印を付け、プレビュー画像には付けない。先読みの目的に替えても印は残す。
+    /// 元の画像は、ビューアで開くのと同じものとしてマークを付け、プレビュー画像には付けない。プリフェッチの目的に替えてもマークは残す。
     @Test func originalIsMarkedAndKeptWhenSentAsPrefetch() {
         let original = request(attachment())
         #expect(original?.isOriginal == true)

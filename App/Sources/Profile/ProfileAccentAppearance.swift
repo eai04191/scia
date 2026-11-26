@@ -49,7 +49,7 @@ struct ProfileAccentAppearance {
     }
 
     /// カードの中のラベルの文字のうち、控えめな文字（`secondaryLabel`）の部分を`color`に塗り替える。nilなら`secondaryLabel`に戻す。
-    /// 塗り替えた部分には印の属性を付け、ダークモードへの切り替えなどで塗り直せるようにする。
+    /// 塗り替えた部分にはマーカーの属性を付け、ダークモードへの切り替えなどで塗り直せるようにする。
     static func recolorSecondaryText(in view: UIView, to color: UIColor?) {
         if let label = view as? UILabel, let text = Self.originalText(of: label), text.length > 0 {
             let mutable = NSMutableAttributedString(attributedString: text)
@@ -73,8 +73,8 @@ struct ProfileAccentAppearance {
         }
     }
 
-    /// ラベルの中のリンクに下線を引くか外し、確認済みのチェックマークを`badge`の色で描き直す。`badge`がnilなら緑に戻す。
-    /// 下線とチェックマークには印の属性を付け、外すときに、もともと引いてあった下線には触れないようにする。
+    /// ラベルの中のリンクに下線を引くか外し、確認済みのチェックマークを`badge`の色で再描画する。`badge`がnilなら緑に戻す。
+    /// 下線とチェックマークにはマーカーの属性を付け、外すときに、もともと引いてあった下線には触れないようにする。
     static func restyleLinks(in view: UIView, underline: Bool, badge: UIColor?) {
         if let label = view as? UILabel, let text = Self.originalText(of: label), text.length > 0 {
             let mutable = NSMutableAttributedString(attributedString: text)
@@ -129,11 +129,11 @@ extension ProfileCardPalette.Options {
 }
 
 extension NSAttributedString.Key {
-    /// カードの色で塗り替えた控えめな文字の印。
+    /// カードの色で塗り替えた控えめな文字のマーカー。
     static let profileAccentSecondary = NSAttributedString.Key("scia.profileAccentSecondary")
-    /// カードの色のために引いたリンクの下線の印。
+    /// カードの色のために引いたリンクの下線のマーカー。
     static let profileAccentUnderline = NSAttributedString.Key("scia.profileAccentUnderline")
-    /// 補足情報の確認済みのチェックマークの印。カードの色に合わせて描き直すときに探す。
+    /// 補足情報の確認済みのチェックマークのマーカー。カードの色に合わせて再描画するときに探す。
     static let profileVerifiedBadge = NSAttributedString.Key("scia.profileVerifiedBadge")
 }
 

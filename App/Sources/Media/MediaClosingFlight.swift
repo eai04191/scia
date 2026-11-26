@@ -18,13 +18,13 @@ final class MediaClosingFlight {
         /// 複製や下地を載せる、操作を素通しする層。終わったら外す。
         let overlay: UIView
         let morph: FocusCroppedImageView
-        /// 複製のすぐ後ろに置く影。戻り先が影を落としていれば、着くにつれて同じ濃さにする。
+        /// 複製のすぐ後ろに置く影。戻り先が影を落としていれば、着くにつれて同じ不透明度にする。
         let shadow: MorphShadowView
         /// 複製に載せた、サムネイルに重ねた表示の複製。
         let decoration: UIView?
-        /// 複製のさらに手前に置いた、サムネイルに重なっているビューの複製。重ねた表示と同じ濃さで出し入れする。
+        /// 複製のさらに手前に置いた、サムネイルに重なっているビューの複製。重ねた表示と同じ不透明度で出し入れする。
         let overlap: MediaSourceOverlap?
-        /// 複製に敷く、サムネイルの背景の色。重ねた表示と同じ濃さで出し入れする。
+        /// 複製に敷く、サムネイルの背景の色。重ねた表示と同じ不透明度で出し入れする。
         let placeholderColor: UIColor?
         /// タイムラインを暗くする下地。`fadingViews`にも含め、閉じながら薄くする。
         let backdrop: UIView
@@ -39,7 +39,7 @@ final class MediaClosingFlight {
     private let movesImage: Bool
     private let handoffStart: CGFloat
     private let barOverlapFadeEnd: CGFloat
-    /// 閉じ始めに、バーと重なっていた部分を手前に見せていた濃さ。
+    /// 閉じ始めに、バーと重なっていた部分を手前に見せていた不透明度。
     private let startOverlapOpacity: CGFloat
     /// 戻り先を見失ってから薄くしている度合い。1で不透明。
     private var visibility: CGFloat = 1
@@ -54,18 +54,18 @@ final class MediaClosingFlight {
     private let startRadius: CGFloat
     /// 閉じ始めの複製の白いフチの幅。ふつうは0で、開く途中から閉じるときだけ残っている。
     private let startBorder: CGFloat
-    /// 閉じ始めの複製の、中身の濃さと暗さ。
+    /// 閉じ始めの複製の、中身の不透明度と暗さ。
     private let startAppearance: (contentOpacity: CGFloat, dimming: CGFloat)
-    /// 閉じ始めに重ねていた一覧の明るさの濃さ。開く途中から閉じるときは、0より大きい。
+    /// 閉じ始めに一覧の明るさで重ねていた画像の不透明度。開く途中から閉じるときは、0より大きい。
     private let startDynamicRangeBlend: CGFloat
-    /// 閉じ始めの影の濃さ。
+    /// 閉じ始めの影の不透明度。
     private let startShadowOpacity: Float
     /// 写真の白いフチを太くし始めてから着くまでの、動きの進み具合の幅。後半で太くし、広がった画像を細い線が囲まないようにする。
     private let paperBorderPortion: CGFloat
     private let startDecorationAlpha: CGFloat
     private let startFadingAlphas: [CGFloat]
     private var concealedTile: ViewerConcealment?
-    /// 戻り先の、回転を戻したときの枠、角度、角の丸み。回した起点（タイムラインで重ねた写真）へは、その角度まで回しながら戻す。
+    /// 戻り先の、回転を戻したときの枠、角度、radius。回した起点（タイムラインで重ねた写真）へは、その角度まで回しながら戻す。
     private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat, border: CGFloat, appearance: (contentOpacity: CGFloat, dimming: CGFloat), shadowOpacity: Float)?
     private let source: any FrameSource
     /// 戻り始めてからの時間。
@@ -78,7 +78,7 @@ final class MediaClosingFlight {
     ///   - concealedTile: 戻り先のサムネイルを隠している取り分。戻り終えたら返す。
     ///   - handoffStart: タイムラインの中の複製へ受け渡し始める進み具合。タイムラインの中の複製がなければ使わない。
     ///   - barOverlapFadeEnd: 閉じ始めにバーと重なっていた部分を、タイムラインの中の複製へ入れ替え終える進み具合。タイムラインの中の複製がなければ使わない。
-    ///   - startOverlapOpacity: 閉じ始めに、バーと重なっていた部分を手前に見せていた濃さ。開く途中から閉じるときは1未満になる。
+    ///   - startOverlapOpacity: 閉じ始めに、バーと重なっていた部分を手前に見せていた不透明度。開く途中から閉じるときは1未満になる。
     ///   - movesImage: falseなら複製を動かさず、その場で薄くする。
     ///   - paperBorderPortion: 写真の白いフチ（タイムラインで重ねた写真）を、着く手前のこの進み具合の幅で太くする。
     ///   - source: 経過時間を送る元。テストでは、実際の時間に頼らずに動きを進めるため、手で送る元を渡す。
@@ -148,8 +148,8 @@ final class MediaClosingFlight {
             concealedTile = tileToConceal.map(ViewerConcealment.init)
         }
         if let tile {
-            // 白いフチの付いた起点（タイムラインで重ねた写真）へは、フチを含めた写真の枠と角の丸みへ、フチを太くしながら戻す。
-            // 縮めて置いた起点（タイムラインで傾けずに重ねた奥の写真）へは、フチと角の丸みも同じ倍率で細くして戻す。
+            // 白いフチの付いた起点（タイムラインで重ねた写真）へは、フチを含めた写真の枠とradiusへ、フチを太くしながら戻す。
+            // 縮めて置いた起点（タイムラインで傾けずに重ねた奥の写真）へは、フチとradiusも同じ倍率で細くして戻す。
             let look = tile.viewerLook
             let paper = look.paperBorder
             let scale = tile.scale(in: window)
@@ -170,7 +170,7 @@ final class MediaClosingFlight {
             // フチを太くするのと同じ区間で、戻り先の見え方（中身を描かない、暗くする）へ移す。着いたところで見え方が急に替わらないようにする。
             parts.morph.contentOpacity = startAppearance.contentOpacity + (target.appearance.contentOpacity - startAppearance.contentOpacity) * borderProgress
             parts.morph.dimming = startAppearance.dimming + (target.appearance.dimming - startAppearance.dimming) * borderProgress
-            // 影も同じ区間で、戻り先が落としている影の濃さにする。着いたところで影が一度に現れて見えないようにする。
+            // 影も同じ区間で、戻り先が落としている影の不透明度にする。着いたところで影が一度に現れて見えないようにする。
             parts.shadow.opacity = startShadowOpacity + (target.shadowOpacity - startShadowOpacity) * Float(borderProgress)
             let decorationAlpha = startDecorationAlpha + (1 - startDecorationAlpha) * clamped
             parts.decoration?.alpha = decorationAlpha
@@ -179,7 +179,7 @@ final class MediaClosingFlight {
                 // 戻り先が画面から外れたら、最後の位置へ向かいながら薄くする。
                 visibility = min(visibility, 1 - clamped)
             }
-            // タイムラインの中の複製へ受け渡す間も、受け渡した複製の手前に重なって見えるよう、複製の濃さとは別に出す。
+            // タイムラインの中の複製へ受け渡す間も、受け渡した複製の手前に重なって見えるよう、複製の不透明度とは別に出す。
             parts.overlap?.view.alpha = decorationAlpha * visibility
         } else {
             visibility = 1 - clamped

@@ -10,7 +10,7 @@ public enum DiffChange: Equatable, Sendable {
 enum SequenceDiff {
     /// `old`から`new`への差分を、新しい版の並びに消えた要素を差し込んだ1列にして返す。
     ///
-    /// 変わらない要素に挟まれた変更のまとまりの中では、消えた要素を先に、足された要素を後に並べる。
+    /// 変わらない要素に挟まれた変更のグループの中では、消えた要素を先に、足された要素を後に並べる。
     /// 消えたものと足されたものが交互に並ぶと、どれがどれに置き換わったのか読み取れないため。
     static func merged<Element: Equatable>(_ old: [Element], _ new: [Element]) -> [(Element, DiffChange)] {
         let difference = new.difference(from: old)

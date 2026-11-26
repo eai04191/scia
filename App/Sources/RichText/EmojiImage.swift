@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// カスタム絵文字の画像。届いたら描き直す。
+/// カスタム絵文字の画像。届いたら再描画する。
 struct EmojiImage: UIViewRepresentable {
     /// 描くのに読む画像。動かすなら元の画像、動かさないなら動かない版。
     let url: URL

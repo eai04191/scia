@@ -351,7 +351,7 @@ struct StatusRefreshTests {
     }
 
     /// 引用元の中の引用だけが承認待ちなら、引用元は手元のまま残し、中の引用だけを差し替える。
-    /// 取り直している間に囲みから行ったお気に入りを、取り直した中身で戻さないため。
+    /// 取り直している間にカードから行ったお気に入りを、取り直した中身で戻さないため。
     @MainActor
     @Test func nestedQuoteKeepsActionsOnQuotedStatus() throws {
         let shown = Self.quoting("1", state: "accepted", nestedState: "pending")
@@ -364,7 +364,7 @@ struct StatusRefreshTests {
         #expect(adopted.favourited)
     }
 
-    /// 承認待ちでない引用は、取り直した引用に差し替えない。取り直している間に囲みから行ったお気に入りなどを、取り直した中身で戻さないため。
+    /// 承認待ちでない引用は、取り直した引用に差し替えない。取り直している間にカードから行ったお気に入りなどを、取り直した中身で戻さないため。
     @Test func keepsQuoteThatWasNotPending() {
         let shown = Self.quoting("1", state: "accepted", nestedState: "accepted")
         let refetched = Self.quoting("1", state: "revoked")

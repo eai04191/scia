@@ -11,7 +11,7 @@ public enum OperationStatusTexts {
     public static let noFailures = "失敗はありません"
     public static let failuresHeader = "最近の失敗"
 
-    /// 最近の失敗の節の注記。
+    /// 最近の失敗のセクションの注記。
     /// - Parameter limit: 残す失敗の数（`OperationStatus.failureLimit`）。
     public static func failuresFooter(limit: Int) -> String {
         // iOSでは、SwiftUIの`Text`に数を埋めて出していて、`Text`が桁区切りを付けていたため、同じにする。
@@ -56,7 +56,7 @@ public enum NoticeTexts {
 
 /// ステータスバーの通知の文言。
 public enum StatusBarTickerTexts {
-    /// 押すと通知のタブを開くことのヒント。
+    /// 選択すると通知のタブを開くことのヒント。
     public static let openHint = "通知タブを開きます。"
 }
 

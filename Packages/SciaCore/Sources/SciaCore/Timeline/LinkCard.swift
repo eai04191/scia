@@ -7,7 +7,7 @@ public enum LinkCard: Equatable, Sendable {
     /// サーバーがまだカードを付けていないか、作らなかったリンク。通信せずに分かるリンク先だけを出す。
     case link(URL)
 
-    /// カードを押したときに開く先。
+    /// カードを選択したときに開く先。
     public var url: URL {
         switch self {
         case .card(let card): card.url

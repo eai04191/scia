@@ -5,7 +5,7 @@ import UIKit
 /// タイムラインの頭に並べると、固定された投稿が多いときに投稿のタイムラインが下へ押し出されるため、何件あっても高さの変わらない横の列にする。
 /// ほかのサーバーのアカウントでは、固定できる数に上限がないこともある。
 final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
-    /// カードが押されたときに、その投稿と、ウインドウの座標でのカードの枠を渡して呼ぶ。
+    /// カードが選択されたときに、その投稿と、ウインドウの座標でのカードの枠を渡して呼ぶ。
     var onOpen: ((Status, CGRect) -> Void)?
 
     private let emojiImages: EmojiImageStore<UIImage>
@@ -88,14 +88,14 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
         ])
     }
 
-    /// 並べる投稿を変える。中身が同じなら作り直さない。編集や操作で中身が変われば、同じ投稿の並びでも描き直し、押したときに渡す投稿も新しくする。
+    /// 並べる投稿を変える。中身が同じなら作り直さない。編集や操作で中身が変われば、同じ投稿の並びでも再描画し、選択したときに渡す投稿も新しくする。
     /// 同じ投稿の並びのままなら、横のスクロール位置は残す。
     func setItems(_ items: [ProfileShelfItem], glyphLanguage: String) {
         guard items != self.items || glyphLanguage != self.glyphLanguage else { return }
         rebuild(items, glyphLanguage: glyphLanguage)
     }
 
-    /// 並べている投稿のカードを描き直す。本文のカスタム絵文字が読み込まれたときに呼ぶ。読み込む前は、絵文字の場所が空白で描かれているため。
+    /// 並べている投稿のカードを再描画する。本文のカスタム絵文字が読み込まれたときに呼ぶ。読み込む前は、絵文字の場所が空白で描かれているため。
     func redraw() {
         rebuild(items, glyphLanguage: glyphLanguage)
     }
@@ -148,7 +148,7 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
 }
 
 /// 固定された投稿のカード。持ち主はプロフィールの本人なので、名前とアイコンは出さず、本文、添付ファイル、投稿した日を出す。
-/// 添付ファイルは見せるだけで、押すとカードと同じく投稿を開く。
+/// 添付ファイルは見せるだけで、選択するとカードと同じく投稿を開く。
 private final class ProfilePinnedCard: UIControl {
     var onTap: (() -> Void)?
 
@@ -265,7 +265,7 @@ struct ProfileShelfItem: Equatable {
     /// カードの本文の右に重ねて出す添付ファイル。出さないならnil。ぼかしは、タイムラインの行と同じく、使う人が開いたり隠したりした選択に従う。
     /// 「投稿の見た目」の並べ方によらず、本文の右に小さく出すときの形にする。カードの幅には、本文の下に大きく並べる余地がないため。
     let media: MediaGridView.Content?
-    /// 本文のカスタム絵文字ごとの描き方。変わったらカードを描き直す。
+    /// 本文のカスタム絵文字ごとの描き方。変わったらカードを再描画する。
     let emojiDisplays: CustomEmojiDisplays
 
     @MainActor
@@ -304,7 +304,7 @@ private extension MediaGridView.Content {
 }
 
 /// 固定された投稿の棚のスクロールビュー。カードは`UIControl`で、スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えない。
-/// カードを押して少し待ってから横へ動かしてもスクロールできるよう、カードの押下は取り消してスクロールに切り替える。
+/// カードを押下して少し待ってから横へ動かしてもスクロールできるよう、カードの押下は取り消してスクロールに切り替える。
 private final class PinnedShelfScrollView: UIScrollView {
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is ProfilePinnedCard || super.touchesShouldCancel(in: view)

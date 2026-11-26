@@ -13,9 +13,9 @@ enum AccountScreenItem: Hashable {
     case logOut
 }
 
-/// アカウントの画面に出すものと、押したときの処理。セッションが作る。
+/// アカウントの画面に出すものと、選択したときの処理。セッションが作る。
 struct AccountScreenContext {
-    /// ログイン中のサーバーのドメイン。サーバーが出すものの節の見出しにする。
+    /// ログイン中のサーバーのドメイン。サーバーが出すもののセクションの見出しにする。
     let server: String
     /// 未読のお知らせの数。画面を出すたびに読む。
     let unreadAnnouncementCount: @MainActor () -> Int
@@ -56,7 +56,7 @@ struct AccountView: View {
     var body: some View {
         Form {
             Section {
-                // タブの画面に開くものがないので、アカウントの画面を閉じずに、この中で進む。リンクを押したときだけ、閉じてから開く。
+                // タブの画面に開くものがないので、アカウントの画面を閉じずに、この中で進む。リンクを選択したときだけ、閉じてから開く。
                 NavigationLink {
                     EmbeddedViewController(make: context.makeAnnouncements)
                         .ignoresSafeArea()
@@ -85,7 +85,7 @@ struct AccountView: View {
                 Text(account)
             }
             Section {
-                // この節の画面は投稿やリンクを出さないので、アカウントの画面を閉じずに、この中で進む。
+                // このセクションの画面は投稿やリンクを出さないので、アカウントの画面を閉じずに、この中で進む。
                 // Mastodonのウェブの設定と同じ順に並べる。
                 NavigationLink(SettingsTexts.AccountAppearance.title) {
                     AccountAppearanceView(model: context.appearance.model, webURL: context.appearance.webURL)
@@ -144,7 +144,7 @@ private struct AccountScreenRow: View {
     }
 }
 
-/// 自分のリストを並べる。押すとそのタイムラインを開き、右上の＋で作り、左へスワイプして消す。
+/// 自分のリストを並べる。選択するとそのタイムラインを開き、右上の＋で作り、左へスワイプして消す。
 /// リストは、サーバーから読んでタブの並びに反映してあるもの（docs/tabs.mdの「リスト」）を出す。
 private struct AccountListsView: View {
     let settings: AppSettings

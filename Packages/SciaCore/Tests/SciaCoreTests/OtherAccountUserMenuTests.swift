@@ -99,7 +99,7 @@ struct OtherAccountUserMenuTests {
     }
 
     /// 選んだアカウントのサーバーでプロフィールのURLで相手を探し、そのアカウントから見た関係で項目を組む。どのアカウントでも同じ結果になる項目と、「別のアカウントで」は出さない。
-    /// 見つけた相手は覚え、次はすぐ組む。
+    /// 見つけた相手はキャッシュし、次はすぐ組む。
     @Test func buildsUserMenuAsOtherAccount() async throws {
         let otherAlice = otherAlice
         let resolved = Mutex<[URL]>([])
@@ -122,7 +122,7 @@ struct OtherAccountUserMenuTests {
         #expect(relation.accountID == "500")
         #expect(resolved.withLock { $0 } == [Self.aliceURL].compactMap(\.self))
 
-        // 見つけた相手と関係を覚えているので、次は探さずにすぐ組む。
+        // 見つけた相手と関係をキャッシュしているので、次は探さずにすぐ組む。
         let again = try #require(tree.menu(groups: groups, avatar: nil)?.flattenedChildren.first { $0.title == "@bobで" })
         #expect(MenuNodeTests.describe(again.children) == "メンション,リストに追加|フォローを外す,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日]")
         #expect(resolved.withLock { $0.count } == 1)
@@ -184,7 +184,7 @@ struct OtherAccountUserMenuTests {
         #expect(acct == "alice@remote.example")
         #expect(asked.withLock { $0 } == ["alice@remote.example"])
 
-        // 見つけた相手を覚えているので、大文字と小文字が違っても、次は探さない。
+        // 見つけた相手をキャッシュしているので、大文字と小文字が違っても、次は探さない。
         _ = await bob.lookUpPerson(.acct("ALICE@remote.example"))
         #expect(asked.withLock { $0.count } == 1)
     }
@@ -199,7 +199,7 @@ struct OtherAccountUserMenuTests {
         #expect(MenuNodeTests.describe(await loaded(bobMenu.children)) == "このアカウントからは見つからないユーザーです(押せない)")
     }
 
-    /// 見つからなければ押せない行で知らせ、探せなければ理由を添えて押せない行で知らせる。
+    /// 見つからなければ無効の行で知らせ、探せなければ理由を添えて無効の行で知らせる。
     @Test func showsWhenPersonIsNotFound() async throws {
         let notFound = try #require(otherAccountsNode(accounts: [try account(resolveAccount: { _ in nil })]))
         #expect(MenuNodeTests.describe(await loaded(notFound.children)) == "このアカウントからは見つからないユーザーです(押せない)")
@@ -207,7 +207,7 @@ struct OtherAccountUserMenuTests {
         #expect(MenuNodeTests.describe(await loaded(failed.children)) == "ユーザーを探せませんでした(押せない)")
     }
 
-    /// メニューを開くたびに、前に見つけた相手との関係を、そのアカウントで読み直す。「別のアカウントで」を組まない並びでは読まない。
+    /// メニューを開くたびに、前に見つけた相手との関係を、そのアカウントで再読み込みする。「別のアカウントで」を組まない並びでは読まない。
     @Test func refreshReloadsRelationOfKnownPerson() async throws {
         let otherAlice = otherAlice
         let fetched = Mutex<[[String]]>([])
@@ -240,7 +240,7 @@ struct OtherAccountUserMenuTests {
         #expect(MenuNodeTests.describe(loaded) == "別のアカウントで[@bob[メンション,リストに追加,フォローを外す,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日]],@carol[このアカウントからは見つからないユーザーです(押せない)],@dave[ユーザーを探せませんでした(押せない)]]")
     }
 
-    /// 投稿のメニューに何人も出るときは、前に見つけた人たちとの関係を、ほかのアカウントごとにまとめて1回で読み直す。
+    /// 投稿のメニューに何人も出るときは、前に見つけた人たちとの関係を、ほかのアカウントごとにまとめて1回で再読み込みする。
     @Test func refreshOfStatusMenuUsersBatchesRelationships() async throws {
         let people = (1...3).map { Account(id: "\($0)", username: "user\($0)", acct: "user\($0)@remote.example", displayName: "", avatar: nil, url: URL(string: "https://remote.example/@user\($0)")) }
         let fetched = Mutex<[[String]]>([])

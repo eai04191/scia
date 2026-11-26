@@ -39,7 +39,7 @@ struct QuotePostingTests {
     }
 
     /// 公開とハッシュタグのストリーミングは、ログインしていない人向けの形（自分の操作を表す項目がない）で届き、`current_user`がいつも`denied`になる。
-    /// そのときは押せるようにし、押してから確かめる。
+    /// そのときは有効にし、選択してから確かめる。
     @Test func anonymousPayloadLeavesAvailabilityUnverified() throws {
         let anonymous = try MastodonDecoder.make().decode(Status.self, from: try fixture("status_with_quote"))
 

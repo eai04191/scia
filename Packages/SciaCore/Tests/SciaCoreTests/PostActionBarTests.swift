@@ -115,7 +115,7 @@ struct PostActionBarTests {
         #expect(reloaded.showsActionBarLongPressItemsInMenu)
     }
 
-    /// 読み直しを外したハッシュタグの操作でメニューを組んでも、読み直さない。ミュートの項目は同じく出す。
+    /// 再読み込みを外したハッシュタグの操作でメニューを組んでも、再読み込みしない。ミュートの項目は同じく出す。
     @Test func hashtagActionsWithoutRefreshDoNotRefresh() {
         var refreshes = 0
         let actions = HashtagMenuActions(

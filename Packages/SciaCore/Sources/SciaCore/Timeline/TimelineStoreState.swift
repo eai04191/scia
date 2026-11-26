@@ -11,7 +11,7 @@ extension TimelineStore {
         /// これより古い投稿はない。
         var reachedEnd = false
         var isLoading = false
-        /// 直近の読み込みで、サーバーがホームを再生成中だった。結果が揃っていないため、時間をおいて読み直す。
+        /// 直近の読み込みで、サーバーがホームを再生成中だった。結果が揃っていないため、時間をおいて再読み込みする。
         var isRegenerating = false
         /// ストリーミングで届き、まだ挿入していない投稿。届いた順。
         var pending: [Status] = []
@@ -28,7 +28,7 @@ extension TimelineStore {
         var savedReadID: String?
         /// 読み込み中のギャップのID。
         var loadingGapIDs: Set<String> = []
-        /// 直近の読み込みに失敗したギャップと、その理由。読み直し始めたら外す。
+        /// 直近の読み込みに失敗したギャップと、その理由。再読み込みし始めたら外す。
         var failedGaps: [String: ErrorPresentation] = [:]
 
         /// 補完を始めたが、まだ成功していない基準のID。失敗した後に新着が挿入されて最新のIDが進んでも、次の補完はここから読む。

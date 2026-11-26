@@ -2,11 +2,11 @@ import SciaCore
 import TextKit2Label
 import UIKit
 
-/// 投稿の本文の下に置く、ほかの投稿の囲み。Mastodonの引用と、fxtwitterから読んだXの投稿に使う。決まりは`docs/quote.md`と`docs/link-card.md`。
+/// 投稿の本文の下に置く、ほかの投稿のカード。Mastodonの引用と、fxtwitterから読んだXの投稿に使う。決まりは`docs/quote.md`と`docs/link-card.md`。
 ///
 /// 上から、作者の行、注意書き、本文、添付ファイル、補足の行を並べる。引用元を出せないときは、作者の行を出さず、理由の1行だけを本文として出す。
 /// 添付ファイルを重ねて出すときは、本文の右に置き、本文はその分をあけて折り返す。補足の行は、本文とサムネイルのどちらよりも下に置く。決まりは`docs/timeline-media.md`。
-/// 囲みのどこかが押されたら、置く側が決めた先を開く。アイコン、注意書き、サムネイル、本文のリンク、押せる補足の行の押下は、並べた部品が受ける。
+/// カードのどこかが選択されたら、置く側が決めた先を開く。アイコン、注意書き、サムネイル、本文のリンク、選択できる補足の行の押下は、並べた部品が受ける。
 final class EmbeddedPostView: UIButton {
     struct Content: Equatable {
         /// 作者の行。出せない理由だけを出すときはnil。
@@ -14,14 +14,14 @@ final class EmbeddedPostView: UIButton {
             var avatar: AvatarView.Content
             /// 作者の行の文字。名前は太く、`@`から始まる名前は控えめに描く。
             var name: NSAttributedString
-            /// アイコンを押してプロフィールを開けるか。
+            /// アイコンを選択してプロフィールを開けるか。
             var opensAccount: Bool
         }
 
         /// 本文と添付ファイルの下に並べる1行。引用元の投票や、引用元がさらに引用していることを示す。
         struct Note: Equatable {
             var text: NSAttributedString
-            /// 押せる見た目にし、押下を囲みに渡さず受ける。
+            /// 選択できる見た目にし、押下をカードに渡さず受ける。
             var isPressable: Bool
         }
 
@@ -35,7 +35,7 @@ final class EmbeddedPostView: UIButton {
             var fadeWidth: Double
         }
 
-        /// 中身を見分ける。リンクカードから替わったのが同じ囲みかを比べるのに使う。
+        /// 中身を見分ける。リンクカードから替わったのが同じカードかを比べるのに使う。
         var id: String
         var header: Header?
         var avatarSize: CGFloat
@@ -61,25 +61,25 @@ final class EmbeddedPostView: UIButton {
         /// 添付ファイルがなければnil。
         var media: MediaGridView.Content?
         var notes: [Note] = []
-        /// 囲みを押して開けるか。開けなければ押下を受けず、行に渡す。
+        /// カードを選択して開けるか。開けなければ押下を受けず、行に渡す。
         var isPressable = true
-        /// 読み上げで、囲みを押す操作の名前。
+        /// 読み上げで、カードを選択する操作の名前。
         var openActionName: String
-        /// 囲みの内側の余白。
+        /// カードの内側の余白。
         var padding: CGFloat
-        /// 作者のアイコンと名前のすき間。
+        /// 作者のアイコンと名前のgap。
         var avatarNameSpacing: CGFloat
         /// 作者の行と本文のあいだ。
         var headerSpacing: CGFloat
         /// 本文、添付ファイル、補足の行のあいだ。
         var mediaSpacing: CGFloat
-        /// リンクカードから替わったときに、囲みを浮かび上がらせる時間。
+        /// リンクカードから替わったときに、カードをフェードインさせる時間。
         var transitionDuration: TimeInterval
     }
 
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
-    /// 閲覧注意のぼかしが押されたときに呼ぶ。
+    /// 閲覧注意のぼかしが選択されたときに呼ぶ。
     var onRevealMedia: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
@@ -91,11 +91,11 @@ final class EmbeddedPostView: UIButton {
         didSet { accountInteraction?.target = accountTarget }
     }
     private var accountInteraction: ObjectInteraction?
-    /// 注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    /// 注意書きかフィルターの警告が選択されたときに、選択したボックスの種類を渡して呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onToggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
-    /// 押せる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
+    /// 選択できる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
     var onSelectNote: ((Int) -> Void)?
-    /// 切った本文の「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    /// 切った本文の「続きを読む」が選択されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onExpandBody: (() -> Void)?
 
     private let avatarView: AvatarView
@@ -110,7 +110,7 @@ final class EmbeddedPostView: UIButton {
     private lazy var textFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
     private let textLastBaselineGuide = UILayoutGuide()
     private lazy var textLastBaseline = textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.bottomAnchor)
-    /// 本文の最初の文字の字面の上端と、最後の文字の字面の下端。本文の上下の部品は、投稿の本文と同じく、ここからすき間を取って置く。
+    /// 本文の最初の文字の字面の上端と、最後の文字の字面の下端。本文の上下の部品は、投稿の本文と同じく、ここからgapを取って置く。
     /// ベースラインからの距離（`GlyphMetrics.textTopInset`、`textBottomInset`）は、行より広いカスタム絵文字を縮めて置くと並べる幅で変わるので、ベースラインと一緒に決め直す。
     private let textGlyphsTopGuide = UILayoutGuide()
     private let textGlyphsBottomGuide = UILayoutGuide()
@@ -125,8 +125,8 @@ final class EmbeddedPostView: UIButton {
     private let headerGuide = UILayoutGuide()
     /// 添付ファイルを本文の右に出すとき、本文とサムネイルの下端のうち、下にあるほう。補足の行をここから並べる。
     private let besideGuide = UILayoutGuide()
-    /// 本文の右に出すサムネイルの一辺の制約と、設定の一辺、囲みの幅の半分から引く長さ。
-    /// 囲みの幅の半分までに縮めた一辺は画素の途中の長さになり、上下と左右の端が別々に丸められて正方形が1画素ずれるので、並べたあとに画素に切り下げて一辺に入れる。
+    /// 本文の右に出すサムネイルの一辺の制約と、設定の一辺、カードの幅の半分から引く長さ。
+    /// カードの幅の半分までに縮めた一辺は画素の途中の長さになり、上下と左右の端が別々に丸められて正方形が1画素ずれるので、並べたあとに画素に切り下げて一辺に入れる。
     private var besideSide: (constraint: NSLayoutConstraint, side: CGFloat, inset: CGFloat)?
     private(set) var content: Content?
     private var variableConstraints: [NSLayoutConstraint] = []
@@ -160,14 +160,14 @@ final class EmbeddedPostView: UIButton {
         layer.cornerRadius = MediaGridView.cornerRadius
         layer.cornerCurve = .continuous
         clipsToBounds = true
-        // 読み上げでは、囲みそのものではなく、まとめた要素とサムネイル、押せる補足の行を読む。
+        // 読み上げでは、カードそのものではなく、まとめた要素とサムネイル、選択できる補足の行を読む。
         isAccessibilityElement = false
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.isUserInteractionEnabled = false
         // 投稿の本文と同じくTextKit 2で描き、大きくした絵文字の行を絵の高さにする。文字列を入れる前に切り替える。
         textLabel.drawsWithTextKit = true
         textLabel.numberOfLines = 0
-        // 本文はリンクの上だけ押下を受ける。リンクの外の押下は、囲みのボタンが受ける。
+        // 本文はリンクの上だけ押下を受ける。リンクの外の押下は、カードのボタンが受ける。
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         textLabel.onExpand = { [weak self] in self?.onExpandBody?() }
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
@@ -231,7 +231,7 @@ final class EmbeddedPostView: UIButton {
         // 原文と訳文を置き換える動きの値。置き換えなければnil。
         let replacement = previous?.id == content.id && (previousTranslation?.isTranslated ?? false) != (content.translation?.isTranslated ?? false)
             ? content.translation ?? previousTranslation : nil
-        // 使い回されて別の囲みに替わったら、前の囲みの置き換えの動きを残さない。
+        // 使い回されて別のカードに替わったら、前のカードの置き換えの動きを残さない。
         if previous?.id != content.id {
             textLabel.cancelTextReplacement()
             cancelShiftBelowText()
@@ -365,7 +365,7 @@ final class EmbeddedPostView: UIButton {
     }
 
     /// 添付ファイルを本文の右に、一辺`side`の正方形で出し、本文はその左に`spacing`をあけて折り返す。上端は本文の1行目の字面の上端にそろえ、本文がなければ本文の字面の上端があるはずの位置に置く。
-    /// 囲みは投稿の本文より狭いので、サムネイルとすき間は囲みの内側の半分までに縮め、本文の幅を残す。
+    /// カードは投稿の本文より狭いので、サムネイルとgapはカードの内側の半分までに縮め、本文の幅を残す。
     /// `besideGuide`の下端を、本文の字面とサムネイルの下端のうち、下にあるほうに合わせる。
     private func applyBesideMedia(_ media: MediaGridView.Content, side: CGFloat, spacing: CGFloat, padding: CGFloat, top: (anchor: NSLayoutYAxisAnchor, inset: CGFloat, spacing: CGFloat)) -> [NSLayoutConstraint] {
         mediaView.isHidden = false
@@ -428,7 +428,7 @@ final class EmbeddedPostView: UIButton {
         }
     }
 
-    /// 本文の右に出すサムネイルの一辺を、設定の一辺と囲みの幅の半分までのうち短いほうを画素に切り下げた長さにする。
+    /// 本文の右に出すサムネイルの一辺を、設定の一辺とカードの幅の半分までのうち短いほうを画素に切り下げた長さにする。
     /// - Returns: 一辺が変わったか。
     private func fitBesideSide() -> Bool {
         guard let besideSide, bounds.width > 0 else { return false }
@@ -453,14 +453,14 @@ final class EmbeddedPostView: UIButton {
         didSet { backgroundColor = isHighlighted ? .systemFill : nil }
     }
 
-    /// 囲みを押せないときは、押せる部品の外の押下を受けず、行に渡す。
+    /// カードを選択できないときは、選択できる部品の外の押下を受けず、行に渡す。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let view = super.hitTest(point, with: event)
         return view === self && content?.isPressable == false ? nil : view
     }
 
-    /// 読み上げでは、作者、注意書き、本文を1つの要素として読み、囲みを開く、プロフィール、注意書きの開閉、リンクを、その要素の操作にする。
-    /// サムネイルと押せる補足の行は、別の要素のまま残す。
+    /// 読み上げでは、作者、注意書き、本文を1つの要素として読み、カードを開く、プロフィール、注意書きの開閉、リンクを、その要素の操作にする。
+    /// サムネイルと選択できる補足の行は、別の要素のまま残す。
     private func updateAccessibility(for content: Content) {
         let isCollapsed = content.isCollapsed
         let boxes = [content.filterWarning, content.shownSpoiler].compactMap(\.self)
@@ -526,7 +526,7 @@ final class EmbeddedPostView: UIButton {
         if after != before || sideChanged {
             super.layoutSubviews()
         }
-        // 字面の上下の端は、行より広いカスタム絵文字の縮め方で変わり、囲みの高さも変わる。サムネイルの一辺を縮めても変わる。
+        // 字面の上下の端は、行より広いカスタム絵文字の縮め方で変わり、カードの高さも変わる。サムネイルの一辺を縮めても変わる。
         if after[2...] != before[2...] || sideChanged {
             onHeightChange?()
         }
@@ -538,7 +538,7 @@ final class EmbeddedPostView: UIButton {
         startPendingShiftBelowText()
     }
 
-    /// 本文を入れ替える前の、本文より下の部品の位置と囲みの高さ。次に並べたときに、そこから新しい位置と高さへ動かす。
+    /// 本文を入れ替える前の、本文より下の部品の位置とカードの高さ。次に並べたときに、そこから新しい位置と高さへ動かす。
     private var pendingShiftBelowText: (views: [(UIView, CGFloat)], height: CGFloat, duration: TimeInterval)?
 
     private func prepareShiftBelowText(duration: TimeInterval) {
@@ -566,7 +566,7 @@ final class EmbeddedPostView: UIButton {
         }
     }
 
-    /// 本文より下の部品と囲みの下端を、前の位置から今の位置へ動かす。本文の段落の文字と、囲みより下の部品と、同じスプリングで動かす。
+    /// 本文より下の部品とカードの下端を、前の位置から今の位置へ動かす。本文の段落の文字と、カードより下の部品と、同じスプリングで動かす。
     private func startPendingShiftBelowText() {
         guard let (views, oldHeight, duration) = pendingShiftBelowText else { return }
         pendingShiftBelowText = nil
@@ -581,7 +581,7 @@ final class EmbeddedPostView: UIButton {
         }
         let growth = bounds.height - oldHeight
         guard abs(growth) > 0.5 else { return }
-        // 囲みは上端を保ったまま伸び縮みするので、高さと、高さの半分だけ動く中心を一緒に動かす。
+        // カードは上端を保ったまま伸び縮みするので、高さと、高さの半分だけ動く中心を一緒に動かす。
         let resize = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
         resize.isAdditive = true
         resize.fromValue = -growth
@@ -602,7 +602,7 @@ final class EmbeddedPostView: UIButton {
             .xPostName: nameGlyphsFrame(in: space),
             .xPostBody: textGlyphsFrame(in: space),
         ].compactMapValues(\.self)
-        // 本文の右に重ねたサムネイルには、本文とのあいだが横のすき間として効くので、別の部品として示す。
+        // 本文の右に重ねたサムネイルには、本文とのあいだが横のgapとして効くので、別の部品として示す。
         if let grid = mediaGrid {
             frames[grid.content?.isStacked == true ? .xPostBesideMedia : .xPostMedia] = grid.previewFrame(in: space)
         }
@@ -634,7 +634,7 @@ final class EmbeddedPostView: UIButton {
     }
 }
 
-/// 囲みの補足の1行。押せる行は、押下を受けて薄くなる。押せない行は押下を囲みに渡す。
+/// カードの補足の1行。選択できる行は、押下を受けて薄くなる。選択できない行は押下をカードに渡す。
 private final class NoteRow: UIControl {
     private let label = UILabel()
 
@@ -659,7 +659,7 @@ private final class NoteRow: UIControl {
         fatalError("init(coder:) has not been implemented")
     }
 
-    // 囲みは、補足の行をベースラインから字面で測って並べる。
+    // カードは、補足の行をベースラインから字面で測って並べる。
     override var forFirstBaselineLayout: UIView { label }
     override var forLastBaselineLayout: UIView { label }
 

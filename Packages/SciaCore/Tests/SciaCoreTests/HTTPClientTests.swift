@@ -171,7 +171,7 @@ struct HTTPClientTests {
         }
     }
 
-    /// 429が再開の時刻を示したあと、本文の途中で切れても、通信の失敗として送り直さない。時刻より前に送ることになるため。
+    /// 429が再開の時刻を示したあと、本文の途中で切れても、通信の失敗として再送しない。時刻より前に送ることになるため。
     @Test func doesNotRetryWhenBodyOfRateLimitIsCut() async throws {
         let transport = ScriptedOpenTransport { request in
             let response = try makeResponse(request.url, statusCode: 429, headers: ["Retry-After": "60"])
@@ -236,9 +236,9 @@ struct HTTPClientTests {
         #expect(await transport.requests.isEmpty)
     }
 
-    // MARK: - 送り直し
+    // MARK: - 再送
 
-    /// `/media_proxy`はここでは止めないが、再開の時刻を示した503を、その場で送り直しもしない。止めるのは画像のストアの役目。
+    /// `/media_proxy`はここでは止めないが、再開の時刻を示した503を、その場で再送もしない。止めるのは画像のストアの役目。
     @Test func doesNotRetryMediaProxyServiceUnavailableWithResumeTime() async throws {
         let transport = StubTransport([.json("", statusCode: 503, headers: ["Retry-After": "60"])])
         await #expect(throws: HTTPStatusError(statusCode: 503, retryAfter: .seconds(60))) {
@@ -247,7 +247,7 @@ struct HTTPClientTests {
         #expect(await transport.requests.count == 1)
     }
 
-    /// APIの外の読み込みも、一時的な失敗ではその場で送り直す。
+    /// APIの外の読み込みも、一時的な失敗ではその場で再送する。
     @Test func retriesTemporaryFailureOfGet() async throws {
         let transport = StubTransport([.json("", statusCode: 502), .failure(.networkConnectionLost), .init(statusCode: 200, body: Data([1]))])
         let (data, _) = try await client(transport).data(for: URLRequest(url: try url("https://files.example.social/1.png")), limit: 100, scope: .host)
@@ -255,7 +255,7 @@ struct HTTPClientTests {
         #expect(await transport.requests.count == 3)
     }
 
-    /// 再開の時刻を示した503は、その場で送り直さずに止める側で扱う。
+    /// 再開の時刻を示した503は、その場で再送せずに止める側で扱う。
     @Test func doesNotRetryServiceUnavailableWithResumeTime() async throws {
         let transport = StubTransport([.json("", statusCode: 503, headers: ["Retry-After": "60"])])
         await #expect(throws: HTTPStatusError.self) {
@@ -266,7 +266,7 @@ struct HTTPClientTests {
 
     // MARK: - 回線
 
-    /// 質を上げると先読みの通信は、聞いたあとで回線が変わってもOSが送らないよう、目的に合わせて回線の制限を付ける。
+    /// 質を上げるとプリフェッチの通信は、聞いたあとで回線が変わってもOSが送らないよう、目的に合わせて回線の制限を付ける。
     @Test(arguments: [
         (RequestPurpose.action, true, true),
         (.display, true, true),
@@ -284,7 +284,7 @@ struct HTTPClientTests {
         #expect(request.allowsConstrainedNetworkAccess == constrained)
     }
 
-    /// 回線で控えた失敗は、同じ回線で送り直しても同じなので、その場で送り直さない。
+    /// 回線で控えた失敗は、同じ回線で再送しても同じなので、その場で再送しない。
     @Test func doesNotRetryWhenUnavailableOnNetwork() async throws {
         let unavailable = URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue])
         let transport = ScriptedOpenTransport { _ in throw unavailable }

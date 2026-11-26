@@ -21,7 +21,7 @@ final class MediaGridView: UIView {
         let cover: MediaCover?
         let tallestAspectRatio: Double
         let thumbnailPolicy: MediaThumbnailPolicy
-        /// サムネイル同士のすき間。
+        /// サムネイル同士のgap。
         var spacing: CGFloat
         var arrangement: Arrangement = .grid
         /// 1つだけ出すとき、これより横長なものは左右を切り落とす。
@@ -92,7 +92,7 @@ final class MediaGridView: UIView {
         // ステータスバーのタップで先頭へ戻る対象はタイムラインだけにする。画面に対象が複数あると、UIKitはどれも動かさない。
         tileContainer.scrollsToTop = false
         addSubview(tileContainer)
-        // ぼかしの題の境界線は文字の大きさに合わせて作るので、文字の大きさの設定が変わったら入れ直す。
+        // ぼかしの題の境界線は文字の大きさに合わせて作るので、Dynamic Typeの設定が変わったら入れ直す。
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             if let content = self.content, content.isCovered {
                 self.updateCoverButton(for: content)
@@ -181,7 +181,7 @@ final class MediaGridView: UIView {
         return tile
     }
 
-    /// 表示中のサムネイルの枠。「投稿の見た目」のプレビューで、サムネイル同士のすき間を示すときに使う。
+    /// 表示中のサムネイルの枠。「投稿の見た目」のプレビューで、サムネイル同士のgapを示すときに使う。
     func tilePreviewFrames(in space: UIView) -> [CGRect] {
         tiles.compactMap { $0.previewFrame(in: space) }.flatMap(\.self)
     }
@@ -304,7 +304,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// ビューアで開く。タップに選んだ操作によらず、メニューの「開く」と持ち上げた画像のタップでも、これで開く。
     var onOpen: (() -> Void)?
     private let store: MediaImageStore<UIImage>
-    /// 窓に開いたアカウントの設定。タイルは投稿の本文の中で何段も親から作られるので、窓から読む。
+    /// ウィンドウに開いたアカウントの設定。タイルは投稿の本文の中で何段も親から作られるので、ウィンドウから読む。
     private var settings: AppSettings { traitCollection.appSettings }
     private var dynamicRangeGeneration = 0
     private let tuning: TuningStore
@@ -316,7 +316,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private var menuInteraction: MediaMenuInteraction?
     private var isCovered = false
     private var policy: MediaThumbnailPolicy?
-    /// いま描いている画像の取得元。同じなら描き直さない。
+    /// いま描いている画像の取得元。同じなら再描画しない。
     private var source: Source?
     /// 画像を読みに行く取得元を選んでいるか。閲覧注意でぼかしている間は選ばず、読みに行かない。
     var requestsThumbnail: Bool { source?.request != nil }
@@ -330,7 +330,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         /// ぼかしている間に、外したらすぐ出せるよう先に読んでおく画像。描かずにキャッシュへ入れるだけ。Wi-Fiでだけ読む。
         let prefetchRequest: MediaThumbnailRequest?
         let blurhash: String?
-        /// blurhashを展開する縦横比。同じblurhashでも、比が違えば描き直す。
+        /// blurhashを展開する縦横比。同じblurhashでも、比が違えば再描画する。
         let aspectRatio: Double?
     }
 
@@ -360,7 +360,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         menuInteraction = MediaMenuInteraction(on: self, wholeImage: { [weak self] in self?.loadedThumbnail }, open: { [weak self] in
             self?.onOpen?()
         }, sharperImage: { [weak self] maxPixelSize in
-            // 動画とGIFのサムネイルはコマの画像で、元のファイルは画像として読めないため、読み直さない。
+            // 動画とGIFのサムネイルはコマの画像で、元のファイルは画像として読めないため、再読み込みしない。
             guard let self, let attachment = self.menuAttachment, attachment.type == .image, let url = attachment.url ?? attachment.remoteUrl else { return nil }
             return try? await self.store.image(for: url, maxPixelSize: maxPixelSize, retriesNow: true, purpose: .action)
         }, offersMenu: { [weak self] _ in self?.menuAttachment != nil })
@@ -377,7 +377,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     }
 
     /// HDRのバッジを出す明るさの組み合わせかを、設定から決め続ける。選び直すと、出ているバッジにもすぐ効かせる。
-    /// 窓の設定が替わったら、替わる前の設定の見張りは世代で止める。止めないと、見張りの系列が替わるたびに増えるため。
+    /// ウィンドウの設定が替わったら、替わる前の設定の見張りは世代で止める。止めないと、見張りの系列が替わるたびに増えるため。
     private func followDynamicRanges() {
         dynamicRangeGeneration += 1
         followDynamicRanges(of: settings, generation: dynamicRangeGeneration)
@@ -399,7 +399,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// アイコンの大きさのチューニングを読み続ける。変えたら、出ているタイルのアイコンも描き直す。
+    /// アイコンの大きさのチューニングを読み続ける。変えたら、出ているタイルのアイコンも再描画する。
     private func followSymbolSizing() {
         withObservationTracking {
             decorationView.sizing = MediaTileSymbolSizing(tuning: tuning)
@@ -431,7 +431,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     }
 
     /// 画像の上に重ねている表示（ALTやGIFのバッジ、動画の再生マーク、残りの枚数）の複製。ビューアが動かす画像の複製に載せて、サムネイルとのあいだを一緒に動かす。
-    /// 動画とGIFではサムネイルの画像も含める。ビューアの複製は再生していたコマを描くため、重ねた表示と一緒にサムネイルへ近づくほど濃くし、着地で絵が切り替わらないようにする。
+    /// 動画とGIFではサムネイルの画像も含める。ビューアの複製は再生していたコマを描くため、重ねた表示と一緒にサムネイルへ近づくほど不透明度を上げ、着地で絵が切り替わらないようにする。
     /// 画像では含めない。複製とサムネイルが同じ絵で、重ねると透明な部分が濃く見えるため。
     func makeDecorationCopy() -> UIView {
         let container = UIView(frame: bounds)
@@ -514,7 +514,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// 上に重なっているビュー。タイムラインで重ねた奥の写真では、それより手前の写真。
     var overlappingViews: [UIView] = []
 
-    /// 見え方。タイムラインで重ねた写真の中のサムネイルでは、その写真のフチ、中身を描くかと暗さ、スタックの影の濃さ。
+    /// 見え方。タイムラインで重ねた写真の中のサムネイルでは、その写真のフチ、中身を描くかと暗さ、スタックの影の不透明度。
     var viewerLook = MediaViewerSourceLook.plain
 
     override var isHighlighted: Bool {
@@ -577,7 +577,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         setNeedsLayout()
     }
 
-    /// 枠の大きさと条件から読む画像を選び、変わっていれば読み直す。
+    /// 枠の大きさと条件から読む画像を選び、変わっていれば再読み込みする。
     private func updateSource() {
         let source = attachment.map { attachment in
             Source(
@@ -589,7 +589,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             )
         }
         guard source != self.source else { return }
-        // 同じ添付ファイルを大きさや条件を変えて読み直すときは、届くまで今の画像を残し、ぼかしに戻さない。
+        // 同じ添付ファイルを大きさや条件を変えて再読み込みするときは、届くまで今の画像を残し、ぼかしに戻さない。
         let keepsCurrentImage = loadedThumbnail != nil && source?.request != nil && source?.attachmentID == self.source?.attachmentID
         self.source = source
         showImage(of: attachment, from: source, keepsCurrentImage: keepsCurrentImage)
@@ -601,7 +601,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         return MediaThumbnailSelection.request(for: attachment, tileSize: bounds.size, displayScale: scale, policy: policy)
     }
 
-    /// ぼかしている間に先読みする画像。外したときに読むのと同じものを、先読みの目的で読む（docs/timeline-media.mdの「状態の表示」）。
+    /// ぼかしている間にプリフェッチする画像。外したときに読むのと同じものを、プリフェッチの目的で読む（docs/timeline-media.mdの「状態の表示」）。
     private func coveredPrefetchRequest(for attachment: MediaAttachment) -> MediaThumbnailRequest? {
         let scale = traitCollection.displayScale
         guard isCovered, let policy, let purpose = policy.prefetch, !bounds.isEmpty, scale > 0 else { return nil }
@@ -666,7 +666,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
 
 /// 添付ファイルのラベル（ALT、GIF、HDR）を1つにまとめたバッジ。タイルの左下に置く。
 /// タイルの大きさは並べ方で変わり、ラベルごとにバッジを置くと狭いタイルに入らないため、1つにまとめ、幅に入らなければ頭の1文字にする。
-/// ラベルごとの下地を細い隙間で離してつなげ、つなぎ目の角は立て、外側の角だけを丸める。区切りに線を描くより、1つのバッジが区切られて見えるため。
+/// ラベルごとの下地を細いgapで離してつなげ、つなぎ目の角は立て、外側の角だけを丸める。区切りに線を描くより、1つのバッジが区切られて見えるため。
 final class MediaBadgeView: UIView {
     enum Mark: CaseIterable {
         case alt
@@ -684,14 +684,14 @@ final class MediaBadgeView: UIView {
         var shortTitle: String { String(title.prefix(1)) }
     }
 
-    /// バッジの文字の大きさの上限。文字の大きさの設定に合わせて大きくするが、いちばん狭いタイルでも1文字のバッジが入るよう、ここで止める。
+    /// バッジの文字の大きさの上限。Dynamic Typeの設定に合わせて大きくするが、いちばん狭いタイルでも1文字のバッジが入るよう、ここで止める。
     static let maximumContentSizeCategory = UIContentSizeCategory.extraExtraLarge
     private static let padding = UIEdgeInsets(top: 2, left: 5, bottom: 2, right: 5)
     /// 頭の1文字にしたときの左右の余白の範囲。狭いタイルでもすべてのラベルを出せるよう、入るまで最大から最小へ詰める。
     private static let shortHorizontalPaddings: ClosedRange<CGFloat> = 1...3
     /// 余白を詰めても入らないとき、文字を小さくする下限。これより小さくすると読めないので、入らない分は切れる。
     private static let minimumFontSize: CGFloat = 6
-    /// ラベルとラベルのあいだの隙間。
+    /// ラベルとラベルのあいだのgap。
     private static let gap: CGFloat = 1
     static let cornerRadius: CGFloat = 4
     /// バッジの下地。画像の明るさによらず白い文字が読めるよう、黒を透かす。
@@ -739,7 +739,7 @@ final class MediaBadgeView: UIView {
         return marks
     }
 
-    /// `size.width`に入る形を選んで大きさを返し、その形で描き直す。できるだけすべてのラベルを出すため、次の順に詰める。
+    /// `size.width`に入る形を選んで大きさを返し、その形で再描画する。できるだけすべてのラベルを出すため、次の順に詰める。
     /// 1. ラベルの名前で並べる
     /// 2. 頭の1文字にし、左右の余白を最大から最小へ詰める
     /// 3. 最小の余白でも入らなければ、文字を下限まで小さくする。下限でも入らない分は切れる

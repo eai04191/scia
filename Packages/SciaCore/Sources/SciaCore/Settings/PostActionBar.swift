@@ -121,7 +121,7 @@ public struct PostActionBarButton: Equatable, Sendable {
     /// した状態か。状態を持たない項目ではfalse。
     public let isOn: Bool
     public let tint: Tint
-    /// 押して行えるか。行えなければ薄く描き、押すとその対象では行えないことを知らせる。
+    /// 選択して行えるか。行えなければ薄く描き、選択するとその対象では行えないことを知らせる。
     public let isAvailable: Bool
 
     public init(item: PostActionBarItem, title: String, symbolName: String, count: Int?, isOn: Bool, tint: Tint, isAvailable: Bool) {
@@ -152,7 +152,7 @@ public struct PostActionBarButton: Equatable, Sendable {
     /// - Parameters:
     ///   - shown: 表示している投稿。ブーストなら、ブーストされた投稿。
     ///   - showsCounts: 返信、ブースト、お気に入りに件数を添えるか。
-    ///   - isAvailable: 投稿のメニューの項目を、いま押して行えるか。メニューと同じ組み方で決める。
+    ///   - isAvailable: 投稿のメニューの項目を、いま選択して行えるか。メニューと同じ組み方で決める。
     public static func buttons(for shown: Status, items: [PostActionBarItem], showsCounts: Bool, isAvailable: (StatusMenuItem) -> Bool) -> [PostActionBarButton] {
         items.map { item in
             guard case .status(let statusItem) = item else {

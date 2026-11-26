@@ -1,8 +1,8 @@
 /// アプリ内のSafariを中くらいの高さで開くときのシートの高さ。使う人が、ホームの上でシートの上端を引いて決める。
-/// 窓の安全領域の中の高さから、上に空ける長さを引いて決める。割合でなく長さで決めるのは、端末の大きさによらず上に見える量を揃えるため。
+/// ウィンドウのセーフエリアの中の高さから、上に空ける長さを引いて決める。割合でなく長さで決めるのは、端末の大きさによらず上に見える量を揃えるため。
 /// 最初から全画面で開くかは、別の設定（`AppSettings.opensInAppBrowserFullScreen`）で決める。全画面で開いても、つまみで下げるとこの高さで止まる。
 public struct InAppBrowserHeight: Hashable, Sendable {
-    /// 上に空ける長さ（pt、安全領域の中）。`step`の刻みに揃えてある。
+    /// 上に空ける長さ（pt、セーフエリアの中）。`step`の刻みに揃えてある。
     public let spaceAbove: Double
 
     /// 上に空ける長さの刻み。シートの段をこの刻みで並べ、引いた位置にいちばん近い段で止める。
@@ -25,23 +25,23 @@ public struct InAppBrowserHeight: Hashable, Sendable {
         "\(Int(spaceAbove))pt"
     }
 
-    /// シートの高さ（pt、下の安全領域を除く）。
+    /// シートの高さ（pt、下のセーフエリアを除く）。
     /// - Parameters:
-    ///   - available: 窓の高さから上下の安全領域を除いた高さ。
-    ///     シートの段の計算にUIKitが渡す最大の高さは使わない。アプリ内のSafariのシートにだけ、同じ窓でも10pt少ない値が渡り、
-    ///     高さを決めるシートと本物で上端の位置がずれたため（iOS 26のシミュレーターで、どちらも同じ窓と安全領域で確かめた）。
-    ///   - minimum: 伏せた高さ（投稿欄で書いている間にシートを下げる高さ）。ほかの端末で決めた長さが、この窓では引ききれないとき（高さの低い窓）は、ここで止める。
+    ///   - available: ウィンドウの高さから上下のセーフエリアを除いた高さ。
+    ///     シートの段の計算にUIKitが渡す最大の高さは使わない。アプリ内のSafariのシートにだけ、同じウィンドウでも10pt少ない値が渡り、
+    ///     高さを決めるシートと本物で上端の位置がずれたため（iOS 26のシミュレーターで、どちらも同じウィンドウとセーフエリアで確かめた）。
+    ///   - minimum: 伏せた高さ（投稿欄で書いている間にシートを下げる高さ）。ほかの端末で決めた長さが、このウィンドウでは引ききれないとき（高さの低いウィンドウ）は、ここで止める。
     public func sheetHeight(available: Double, minimum: Double) -> Double {
         max(available - spaceAbove, minimum)
     }
 
-    /// この窓で決められる上に空ける長さ。短いほうの端から、シートが伏せた高さになるところまで、刻みごとに並べる。
+    /// このウィンドウで決められる上に空ける長さ。短いほうの端から、シートが伏せた高さになるところまで、刻みごとに並べる。
     public static func selectableSpaces(available: Double, minimum: Double) -> [Double] {
         guard available - minimum >= minimumSpace else { return [] }
         return Array(stride(from: minimumSpace, through: available - minimum, by: step))
     }
 
-    /// この窓で決められる範囲に寄せる。ほかの端末で決めた長さが、この窓では引ききれないときに使う。
+    /// このウィンドウで決められる範囲に寄せる。ほかの端末で決めた長さが、このウィンドウでは引ききれないときに使う。
     public func clamped(available: Double, minimum: Double) -> InAppBrowserHeight {
         InAppBrowserHeight(spaceAbove: min(spaceAbove, Self.selectableSpaces(available: available, minimum: minimum).last ?? Self.minimumSpace))
     }

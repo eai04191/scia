@@ -11,7 +11,7 @@ struct StreamingHubTests {
         pingInterval: .seconds(3600),
         pingTimeout: .seconds(5)
     )
-    /// 待つ時間はテストごとの手で進める時計で数えるので、進めない限りポーリングや知らせは起きない。切断を確かめないテストでは、念のため長くする。
+    /// 待つ時間はテストごとの手で進める時計で数えるので、進めない限りポーリングや切断の通知は起きない。切断を確かめないテストでは、念のため長くする。
     private static let live = LiveUpdates.Policy(pollingInterval: .seconds(3600), outageNoticeDelay: .seconds(3600))
     private static let outage = LiveUpdates.Policy(pollingInterval: .milliseconds(15), outageNoticeDelay: .milliseconds(30))
     private static let subscribeUser = #"{"stream":"user","type":"subscribe"}"#
@@ -86,12 +86,12 @@ struct StreamingHubTests {
         let home = Recorder()
 
         let subscription = hub.subscribe(.user, home.record)
-        // 切れてつなぎ直しを待ち始めたら、つなぎ直す10msだけ進める。
+        // 切れて再接続を待ち始めたら、再接続する10msだけ進める。
         try await waitUntil { home.labels.contains("delete 1") && clock.sleeperCount(remaining: .milliseconds(10)) >= 1 }
         clock.advance(by: .milliseconds(10))
         try await waitUntil { home.labels.contains("delete 2") }
 
-        // シナリオの接続は購読しなくてもイベントを流し、最初の接続は購読を送り終える前に切れることがあるため、つなぎ直した方だけを見る。
+        // シナリオの接続は購読しなくてもイベントを流し、最初の接続は購読を送り終える前に切れることがあるため、再接続した方だけを見る。
         #expect(connector.connectCount == 2)
         #expect(connector.sent.last == [Self.subscribeUser])
         #expect(home.labels == ["connected", "delete 1", "connected", "delete 2"])
@@ -199,8 +199,8 @@ struct StreamingHubTests {
         localSubscription?.cancel()
     }
 
-    /// `connected`を待っている間に届いたイベントは、その間に切れてつなぎ直しても捨てず、つなぎ直した`connected`の後に渡す。
-    /// 削除や編集は、つなぎ直したあとの補完では読み直せないため。
+    /// `connected`を待っている間に届いたイベントは、その間に切れて再接続しても捨てず、再接続した`connected`の後に渡す。
+    /// 削除や編集は、再接続したあとの補完では再読み込みできないため。
     @Test func eventsHeldBeforeDelayedConnectedSurviveReconnecting() async throws {
         let messageGate = Gate()
         let sendGate = Gate()
@@ -233,7 +233,7 @@ struct StreamingHubTests {
         try await waitUntil { home.labels.contains("delete 30") }
         #expect(local.labels.isEmpty, "購読を送り終える前に、ローカルへ渡しました")
 
-        // 購読を送り終える前に切れて、つなぎ直す。
+        // 購読を送り終える前に切れて、再接続する。
         dropGate.open()
         try await clock.advance(afterSleeping: .milliseconds(10))
         try await waitUntil { connector.connectCount == 2 && local.labels.count >= 2 }
@@ -245,7 +245,7 @@ struct StreamingHubTests {
         sendGate.open()
     }
 
-    /// 購読を送っている間に切れてつなぎ直したら、つなぎ直したときの`connected`だけを届ける。
+    /// 購読を送っている間に切れて再接続したら、再接続したときの`connected`だけを届ける。
     /// 切れる前の送信が後から終わっても、もう一度届けると、受け取った側が補完を余分に繰り返すため。
     @Test func connectedAfterSendingIsDroppedWhenReconnectedMeanwhile() async throws {
         let sendGate = Gate()
@@ -275,7 +275,7 @@ struct StreamingHubTests {
         try await clock.advance(afterSleeping: .milliseconds(10))
         try await waitUntil { connector.connectCount == 2 && hub.isConnected && local.labels == ["connected"] }
 
-        // 切れる前の送信を、つなぎ直した後に送り終えさせ、届けるか捨てるかが決まるまで待つ。
+        // 切れる前の送信を、再接続した後に送り終えさせ、届けるか捨てるかが決まるまで待つ。
         sendGate.open()
         await hub.lastConnectedReportAfterSending?.value
 
@@ -352,7 +352,7 @@ struct StreamingHubTests {
         let hub = makeHub(connector, reconnect: slow, live: LiveUpdates.Policy(pollingInterval: .seconds(3600), outageNoticeDelay: .milliseconds(10)), clock: clock)
         let home = Recorder()
         let subscription = hub.subscribe(.user, home.record)
-        // 1回目の接続に失敗して、つなぎ直しを3600秒待っている間に、知らせの10msだけ進める。
+        // 1回目の接続に失敗して、再接続を3600秒待っている間に、切断の通知の10msだけ進める。
         try await waitUntil { connector.connectCount == 1 && clock.sleeperCount(remaining: .milliseconds(10)) >= 1 }
         clock.advance(by: .milliseconds(10))
         try await waitUntil { home.labels.contains("outage true") }
@@ -361,7 +361,7 @@ struct StreamingHubTests {
 
         try await waitUntil { hub.isConnected }
         #expect(connector.connectCount == 2)
-        // つなぎ直したあとは時計を進めないので、新しく数え始めた知らせは届かない。
+        // 再接続したあとは時計を進めないので、新しく数え始めた切断の通知は届かない。
         #expect(Array(home.labels.prefix(2)) == ["outage true", "outage false"])
         #expect(home.labels.contains("connected"))
         subscription.cancel()
@@ -376,7 +376,7 @@ struct StreamingHubTests {
         hub.stopUntilLogin()
         home.cancel()
         let again = hub.subscribe(.user) { _ in }
-        // 止めた接続が閉じ終えたら、それ以上つなぎ直さない。申し込み直しでつなぐなら、申し込んだときに始めている。
+        // 止めた接続が閉じ終えたら、それ以上再接続しない。申し込み直しでつなぐなら、申し込んだときに始めている。
         try await waitUntil { connector.closedCount == 1 }
 
         #expect(hub.state == .loginRequired)

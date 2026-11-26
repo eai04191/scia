@@ -19,7 +19,7 @@ public struct ObjectEntity<Item: ObjectActionItem & MenuItemPresentable> {
 extension ObjectEntity where Item == StatusMenuItem {
     /// タイムラインの投稿。
     public static var status: Self { ObjectEntity(page: .statusActions, actions: \.statusActions) }
-    /// 引用の囲み。アクションバーを出さないので、投稿とは別に選ぶ。
+    /// 引用のカード。アクションバーを出さないので、投稿とは別に選ぶ。
     public static var quotedStatus: Self { ObjectEntity(page: .quotedStatusActions, actions: \.quotedStatusActions) }
     public static var notification: Self { ObjectEntity(page: .notificationActions, actions: \.notificationActions) }
 }
@@ -34,7 +34,7 @@ extension ObjectEntity where Item == LinkMenuItem {
     public static var link: Self { ObjectEntity(page: .linkActions, actions: \.linkActions) }
 }
 
-/// Xの投稿の囲みのような、Mastodonの外のサービスの投稿。
+/// Xの投稿のカードのような、Mastodonの外のサービスの投稿。
 @MainActor
 extension ObjectEntity where Item == ExternalPostMenuItem {
     public static var externalPost: Self { ObjectEntity(page: .externalPostActions, actions: \.externalPostActions) }

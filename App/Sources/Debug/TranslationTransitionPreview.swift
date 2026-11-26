@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 自動翻訳の置き換えを繰り返し見せる見本。チューニングの値は1回ごとに読み直す。
+/// 自動翻訳の置き換えを繰り返し見せる見本。チューニングの値は1回ごとに再読み込みする。
 final class TranslationTransitionLoopView: UIView {
     private static let pause: TimeInterval = 1.2
 

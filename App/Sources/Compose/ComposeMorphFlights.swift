@@ -6,10 +6,10 @@ import UIKit
 /// カプセルの行と書いているときの行は、スタックビューの中で入れ替えるので、行の中身を行の外へは動かせない。
 /// 両方の端の本物を隠し、バーの上に重ねた複製を、行を入れ替えるのと同じアニメーションの中で動かす。
 /// 複製はバーの中に置くので、キーボードに乗ってバーごと動いても、バーの中の位置だけを動かせばよい。
-/// カプセルの写真は白いフチが付いて回っているので、複製も大きさ、回転、フチの幅、角の丸みを一緒に移す。
+/// カプセルの写真は白いフチが付いて回っているので、複製も大きさ、回転、フチの幅、radiusを一緒に移す。
 /// カプセルの写真のスタックは、輪郭を合わせた形で影を1つだけ落とす。動いている複製はスタックの形が崩れていくので、写真の複製をまとめて1つの入れ物に入れ、
 /// 入れ物の影として、動いている途中の形のまま描く。写真同士の影は、動いている間は描かない。カプセルから動き始めるときは、
-/// 写真同士の影の像を複製に載せて薄くし、着くときは、着いてから本物の影を浮かび上がらせて、どちらの端でも1コマで替わらないようにする。
+/// 写真同士の影のスナップショットを複製に載せて薄くし、着くときは、着いてから本物の影をフェードインさせて、どちらの端でも1コマで替わらないようにする。
 @MainActor
 final class ComposeMorphFlights {
     /// 画面の描き換えと同じ時間。テストでは差し替える。
@@ -44,9 +44,9 @@ final class ComposeMorphFlights {
         let cornerRadius: CGFloat
         /// 白いフチの幅。カプセルの写真だけに付く。
         let border: CGFloat
-        /// 送信の状態の表示。両端の表示の像を複製に載せ、起点のものを薄くしながら行き先のものを濃くする。出していなければnil。
+        /// 送信の状態の表示。両端の表示のスナップショットを複製に載せ、起点のものを薄くしながら行き先のものを濃くする。出していなければnil。
         let status: StatusOverlay?
-        /// 上に重ねた写真が落としている影の像。起点にあれば複製に載せ、動き始めに薄くする。
+        /// 上に重ねた写真が落としている影のスナップショット。起点にあれば複製に載せ、動き始めに薄くする。
         let betweenShadow: UIView?
     }
 
@@ -63,7 +63,7 @@ final class ComposeMorphFlights {
             }
         }
 
-        /// 見えているものがあるか。何も出していなければ、像を載せない。
+        /// 見えているものがあるか。何も出していなければ、スナップショットを載せない。
         @MainActor
         var showsSomething: Bool {
             switch self {
@@ -85,7 +85,7 @@ final class ComposeMorphFlights {
 
     private let container: UIView
     /// 写真の複製をまとめる入れ物。中の複製を合わせた形で、カプセルの写真のスタックと同じ影を落とす。
-    /// 動いている間は画面の外で描き直すことになるので、動いていないときは影を消す。
+    /// 動いている間は画面の外で再描画することになるので、動いていないときは影を消す。
     private lazy var shadowGroup: UIView = {
         let group = UIView(frame: container.bounds)
         group.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -104,7 +104,7 @@ final class ComposeMorphFlights {
 
     /// 起点の本物を隠し、同じ位置に複製を置く。動かしている途中の複製があれば、そのとき見えている位置から向かい直す。
     /// 行を入れ替える前に呼ぶ。複製は`order`の順に、後ろのものほど手前に重ねる。
-    /// `stackShadowOpacity`は、起点で写真のスタックが落としている影の濃さ。動いている途中なら、見えている濃さから向かい直す。
+    /// `stackShadowOpacity`は、起点で写真のスタックが落としている影の不透明度。動いている途中なら、見えている不透明度から向かい直す。
     func takeOff(from sources: [Key: End], stackingOrder order: [Key], stackShadowOpacity: Float) {
         let groupLayer = shadowGroup.layer
         if flights.isEmpty {
@@ -161,10 +161,10 @@ final class ComposeMorphFlights {
     /// 複製を行き先の本物の位置へ動かし、行き先の本物を隠す。行き先のない複製は、薄くして消す。
     /// 行を入れ替えて並べ直したあと、同じアニメーションの中で呼ぶ。返した値を`finish`に渡す。
     /// `delays`にある複製は、その時間だけ遅らせて、`delayedAnimation`が返すアニメーションで動かす。遅らせた複製も、ほかと同じ時刻に着かせる。
-    /// 写真のスタックの影は、`duration`の間に`stackShadowOpacity`（カプセルに着くならスタックの影の濃さ、列に着くなら0）へ向かわせる。
+    /// 写真のスタックの影は、`duration`の間に`stackShadowOpacity`（カプセルに着くならスタックの影の不透明度、列に着くなら0）へ向かわせる。
     func land(on targets: [Key: End], delays: [Key: TimeInterval], stackShadowOpacity: Float, duration: TimeInterval, delayedAnimation: (TimeInterval, @escaping () -> Void) -> Void) -> Int {
         generation += 1
-        // 影の濃さはUIKitのアニメーションで動かないので、Core Animationで、複製と同じ`.smooth`のスプリングで動かす。
+        // 影の不透明度はUIKitのアニメーションで動かないので、Core Animationで、複製と同じ`.smooth`のスプリングで動かす。
         let groupLayer = shadowGroup.layer
         let animation = CASpringAnimation(perceptualDuration: duration, bounce: 0)
         animation.keyPath = "shadowOpacity"
@@ -269,7 +269,7 @@ final class ComposeMorphFlights {
         return true
     }
 
-    /// 動き始めに写真同士の影を薄くする時間。カプセルに着いてから写真同士の影を浮かび上がらせる時間と揃える。
+    /// 動き始めに写真同士の影を薄くする時間。カプセルに着いてから写真同士の影をフェードインさせる時間と揃える。
     private static let decorationRevealDuration: TimeInterval = 0.15
 
     private func conceal(_ end: End) {
@@ -306,11 +306,11 @@ private final class FlightCopy: UIView {
 
     private let inner: UIView
     private var border: CGFloat = 0
-    /// 両端の写真に重ねている送信の状態の表示の像。本物ごとに持つ。
+    /// 両端の写真に重ねている送信の状態の表示のスナップショット。本物ごとに持つ。
     private var statuses: [ObjectIdentifier: UIView] = [:]
-    /// 写真の上に収まる状態の表示の像を入れる、中の画像と同じ大きさの入れ物。タイルの上の表示より手前に置く。
+    /// 写真の上に収まる状態の表示のスナップショットを入れる、中の画像と同じ大きさの入れ物。タイルの上の表示より手前に置く。
     private var coveringStatuses: UIView?
-    /// 写真の外にはみ出す表示の像を入れる、複製と同じ位置、大きさ、回転で動かす入れ物。写真の複製を入れる影の入れ物の外に置く。
+    /// 写真の外にはみ出す表示のスナップショットを入れる、複製と同じ位置、大きさ、回転で動かす入れ物。写真の複製を入れる影の入れ物の外に置く。
     /// 影の入れ物は中身の形で影を落とすので、中に置くと、本物では影を落とさない失敗のアイコンまで影を落とすため。
     private(set) var overhang: UIView?
 
@@ -330,7 +330,7 @@ private final class FlightCopy: UIView {
         overhang.transform = transform
     }
 
-    /// 起点の写真に、上の写真が落としていた影の像。写真と同じ大きさなので、複製の大きさに合わせて伸び縮みさせる。
+    /// 起点の写真に、上の写真が落としていた影のスナップショット。写真と同じ大きさなので、複製の大きさに合わせて伸び縮みさせる。
     private var betweenShadow: UIView?
 
     var betweenShadowAlpha: CGFloat {
@@ -352,12 +352,12 @@ private final class FlightCopy: UIView {
     /// 再生アイコンを見せている表示。列とカプセルで再生アイコンの大きさが違い、2つを重ねて入れ替えると途中で丸が二重に見えるため、
     /// 1つだけを見せ、起点の大きさから行き先の大きさへ変えながら動かす。小さく作った丸と三角を広げるとぼけるので、大きいほうを縮めて動かす。
     private var playOwner: MediaTileDecorationView?
-    /// 行き先へ向かい始める前の、重ねた表示の部品の`transform`と濃さ。まだ一度も描いていない複製を止めるとき、見えている形として使う。
+    /// 行き先へ向かい始める前の、重ねた表示の部品の`transform`と不透明度。まだ一度も描いていない複製を止めるとき、見えている形として使う。
     private var tileDecorationBeforeMove: [(view: UIView, transform: CGAffineTransform, alpha: CGFloat)] = []
 
     /// `view`の上の表示を載せる。`shown`がfalseなら、どの部品も見せずに載せ、`showTileDecoration`で濃くする。
     /// 再生アイコンの丸と三角より手前に、送信中の暗い下地などの重ねた表示（`attachDecoration`）を置く。列のサムネイルと同じ重なり順にするため。
-    /// 同じ本物の表示を載せていても、表示が変わっていれば（動画を読み込み終えて再生アイコンが付いたなど）作り直し、部品の今の濃さを引き継ぐ。
+    /// 同じ本物の表示を載せていても、表示が変わっていれば（動画を読み込み終えて再生アイコンが付いたなど）作り直し、部品の今の不透明度を引き継ぐ。
     func attachTileDecoration(_ layout: MediaTileDecorationLayout, of view: UIView, shown: Bool) {
         let id = ObjectIdentifier(view)
         let existing = tileDecorations[id]
@@ -379,7 +379,7 @@ private final class FlightCopy: UIView {
         if let existing {
             existing.view.removeFromSuperview()
             if existing.view === playOwner {
-                // 見せていた再生アイコンを、作り直した表示へ、見えている大きさと濃さのまま移す。作り直した表示になければ、ほかの表示から選び直す。
+                // 見せていた再生アイコンを、作り直した表示へ、見えている大きさと不透明度のまま移す。作り直した表示になければ、ほかの表示から選び直す。
                 let shownSize = shownPlaySize(of: existing.view)
                 let alpha = existing.view.view(for: .play).alpha
                 playOwner = nil
@@ -397,7 +397,7 @@ private final class FlightCopy: UIView {
         adoptPlay(of: added)
     }
 
-    /// `added`の再生アイコンを、見せる1つにするか決める。まだ見せていなければ選び、見せているものより大きければ、見えている大きさと濃さのまま替える。
+    /// `added`の再生アイコンを、見せる1つにするか決める。まだ見せていなければ選び、見せているものより大きければ、見えている大きさと不透明度のまま替える。
     private func adoptPlay(of added: MediaTileDecorationView) {
         guard added.decoration.showsPlay else { return }
         guard let owner = playOwner else {
@@ -440,7 +440,7 @@ private final class FlightCopy: UIView {
         }
     }
 
-    /// 重ねた表示の部品と、再生アイコンの三角と、送信の状態の表示の像。止めるときに、見えている形を読み戻す。
+    /// 重ねた表示の部品と、再生アイコンの三角と、送信の状態の表示のスナップショット。止めるときに、見えている形を読み戻す。
     private var tileDecorationParts: [UIView] {
         tileDecorations.values.map(\.view).flatMap { decoration in MediaTileDecorationView.Part.allCases.map(decoration.view(for:)) + [decoration.playGlyph] }
             + statuses.values
@@ -473,8 +473,8 @@ private final class FlightCopy: UIView {
         owner.playGlyph.transform = CGAffineTransform(scaleX: glyphScale, y: glyphScale)
     }
 
-    /// `view`（両端の本物）に重ねた送信の状態の表示の像を載せる。`shown`がfalseなら見せずに載せ、`showStatus`で濃くする。
-    /// 同じ本物の像を載せていれば、今の表示で撮り直して今の濃さを引き継ぐ。撮れなければ前の像を残す。表示を出していなければ、載せていた像を外す。
+    /// `view`（両端の本物）に重ねた送信の状態の表示のスナップショットを載せる。`shown`がfalseなら見せずに載せ、`showStatus`で濃くする。
+    /// 同じ本物のスナップショットを載せていれば、今の表示で撮り直して今の不透明度を引き継ぐ。撮れなければ前のスナップショットを残す。表示を出していなければ、載せていたスナップショットを外す。
     func attachStatus(_ status: ComposeMorphFlights.StatusOverlay?, of view: UIView, shown: Bool) {
         let id = ObjectIdentifier(view)
         let existing = statuses[id]
@@ -487,7 +487,7 @@ private final class FlightCopy: UIView {
         existing?.removeFromSuperview()
         snapshot.isUserInteractionEnabled = false
         snapshot.alpha = existing?.alpha ?? (shown ? 1 : 0)
-        // 動かす前の濃さの記録も、撮り直した像へ移す。止めるときに、外した像ではなく今の像を戻すため。
+        // 動かす前の不透明度の記録も、撮り直したスナップショットへ移す。止めるときに、外したスナップショットではなく今のスナップショットを戻すため。
         tileDecorationBeforeMove = tileDecorationBeforeMove.map { part in
             part.view === existing ? (view: snapshot, transform: part.transform, alpha: part.alpha) : part
         }
@@ -506,7 +506,7 @@ private final class FlightCopy: UIView {
             covering.addSubview(snapshot)
         case .bottomTrailingCorner(let mark):
             guard let overhang = overhang ?? makeOverhang() else { return }
-            // 複製が本物と同じ大きさになったとき本物と重なるよう、本物の右下の角からの位置で置く。行き先の像は、起点の大きさの複製に載せるため。
+            // 複製が本物と同じ大きさになったとき本物と重なるよう、本物の右下の角からの位置で置く。行き先のスナップショットは、起点の大きさの複製に載せるため。
             let frame = mark.convert(mark.bounds, to: view)
             snapshot.frame = frame.offsetBy(dx: overhang.bounds.width - view.bounds.width, dy: overhang.bounds.height - view.bounds.height)
             snapshot.autoresizingMask = [.flexibleLeftMargin, .flexibleTopMargin]
@@ -570,7 +570,7 @@ private final class FlightCopy: UIView {
     private var appliedGeometry: Geometry?
     private var previousGeometry: Geometry?
 
-    /// アニメーションの中で呼ぶと、外枠、中の画像、角の丸みを一緒に動かす。
+    /// アニメーションの中で呼ぶと、外枠、中の画像、radiusを一緒に動かす。
     func apply(_ geometry: Geometry) {
         previousGeometry = appliedGeometry ?? geometry
         appliedGeometry = geometry
@@ -593,7 +593,7 @@ private final class FlightCopy: UIView {
     }
 
     /// 動いている途中の見えている形で止め、そこから次の行き先へ向かい直せるようにする。
-    /// 作ったばかりでまだ一度も描いていない複製（描き直しの前に行き先を測り直したとき）は、見えている形を読めない。
+    /// 作ったばかりでまだ一度も描いていない複製（再描画の前に行き先を測り直したとき）は、見えている形を読めない。
     /// 読めないまま止めると、行き先の値を見えている形と取り違え、行き先へ1コマで移るため、動かす前の形に戻す。
     func freezeAtPresentation() {
         guard layer.presentation() != nil else {

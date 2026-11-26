@@ -19,7 +19,7 @@ final class ComposeAttachmentStrip: UIView {
     /// 書いていないときのカプセルのサムネイルも、同じ決め方で読む。
     static let attachedThumbnailPolicy = MediaThumbnailPolicy(enhancement: nil, upscaleTolerance: 2)
 
-    /// サムネイルを押したときに呼ぶ。
+    /// サムネイルを選択したときに呼ぶ。
     var onSelect: (DraftAttachment.ID) -> Void = { _ in }
     /// 並べ替えたときに、移した添付と移した先の位置を渡して呼ぶ。
     var onMove: (DraftAttachment.ID, Int) -> Void = { _, _ in }
@@ -34,7 +34,7 @@ final class ComposeAttachmentStrip: UIView {
     private let collectionView: UICollectionView
     private var dataSource: UICollectionViewDiffableDataSource<Int, DraftAttachment.ID>?
     private var items: [DraftAttachment.ID: Item] = [:]
-    /// 投稿を送っている間と、準備を待っている間。並べ替え、移動、削除を受け付けない。送る中身は押した時点で決めるため。
+    /// 投稿を送っている間と、準備を待っている間。並べ替え、移動、削除を受け付けない。送る中身は選択した時点で決めるため。
     private var isLocked = false
     private var sensitivityToggle = MediaSensitivityToggle.mark
 
@@ -100,7 +100,7 @@ final class ComposeAttachmentStrip: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 並びと各サムネイルの状態を描き直す。足したものは後ろに付け、並びの変わらないものは中身だけ描き直す。
+    /// 並びと各サムネイルの状態を再描画する。足したものは後ろに付け、並びの変わらないものは中身だけ再描画する。
     /// - Parameters:
     ///   - isLocked: 投稿を送っている間と、準備を待っている間。
     ///   - sensitivityToggle: メニューに出す、閲覧注意の付け外しの項目。
@@ -113,7 +113,7 @@ final class ComposeAttachmentStrip: UIView {
         var snapshot = NSDiffableDataSourceSnapshot<Int, DraftAttachment.ID>()
         snapshot.appendSections([0])
         snapshot.appendItems(ids)
-        // 並べ替えで位置が変わると、前へ・後ろへの移動の項目も変わるため、残っているものはすべて描き直す。
+        // 並べ替えで位置が変わると、前へ・後ろへの移動の項目も変わるため、残っているものはすべて再描画する。
         snapshot.reconfigureItems(ids.filter { dataSource.snapshot().indexOfItem($0) != nil })
         dataSource.apply(snapshot, animatingDifferences: window != nil)
     }
@@ -174,7 +174,7 @@ final class ComposeAttachmentStrip: UIView {
         case .unmark:
             AttachmentAction(title: ComposeTexts.Attachment.unmarkSensitive, systemImage: "eye", group: .sensitivity) { [weak self] in self?.onSetSensitive(false) }
         case .lockedBySpoiler:
-            // 項目を消さず、押せない形で理由を添える。外せない理由が分からないまま、項目がなくなったように見えないようにするため。
+            // 項目を消さず、無効にして理由を添える。外せない理由が分からないまま、項目がなくなったように見えないようにするため。
             AttachmentAction(title: ComposeTexts.Attachment.unmarkSensitive, subtitle: ComposeTexts.Attachment.sensitiveLockedBySpoiler, systemImage: "eye", group: .sensitivity, isEnabled: false) {}
         }
     }
@@ -191,7 +191,7 @@ final class ComposeAttachmentStrip: UIView {
 
 /// 移動、閲覧注意、削除の操作。セルのカスタムアクションとコンテキストメニューで同じものを出す。
 private struct AttachmentAction {
-    /// メニューで区切って並べるまとまり。並びの順に出す。
+    /// メニューで区切って並べるグループ。並びの順に出す。
     enum Group: CaseIterable {
         case move, sensitivity, remove
     }
@@ -286,15 +286,15 @@ extension ComposeAttachmentStrip: UICollectionViewDragDelegate, UICollectionView
 /// ビューアはこのサムネイルとのあいだで画像を動かす。
 private final class ComposeAttachmentCell: UICollectionViewCell {
     let tile = MediaTileView(store: AppDependencies.mediaImages)
-    /// 状態の表示を、サムネイルと同じ角の丸い枠に収める。投稿欄の開閉では、サムネイルと一緒に隠し、像を複製に載せて運ぶ。
+    /// 状態の表示を、サムネイルと同じ角の丸い枠に収める。投稿欄の開閉では、サムネイルと一緒に隠し、スナップショットを複製に載せて運ぶ。
     let overlay = UIView()
     /// 送信中と変換待ちの間、サムネイルを少し暗くする。
     private let dimView = UIView()
     private let spinner = UIActivityIndicatorView(style: .medium)
-    /// 送っている間の進み具合。満ちたら、サーバーの変換待ちの回る表示に替わる。
+    /// 送っている間の進み具合。満ちたら、サーバーの変換待ちのアクティビティインジケーターに替わる。
     private let progressRing = ProgressRingView()
     private let failureView = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
-    /// 代替テキストの送信中に、ALTのバッジの位置に出す小さな回る表示。
+    /// 代替テキストの送信中に、ALTのバッジの位置に出す小さなアクティビティインジケーター。
     private let descriptionSpinner = UIActivityIndicatorView(style: .medium)
     /// 代替テキストを送れなかったときに、ALTのバッジの位置に出すエラーのアイコン。
     private let descriptionFailureView = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
@@ -303,7 +303,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        // 押したことはセルの選択で受けるため、サムネイル自身には触れさせない。
+        // 押下はセルの選択で受けるため、サムネイル自身には触れさせない。
         tile.isUserInteractionEnabled = false
         tile.isAccessibilityElement = false
         overlay.isUserInteractionEnabled = false
@@ -373,7 +373,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         } else {
             tile.applyLocal(thumbnail: item.local?.thumbnail, kind: item.local?.displayKind, description: showsDescriptionState ? "" : description)
         }
-        // 送っている間は進み具合の円を満たし、満ちたらサーバーの変換待ちの回る表示に替える。変換にかかる時間は分からない。
+        // 送っている間は進み具合の円を満たし、満ちたらサーバーの変換待ちのアクティビティインジケーターに替える。変換にかかる時間は分からない。
         let isWorking = item.status == .exporting || item.status == .uploading || item.status == .processing
         dimView.isHidden = !isWorking
         progressRing.isHidden = item.progress == nil

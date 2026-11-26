@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// フィルターの画面。サーバーのフィルターを変えずに、読み込み中や失敗、空、長い名前とキーワード、期限のあるものと切れたもの、保存や削除をサーバーが断ったとき、保存に時間がかかるときを並べる。
-/// 項目を押すと編集の画面が開く。保存と削除は通信せず、断る状態のほかは受け付けたことにする。
+/// 項目を選択すると編集の画面が開く。保存と削除は通信せず、断る状態のほかは受け付けたことにする。
 enum FiltersCatalog {
     private struct Failure: LocalizedError {
         var errorDescription: String? { "サーバーに接続できませんでした。" }

@@ -39,7 +39,7 @@ struct ReadVisibilityTests {
         #expect(ReadVisibility.visibleIDs(of: rows, in: visibleRect) == ["a", "b"])
     }
 
-    /// 見ていない間は報告しない。窓が前面にない間は、使う人がスクロールしたときだけ報告する。
+    /// 見ていない間は報告しない。ウィンドウが前面にない間は、使う人がスクロールしたときだけ報告する。
     @Test func reportsOnlyWhileShown() {
         #expect(ReadVisibility.shouldReport(isShown: true, isWindowActive: true, byUser: false))
         #expect(!ReadVisibility.shouldReport(isShown: false, isWindowActive: true, byUser: true))

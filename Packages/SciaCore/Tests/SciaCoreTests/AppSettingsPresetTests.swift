@@ -197,7 +197,7 @@ struct AppSettingsPresetTests {
         #expect(homeSettings.appearance.animatesAvatars == nil)
     }
 
-    /// サーバーの「アニメーションGIFを自動再生する」は、アカウントの設定ごとに、そのアカウントの覚えた値を読む。窓を分けて別のアカウントを開いていても混ざらない。
+    /// サーバーの「アニメーションGIFを自動再生する」は、アカウントの設定ごとに、そのアカウントのキャッシュした値を読む。ウィンドウを分けて別のアカウントを開いていても混ざらない。
     @Test func serverAnimationsArePerAccount() {
         let app = makeSettings()
         let a = app.forAccount("a@example.social")
@@ -265,7 +265,7 @@ struct AppSettingsPresetTests {
         #expect(!changed.isOpen)
     }
 
-    /// 使っていないプリセットの値を変えても、同じ値をほかのプリセットで読んでいる画面には届かない。プリセットを管理から直している間に、タイムラインを描き直したり翻訳をやり直したりしないため。
+    /// 使っていないプリセットの値を変えても、同じ値をほかのプリセットで読んでいる画面には届かない。プリセットを管理から直している間に、タイムラインを再描画したり翻訳をやり直したりしないため。
     @Test func changingUnusedPresetDoesNotNotifyOtherReaders() throws {
         let app = makeSettings()
         app.accentColor = .purple

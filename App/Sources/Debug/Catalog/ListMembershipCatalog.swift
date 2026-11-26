@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// ユーザーのメニューの「リストに追加」のシート。サーバーに送らずに、読み込み中や失敗、長い名前、リストがないとき、足せない相手、フォローしている途中を並べる。
-/// リストを押しても何も送らない。
+/// リストを選択しても何も送らない。
 enum ListMembershipCatalog {
     private struct Failure: LocalizedError {
         var errorDescription: String? { "サーバーに接続できませんでした。" }

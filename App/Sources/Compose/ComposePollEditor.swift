@@ -5,8 +5,8 @@ import UIKit
 ///
 /// 選択肢の欄は、タイムラインの投票と同じく角丸のボックスに入れ、書くとどう見えるかを分かるようにする。欄の数は下書きが決め、最後の欄に書くと空の欄が増える。
 /// 空の欄は送らないので、選択肢を足すボタンも消すボタンも置かない。
-/// 設定（締め切り、選び方、結果を見せるか）は、今どうなっているかが見え、1回押せば変えられるよう、ボタンを1行に並べる（`ComposePollSettingsRow`）。
-/// 1つのメニューにまとめても設定の行は残り、押す回数が増えるだけだったため。
+/// 設定（締め切り、選び方、結果を見せるか）は、今どうなっているかが見え、1回選択すれば変えられるよう、ボタンを1行に並べる（`ComposePollSettingsRow`）。
+/// 1つのメニューにまとめても設定の行は残り、選択する回数が増えるだけだったため。
 /// どのボタンもラベルに今の設定を出す。締め切りが「7日」と今の値を出す横で、切り替えだけ機能の名前を出すと、オフの「複数選択」を今の設定と読み違えるため。
 ///
 /// 入力欄のフォーカスと補完は投稿欄が本文や注意書きと一緒に扱うため、入力欄の`delegate`と打ったときの処理は置く側が決める。
@@ -24,7 +24,7 @@ final class ComposePollEditor: UIView {
     var onSetMultiple: (Bool) -> Void = { _ in }
     var onSetHidesTotals: (Bool) -> Void = { _ in }
     var onRemovePoll: () -> Void = {}
-    /// 折りたたんだ1行を押したときに呼ぶ。置く側が欄を開き、選択肢の入力欄にフォーカスを移す。
+    /// 折りたたんだ1行を選択したときに呼ぶ。置く側が欄を開き、選択肢の入力欄にフォーカスを移す。
     var onUnfold: () -> Void = {}
 
     /// 選択肢の入力欄。並びの順。
@@ -33,9 +33,9 @@ final class ComposePollEditor: UIView {
     private let optionsStack = UIStackView()
     /// 設定の1行。値が替わるときの動きのため、SwiftUIで描く。
     private let settingsRow = ComposePollSettingsRow()
-    /// 折りたたんだときに、選択肢の欄と設定の行の代わりに出す1行。書いた選択肢を並べ、押すと開く。
+    /// 折りたたんだときに、選択肢の欄と設定の行の代わりに出す1行。書いた選択肢を並べ、選択すると開く。
     private let summaryButton = FadingTitleButton(configuration: .plain())
-    /// 折りたたんだ1行の末尾に置く、押すと開くことを示すシンボル。ボタンの画像は先頭の1つしか置けないので、別のビューで重ねる。
+    /// 折りたたんだ1行の末尾に置く、選択すると開くことを示すシンボル。ボタンの画像は先頭の1つしか置けないので、別のビューで重ねる。
     private let summaryChevron = UIImageView(image: UIImage(systemName: "chevron.down"))
     /// 選択肢の欄と設定の行を入れ、折りたたむと高さを0にして切り抜く入れ物。
     private let expandedContainer = UIView()
@@ -51,7 +51,7 @@ final class ComposePollEditor: UIView {
     private(set) var content: Content?
     /// 切り替えのボタンの文言を、設定の行に収まるところまで縮めた段階。
     var labelLength: SettingsLabelLength { settingsRow.labelLength }
-    /// 増えて、まだ浮かび上がらせていない欄。
+    /// 増えて、まだフェードインさせていない欄。
     private var appearingRows: [UIView] = []
     /// 減って並びから外し、まだ薄くし始めていない欄。
     private var leavingRows: [UIView] = []
@@ -106,7 +106,7 @@ final class ComposePollEditor: UIView {
     }
 
     /// 下書きに合わせる。`animatesRows`なら、欄の増減をすぐには見せず、置く側が投稿欄の高さを変える動きの中で`revealRowChanges`を、
-    /// 動き終えたら`finishRowChanges`を呼ぶ。増えた欄は、置かれる場所で透明にしておき、浮かび上がらせる。減った欄は、並びから外して元の場所に残し、薄くしてから外す。
+    /// 動き終えたら`finishRowChanges`を呼ぶ。増えた欄は、置かれる場所で透明にしておき、フェードインさせる。減った欄は、並びから外して元の場所に残し、薄くしてから外す。
     /// `settingsDuration`が0より大きければ、設定の値と選び方のマークを、その時間で入れ替える。
     /// 欄の数が変わったらtrueを返す。
     @discardableResult
@@ -116,7 +116,7 @@ final class ComposePollEditor: UIView {
         let poll = content.poll
         let rowCount = optionRows.count
         while optionRows.count < poll.options.count {
-            // マークの形は並べる前に決める。あとから決めると、形の変わるところが、欄を浮かび上がらせる動きに乗る。
+            // マークの形は並べる前に決める。あとから決めると、形の変わるところが、欄をフェードインさせる動きに乗る。
             let row = makeOptionRow(index: optionRows.count, multiple: poll.multiple)
             let previous = optionRows.last?.view.frame
             optionRows.append(row)
@@ -224,7 +224,7 @@ final class ComposePollEditor: UIView {
         return 4 + options + 8 + height(of: settingsRow) + 4
     }
 
-    /// 増えた欄を浮かび上がらせ、減った欄を薄くする。投稿欄の高さを変える動きの中で呼び、返した欄を、動き終えたら`finishRowChanges`に渡す。
+    /// 増えた欄をフェードインさせ、減った欄を薄くする。投稿欄の高さを変える動きの中で呼び、返した欄を、動き終えたら`finishRowChanges`に渡す。
     func revealRowChanges() -> [UIView] {
         appearingRows.forEach { $0.alpha = 1 }
         appearingRows = []
@@ -265,7 +265,7 @@ final class ComposePollEditor: UIView {
         summaryButton.accessibilityLabel = ComposeTexts.Poll.optionsLabel
         summaryButton.accessibilityHint = ComposeTexts.Poll.optionsHint
         summaryButton.addAction(UIAction { [weak self] _ in self?.onUnfold() }, for: .primaryActionTriggered)
-        // 1行の文字は大きさを決めて入れるので、文字の大きさの設定が変わったら入れ直す。
+        // 1行の文字は大きさを決めて入れるので、Dynamic Typeが変わったら入れ直す。
         summaryButton.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UIButton, _) in
             guard let self, let poll = content?.poll else { return }
             updateSummary(poll)
@@ -310,7 +310,7 @@ final class ComposePollEditor: UIView {
         content.alignment = .center
         content.spacing = 8
         content.translatesAutoresizingMaskIntoConstraints = false
-        // タイムラインの投票の選択肢と同じ、角丸のボックスにする。ボックスのどこを押しても、その欄に書き始める。
+        // タイムラインの投票の選択肢と同じ、角丸のボックスにする。ボックスのどこを選択しても、その欄に書き始める。
         let box = UIView()
         box.backgroundColor = .tertiarySystemFill
         box.layer.cornerRadius = 8
@@ -329,15 +329,15 @@ final class ComposePollEditor: UIView {
 
 /// 選択肢の先頭のマーク。複数選べない投票は丸、複数選べる投票は四角。
 ///
-/// SF Symbolsの`circle`と`square`を置かずに、フチだけの角丸の四角を描く。選び方を変えたときに、線を消して描き直さず、
-/// 同じ線のまま角の丸みと大きさを変えて、丸と四角の間を移るため。記号の置き換えは、消して描き直す動きしかない。
-/// 大きさ、線の太さ、四角の角の丸みは、タイムラインの投票が使う記号（`subheadline`）に合わせ、文字の大きさに比例させる。
+/// SF Symbolsの`circle`と`square`を置かずに、フチだけの角丸の四角を描く。選び方を変えたときに、線を消して再描画せず、
+/// 同じ線のままradiusと大きさを変えて、丸と四角の間を移るため。記号の置き換えは、消して再描画する動きしかない。
+/// 大きさ、線の太さ、四角の角のradiusは、タイムラインの投票が使う記号（`subheadline`）に合わせ、文字の大きさに比例させる。
 @MainActor
 final class ComposePollOptionMark: UIView {
     private(set) var multiple: Bool
     private let shape = UIView()
 
-    /// 丸の直径、四角の一辺、四角の角の丸みの、記号の文字の大きさに対する割合。選び方のボタンのアイコンも、丸と四角の比をここから取る。
+    /// 丸の直径、四角の一辺、四角の角のradiusの、記号の文字の大きさに対する割合。選び方のボタンのアイコンも、丸と四角の比をここから取る。
     nonisolated static let circleDiameterRatio: CGFloat = 1.06
     nonisolated static let squareSideRatio: CGFloat = 0.94
     nonisolated static let squareCornerRatio: CGFloat = 0.22

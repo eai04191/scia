@@ -1,6 +1,6 @@
 public import Foundation
 
-/// ユーザーのメニューの項目を押したときの操作。
+/// ユーザーのメニューの項目を選択したときの操作。
 public enum UserMenuCommand: Sendable {
     case url(URLMenuCommand)
     /// 文字のままのハンドルで、相手を探してプロフィールのURLを決めてから、URLの項目を行う。
@@ -35,7 +35,7 @@ public enum UserMenuTarget: Sendable {
     case account(id: String, acct: String)
     /// 本文や自己紹介のメンションのリンク。APIの`mentions`にないリンクでは、パーサーはリンクの文字列を`acct`の代わりにするが、
     /// Mastodonはほかのサーバーのユーザーでもリンクの文字列からサーバー名を省くため、そのままでは別のユーザーを指す。プロフィールのURLでアカウントを引いて`acct`を決める。
-    /// - Parameter shownAcct: 見つからなかったときの知らせに出す、リンクの文字列から取った名前。
+    /// - Parameter shownAcct: 見つからなかったときのエラーに出す、リンクの文字列から取った名前。
     case profileURL(URL, shownAcct: String)
     /// 文字のまま書かれたハンドル（`user@domain`）。ハンドルでアカウントを引く。
     case handle(String)
@@ -93,11 +93,11 @@ public struct UserMenuActions {
     public let localServer: String
     /// 相手のIDと`acct`を決める。リンクのメンションは、プロフィールのURLから探す。見つからなければ投げる。
     public let resolveTarget: @MainActor (UserMenuTarget) async throws -> UserIdentity
-    /// `resolveTarget`で決めた相手と自分の関係を読む。相手が自分でも読む。覚えている関係を読み直している途中なら、それを待つ。
+    /// `resolveTarget`で決めた相手と自分の関係を読む。相手が自分でも読む。キャッシュした関係を再読み込みしている途中なら、それを待つ。
     public let loadRelation: @MainActor (UserMenuTarget, UserIdentity) async throws -> UserRelation?
-    /// 手元で分かっている相手との関係。相手のIDが分からないか、関係を覚えていなければnil。
+    /// 手元で分かっている相手との関係。相手のIDが分からないか、関係をキャッシュしていなければnil。
     public let knownRelation: @MainActor (UserMenuTarget) -> KnownRelation?
-    /// 相手たちとの関係をまとめて1回で読み直し、覚えておく。自分のメモを出すため、自分も含める。
+    /// 相手たちとの関係をまとめて1回で再読み込みし、キャッシュする。自分のメモを出すため、自分も含める。
     public let reloadRelations: @MainActor ([String]) -> Void
     /// 関係の項目で選んだ変更を送る。取り消しにくい変更は、確かめてから送る。
     public let changeRelation: @MainActor (UserRelationChange, UserRelation) -> Void
@@ -168,7 +168,7 @@ public struct UserMenuActions {
 
 /// ユーザーのメニュー。投稿のメニューのサブメニュー、アイコンや人のリストの行、本文や自己紹介のメンション、プロフィール画面の「…」で、同じ並びから組む。
 /// 決まりはdocs/menus.mdの「ユーザーのメニュー」にある。項目の名前、並び、出す条件、見出しはここだけが知る。
-/// 押したときの動き（共有のシートを出す起点、プロフィールを開く先）と、人のアイコンの画像は、出す場所が決める。
+/// 選択したときの動き（共有のシートを出す起点、プロフィールを開く先）と、人のアイコンの画像は、出す場所が決める。
 @MainActor
 public struct UserMenuTree {
     public let subject: UserMenuSubject
@@ -190,7 +190,7 @@ public struct UserMenuTree {
 
     /// 投稿のメニューに置く、`@acct`のサブメニュー。サブメニューの項目にその人のアイコンを付け、中の「プロフィール」は記号のままにする。同じ顔が2つ並ばないようにするため。
     /// カスタマイズのほかの中身が1つで、「その他」にカスタマイズのほかに何もなければ、サブメニューにせず「@acctのプロフィール」のように直接並べ、カスタマイズは出さない。出す項目がなければnil。
-    /// 関係の読み直しは、投稿のメニューに出る人をまとめて1回で頼むため、ここでは頼まない。
+    /// 関係の再読み込みは、投稿のメニューに出る人をまとめて1回で頼むため、ここでは頼まない。
     /// - Parameter avatar: その人のアイコン。nilならアイコンを付けない。
     public func submenu(groups: MenuLayout<UserMenuItem>.Groups, avatar: MenuAvatar?) -> MenuNode<UserMenuCommand>? {
         // 関係の項目は読んでから中身が決まり、名前に相手を入れられないため、1つだけでもサブメニューにする。
@@ -223,17 +223,17 @@ public struct UserMenuTree {
         return children.isEmpty ? nil : .submenu("", children)
     }
 
-    /// プロフィールのハンドルを押したときのメニュー。コピーの項目を、並びの設定によらず決まった順に出す。
-    /// 見出しは置かない。押したハンドルのそばに出て、項目のサブテキストで中身が分かるため。出す項目がなければnil。
+    /// プロフィールのハンドルを選択したときのメニュー。コピーの項目を、並びの設定によらず決まった順に出す。
+    /// 見出しは置かない。選択したハンドルのそばに出て、項目のサブテキストで中身が分かるため。出す項目がなければnil。
     public func handleMenu() -> MenuNode<UserMenuCommand>? {
         let groups = MenuLayout<UserMenuItem>.Groups(main: [.init(UserMenuItem.copyItems)], more: [])
         let children = nodes(groups: groups, offersProfile: false, profileAvatar: nil)
         return children.isEmpty ? nil : .submenu("", children)
     }
 
-    /// 単独で出すメニューとプロフィール画面のメニューで、開くたびに関係を読み直す相手のID。
-    /// 関係で中身が変わる項目を出していなければ読み直さないのでnil。リンクのメンションは、相手を探すまでIDが分からないため、
-    /// ここではなく、相手を探したあとに関係を読むところ（`UserMenuActions.loadRelation`）で読み直す。
+    /// 単独で出すメニューとプロフィール画面のメニューで、開くたびに関係を再読み込みする相手のID。
+    /// 関係で中身が変わる項目を出していなければ再読み込みしないのでnil。リンクのメンションは、相手を探すまでIDが分からないため、
+    /// ここではなく、相手を探したあとに関係を読むところ（`UserMenuActions.loadRelation`）で再読み込みする。
     public func relationReloadID(groups: MenuLayout<UserMenuItem>.Groups) -> String? {
         guard let id = subject.id, groups.needsRelationship else { return nil }
         return id
@@ -340,10 +340,10 @@ public struct UserMenuTree {
 // MARK: - 関係の項目
 
 extension UserMenuTree {
-    /// 関係の項目。関係を覚えている相手は、覚えている関係でその場で組む。
-    /// 覚えていない相手は、読む間は読み込み中の行を出し、読んでから中身を渡す。開く途中のサブメニューで中身が替わると動きが崩れるため、
-    /// メニューを開いたときに出る人の関係をまとめて読み直し（`reloadRelations`）、次からは覚えている関係で組めるようにしている。
-    /// 自分には、自分用の書き置きに使えるメモだけを出す。読めなかったら、`failureSlots`の項目にだけ押せない行で知らせ、ほかの項目は何も出さない。項目ごとに同じ知らせが並ばないようにするため。
+    /// 関係の項目。関係をキャッシュしている相手は、キャッシュした関係でその場で組む。
+    /// キャッシュしていない相手は、読む間は読み込み中の行を出し、読んでから中身を渡す。開く途中のサブメニューで中身が替わると動きが崩れるため、
+    /// メニューを開いたときに出る人の関係をまとめて再読み込み（`reloadRelations`）、次からはキャッシュした関係で組めるようにしている。
+    /// 自分には、自分用の書き置きに使えるメモだけを出す。読めなかったら、`failureSlots`の項目にだけ無効の行で知らせ、ほかの項目は何も出さない。項目ごとに同じ行が並ばないようにするため。
     /// 通報は関係で中身が変わらないため、関係を待たずに出す。リンクのメンションのように相手を探す必要があるときは、探してから出す。
     func relationNodes(_ item: UserMenuItem, actions: UserMenuActions, load: UserRelationLoad, failureSlots: RelationFailureSlots) -> [MenuNode<UserMenuCommand>] {
         let reportableStatusID = reportableStatusID
@@ -386,7 +386,7 @@ extension UserMenuTree {
         }]
     }
 
-    /// 関係を覚えていない相手の通報。相手のIDが分かっていればその場で出し、相手を探すときは探してから出す。自分には出さない。
+    /// 関係をキャッシュしていない相手の通報。相手のIDが分かっていればその場で出し、相手を探すときは探してから出す。自分には出さない。
     private func reportNodes(actions: UserMenuActions, load: UserRelationLoad, showsFailure: Bool) -> [MenuNode<UserMenuCommand>] {
         let reportableStatusID = reportableStatusID
         func node(_ identity: UserIdentity) -> MenuNode<UserMenuCommand> {
@@ -408,7 +408,7 @@ extension UserMenuTree {
         }]
     }
 
-    /// 関係を読めなかった知らせ。押せない行で出す。
+    /// 関係を読めなかったことを伝える、無効の行。
     private static var relationFailureNode: MenuNode<UserMenuCommand> {
         .action("関係を読み込めませんでした", icon: .symbol("exclamationmark.triangle"), isEnabled: false, nil)
     }
@@ -527,14 +527,14 @@ extension UserMenuTree {
         }
     }
 
-    /// 「別のアカウントで」を出す並びなら、ほかのアカウントのアイコンを読み、前に見つけたこの人との関係を、そのアカウントで読み直す。
-    /// 組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。メニューを開くときだけ呼ぶ。組むたびに呼ぶと、スクロールで投稿を組むたびにほかのサーバーへ通信するため。
+    /// 「別のアカウントで」を出す並びなら、ほかのアカウントのアイコンを読み、前に見つけたこの人との関係を、そのアカウントで再読み込みする。
+    /// 組んだメニューはキャッシュしていた関係のまま出し、再読み込みした関係は次に開いたときから使う。メニューを開くときだけ呼ぶ。組むたびに呼ぶと、スクロールで投稿を組むたびにほかのサーバーへ通信するため。
     /// - Parameter groups: メニューを組んだ並び。
     public func refreshOtherAccounts(groups: MenuLayout<UserMenuItem>.Groups) {
         Self.refreshOtherAccounts(of: [self], groups: groups)
     }
 
-    /// `trees`の人たちの「別のアカウントで」を、ほかのアカウントごとに、関係をまとめて1回で読み直す。投稿のメニューのように、1つのメニューに何人も出るときに使う。
+    /// `trees`の人たちの「別のアカウントで」を、ほかのアカウントごとに、関係をまとめて1回で再読み込みする。投稿のメニューのように、1つのメニューに何人も出るときに使う。
     /// - Parameter groups: メニューを組んだ並び。
     static func refreshOtherAccounts(of trees: [UserMenuTree], groups: MenuLayout<UserMenuItem>.Groups) {
         guard let actions = trees.lazy.compactMap(\.actions).first, (groups.main + groups.more).contains(where: { $0.items.contains(.otherAccounts) }) else { return }

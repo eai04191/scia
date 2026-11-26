@@ -168,7 +168,7 @@ struct ComposeModelAccountTests {
         #expect(model.otherAccount == nil)
     }
 
-    /// 前のサーバーへのアップロードの途中で替えたら、その結果は使わず、抜けるのを待ってから替えた先のサーバーへ送り直す。
+    /// 前のサーバーへのアップロードの途中で替えたら、その結果は使わず、抜けるのを待ってから替えた先のサーバーへ再送する。
     @Test func ignoresUploadToPreviousServer() async throws {
         let uploads = Uploads()
         let gate = Gate()
@@ -209,7 +209,7 @@ struct ComposeModelAccountTests {
     }
 
     /// ほかのアカウントの投稿を削除して書き直すときは、そのアカウントのサーバーで元の投稿を消し、消せたことはそのアカウントに知らせる。今のアカウントには知らせない。
-    /// 今のアカウントで同じIDの投稿が消えたという知らせは、別の投稿なので使わない。
+    /// 今のアカウントで同じIDの投稿が消えたというイベントは、別の投稿なので使わない。
     @Test func redraftsOtherAccountsStatus() async throws {
         let deleted = Posted()
         let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }

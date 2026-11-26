@@ -97,7 +97,7 @@ extension TimelineViewController {
         return BuiltMenu(root: root, renderer: renderer) { statusMenu?.didRender() }
     }
 
-    /// メディアのメニューの木。`target`で行える項目を、今の状態から決める。
+    /// メディアのメニューのツリー。`target`で行える項目を、今の状態から決める。
     /// - Parameter statusMenu: 投稿の投稿のメニューの中身。「投稿」のサブメニューにする。
     func mediaMenuTree(for target: MediaMenuTarget, statusMenu: [MenuNode<StatusMenuCommand>]?) -> MediaMenuTree {
         let attachment = target.attachment
@@ -122,7 +122,7 @@ extension TimelineViewController {
         return tree
     }
 
-    /// メディアのメニューで押された項目を行う。「投稿」の中の項目は、投稿のメニューが行う。
+    /// メディアのメニューで選択された項目を行う。「投稿」の中の項目は、投稿のメニューが行う。
     func performMediaMenu(_ command: MediaMenuCommand, target: MediaMenuTarget, subject: OperationStatus.Subject?) {
         let attachment = target.attachment
         let source = target.source
@@ -191,7 +191,7 @@ final class CustomEmojiMenus {
     /// `:shortcode:`のサブメニュー。出す項目がなければnil。
     func node(for emoji: CustomEmoji) -> MenuNode<CustomEmojiMenuCommand>? {
         guard let timeline else { return nil }
-        // 使う人が開いたメニューなので、前に読めなかった画像も間隔を待たずに読み直す。
+        // 使う人が開いたメニューなので、前に読めなかった画像も間隔を待たずに再読み込みする。
         images[emoji.staticUrl] = timeline.emojiImages.image(for: choice(in: timeline).url(of: emoji), retriesNow: true)
         return timeline.customEmojiMenuTree(for: emoji).submenu(groups: timeline.settings.customEmojiMenuLayout.groups)
     }
@@ -241,7 +241,7 @@ final class CustomEmojiMenus {
 }
 
 extension TimelineViewController {
-    /// カスタム絵文字のメニューの木。タイムラインで行える項目を入れる。
+    /// カスタム絵文字のメニューのツリー。タイムラインで行える項目を入れる。
     func customEmojiMenuTree(for emoji: CustomEmoji) -> CustomEmojiMenuTree {
         var tree = CustomEmojiMenuTree(emoji: emoji)
         tree.open = true

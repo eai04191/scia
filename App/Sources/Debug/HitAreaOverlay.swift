@@ -40,7 +40,7 @@ enum HitAreaOverlay {
     }
 }
 
-/// 一番手前に置き、指を受けずに下のウィンドウへ通すウィンドウ。根の画面を持たせないのは、ステータスバーの見た目と画面の向きを下のウィンドウに任せるため。
+/// 一番手前に置き、指を受けずに下のウィンドウへ通すウィンドウ。ルートの画面を持たせないのは、ステータスバーの見た目と画面の向きを下のウィンドウに任せるため。
 private final class HitAreaWindow: UIWindow {
     /// 調べる点の間隔（pt）。細かくするほど境目が正確になるが、`hitTest`の回数が増える。
     private static let step: CGFloat = 4
@@ -48,9 +48,9 @@ private final class HitAreaWindow: UIWindow {
     private static let smallViewSize: CGFloat = 32
     /// 枠の中をすべて調べる、`hitTest`を上書きしたビューの、画面に占める広さの割合の上限。
     private static let detailedAreaRatio: CGFloat = 0.25
-    /// 1フレームで調べるのに使ってよい時間の、フレームの間隔に対する割合。画面のすべてを調べるのは1フレームに収まらないため、フレームに分けて調べ、調べ終えたら描き直す。
+    /// 1フレームで調べるのに使ってよい時間の、フレームの間隔に対する割合。画面のすべてを調べるのは1フレームに収まらないため、フレームに分けて調べ、調べ終えたら再描画する。
     /// タイムラインの画面では、すべてを調べるのにシミュレーターで合わせて1秒ほどかかる。1フレームで済ませると、表示している間の操作が止まる。
-    /// 割合を上げると早く描き直せるが、表示している間のスクロールが引っかかる。
+    /// 割合を上げると早く再描画できるが、表示している間のスクロールが引っかかる。
     private static let frameBudgetRatio: CFTimeInterval = 0.5
 
     private let drawing = CALayer()
@@ -111,8 +111,8 @@ private final class HitAreaWindow: UIWindow {
         }
     }
 
-    /// 前と同じ結果なら描き直さない。描き直すたびに画面が動いたことになり、`Tools/sim.sh`が画面が止まるのを待ち続けるため。
-    /// 点ごとに受けるビューが同じでも、ビューが点の間で動いたときや、画面の大きさと倍率が変わったときは描き直す。境目を枠の縁で描くため。
+    /// 前と同じ結果なら再描画しない。再描画するたびに画面が動いたことになり、`Tools/sim.sh`が画面が止まるのを待ち続けるため。
+    /// 点ごとに受けるビューが同じでも、ビューが点の間で動いたときや、画面の大きさと倍率が変わったときは再描画する。境目を枠の縁で描くため。
     private func show(_ grid: HitGrid) {
         let map = HitAreaMap(views: grid.views, columns: grid.columns, rows: grid.rows, step: Self.step, in: self, windows: targetWindows())
         let scale = traitCollection.displayScale
@@ -186,7 +186,7 @@ private final class HitAreaWindow: UIWindow {
         return detail
     }
 
-    /// 型ごとに覚えた、アプリのコードで`hitTest`か`point(inside:)`を上書きしているか。
+    /// 型ごとにキャッシュした、アプリのコードで`hitTest`か`point(inside:)`を上書きしているか。
     private var overrides: [ObjectIdentifier: Bool] = [:]
 
     /// アプリのコードで上書きしているか。UIKitの部品（`UIScrollView`や`UIControl`など）も上書きしているが、枠の中をすべて受けるので含めない。
@@ -281,7 +281,7 @@ private struct HitAreaLabel: Sendable {
     let color: CGColor
 }
 
-/// 描き直すかを決める、描いた結果の中身。
+/// 再描画するかを決める、描いた結果の中身。
 private struct HitAreaSignature: Equatable {
     let views: [ObjectIdentifier?]
     let frames: [CGRect]
@@ -297,10 +297,10 @@ private struct HitAreaSignature: Equatable {
 }
 
 /// 調べた点の結果から、画面の画素ごとに受けるビューを決める。
-/// 4ptおきの点の結果をそのまま塗ると、境目が4ptの格子に丸められ、ビューの縁から最大4ptずれる。
+/// 4ptおきの点の結果をそのまま塗ると、境目が4ptのグリッドに丸められ、ビューの縁から最大4ptずれる。
 /// まわりの点と受けるビューが違う点の中だけは、画素ごとに、まわりの点で受けたビューのうち、その画素を枠の中に含むものから、一番手前に描かれるものを選ぶ。
 /// `hitTest`はビューの枠と親の枠の中で受けるので、そうしたビューの範囲の縁は枠の縁と一致する。
-/// アプリのコードで`hitTest`か`point(inside:)`を上書きしたビューは、枠の一部だけで受けることがあるため、枠では決めず、点の結果のまま塗る。そうしたビューの範囲の縁は、格子に丸められたまま最大4ptずれる。
+/// アプリのコードで`hitTest`か`point(inside:)`を上書きしたビューは、枠の一部だけで受けることがあるため、枠では決めず、点の結果のまま塗る。そうしたビューの範囲の縁は、グリッドに丸められたまま最大4ptずれる。
 @MainActor
 private struct HitAreaMap {
     /// 点の結果に出てきたビュー。`owners`はこの番号で持つ。

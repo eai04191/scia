@@ -1,25 +1,25 @@
-/// スレッドの画面に並べる投稿。押した投稿と、その前後の会話を持つ。
+/// スレッドの画面に並べる投稿。選択した投稿と、その前後の会話を持つ。
 ///
-/// 字下げせず、すべて同じ幅で平らに並べる。返信は返信先の直後に、深さ優先で並べ、同じ返信先への返信は古い順にする。
+/// インデントせず、すべて同じ幅で平らに並べる。返信は返信先の直後に、深さ優先で並べ、同じ返信先への返信は古い順にする。
 /// こうすると、すぐ上の行が返信先になる行が多くなり、線でつなげる。
 @MainActor
 public final class ThreadStore {
-    /// 押した投稿。ブーストを押したときは、ブーストされた投稿。
+    /// 選択した投稿。ブーストを選択したときは、ブーストされた投稿。
     public let focusID: Status.ID
     private var statuses: [Status.ID: Status]
-    /// 押した投稿から返信先をたどった投稿のID。古い順。
+    /// 選択した投稿から返信先をたどった投稿のID。古い順。
     private var ancestorIDs: [Status.ID] = []
     /// 消えた投稿。あとからストリーミングで届いても足さない。
     private var deletedIDs: Set<Status.ID> = []
     /// 会話を読み始めてからストリーミングで足した返信。読んだ会話に含まれていなくても残す。読み終えるまでに届いた返信は、読んだ会話に入っていないことがあるため。
-    /// それより前に足した返信は残さない。切れている間に消えた投稿を、読み直した会話で消すため。
+    /// それより前に足した返信は残さない。切れている間に消えた投稿を、再読み込みした会話で消すため。
     private var receivedWhileLoading: Set<Status.ID> = []
-    /// 会話を読み始めてから、編集や操作の結果で差し替えた投稿。読み直した会話の応答は、それより古いことがあるため、手元の内容を残す。
+    /// 会話を読み始めてから、編集や操作の結果で差し替えた投稿。再読み込みした会話の応答は、それより古いことがあるため、手元の内容を残す。
     private var updatedWhileLoading: Set<Status.ID> = []
     /// スレッドで当てるサーバーのフィルター。nilなら当てない。
     private let filtering: StatusFiltering?
 
-    /// - Parameter filtering: スレッドで当てるサーバーのフィルター。押した投稿は、押して開いたものなので隠さない。
+    /// - Parameter filtering: スレッドで当てるサーバーのフィルター。選択した投稿は、選択して開いたものなので隠さない。
     public init(focus: Status, filtering: StatusFiltering? = nil) {
         focusID = focus.id
         statuses = [focus.id: focus]
@@ -36,8 +36,8 @@ public final class ThreadStore {
         updatedWhileLoading = []
     }
 
-    /// 読み込んだ会話で、押した投稿のほかの投稿を置き換える。
-    /// - Parameter focus: 読み直した押した投稿。読み直していなければnilで、手元の投稿を使う。
+    /// 読み込んだ会話で、選択した投稿のほかの投稿を置き換える。
+    /// - Parameter focus: 再読み込みした、選択した投稿。再読み込みしていなければnilで、手元の投稿を使う。
     public func apply(_ context: StatusContext, focus updatedFocus: Status? = nil) {
         let focus = updatedWhileLoading.contains(focusID) ? statuses[focusID] : updatedFocus ?? statuses[focusID]
         let received = receivedWhileLoading.compactMap { statuses[$0] }
@@ -46,7 +46,7 @@ public final class ThreadStore {
         for status in received + context.ancestors + context.descendants where !deletedIDs.contains(status.id) {
             statuses[status.id] = status
         }
-        // 読み直した会話に残っている投稿だけ、手元の新しい内容に戻す。
+        // 再読み込みした会話に残っている投稿だけ、手元の新しい内容に戻す。
         for status in updated where statuses[status.id] != nil {
             statuses[status.id] = status
         }
@@ -140,7 +140,7 @@ public final class ThreadStore {
                 appendSubtree(child)
             }
         }
-        // 祖先へのほかの返信は、その祖先の直後に置き、押した投稿より上に並べる。
+        // 祖先へのほかの返信は、その祖先の直後に置き、選択した投稿より上に並べる。
         for id in chain {
             if let status = statuses[id] {
                 placed.insert(id)

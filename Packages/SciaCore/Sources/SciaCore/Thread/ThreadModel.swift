@@ -3,7 +3,7 @@ import os
 
 /// スレッドの読み込みとストリーミングを受け持ち、ThreadStoreの並びをタイムラインの画面（`TimelineDisplay`）へ命令として伝える。
 ///
-/// 押した投稿だけを並べて開き、会話を読んだら、押した投稿の位置を保ったまま、祖先を上に、返信を下に足す。
+/// 選択した投稿だけを並べて開き、会話を読んだら、選択した投稿の位置を保ったまま、祖先を上に、返信を下に足す。
 /// 開いている間は、ホームのストリームに届いた投稿から、スレッドへの返信と、スレッドの中の投稿の編集と削除を拾う。
 @MainActor
 public final class ThreadModel {
@@ -11,7 +11,7 @@ public final class ThreadModel {
     public weak var display: (any TimelineDisplay)?
     /// スレッドで当てるサーバーのフィルター。画面の警告の折りたたみにも同じものを使う。
     public let filtering: StatusFiltering
-    /// 画面を移る動きの最中なら、移り終わってから`work`を行う。移る途中に行を足すと、メインスレッドが止まって動きが跳ぶため。作る側が、画面の動きに合わせて渡す。
+    /// 画面遷移の最中なら、遷移し終わってから`work`を行う。遷移の途中に行を足すと、メインスレッドが止まって動きが跳ぶため。作る側が、画面の動きに合わせて渡す。
     public var afterTransition: (_ work: @escaping @MainActor () -> Void) -> Void = { $0() }
     /// 最初の会話を並べ終えたときに呼ぶ。開く動きのために空けていた余白を戻すなど、画面の側の後始末に使う。
     public var onFirstLoadShown: (() -> Void)?
@@ -20,7 +20,7 @@ public final class ThreadModel {
     private let streamingHub: StreamingHub
     private var streamingSubscription: StreamingHub.Subscription?
     private var isInForeground = true
-    /// 会話を一度読み終えた。読み直しでは、押した投稿も読み直して編集を取り込む。
+    /// 会話を一度読み終えた。再読み込みでは、選択した投稿も再読み込みして編集を取り込む。
     private var hasLoaded = false
     public private(set) var loadTask: Task<Void, Never>?
     /// 会話を読んでいる途中。つないだときやポーリングで、読み込みを重ねない。
@@ -53,21 +53,21 @@ public final class ThreadModel {
 
     public var focusID: Status.ID { store.focusID }
 
-    /// 画面に積む前に呼ぶ。押した投稿だけを並べ、会話を読み始める。
+    /// 画面にプッシュする前に呼ぶ。選択した投稿だけを並べ、会話を読み始める。
     public func start() {
         display?.show(store.entries)
         load(purpose: .action)
         startStreaming()
     }
 
-    /// タイムラインを引っぱって離したときに、会話と押した投稿を読み直す。スレッドは上に新しい投稿が来る並びではないため、全体を読み直す。
+    /// タイムラインをpull to refreshしたときに、会話と選択した投稿を再読み込みする。スレッドは上に新しい投稿が来る並びではないため、全体を再読み込みする。
     public func refresh() async {
         logger.info("thread refresh")
         load(purpose: .action)
         await loadTask?.value
     }
 
-    /// 失敗の表示の再試行が押されたときに呼ぶ。
+    /// 失敗の表示の再試行が選択されたときに呼ぶ。
     public func retry() {
         load(purpose: .action)
     }
@@ -77,8 +77,8 @@ public final class ThreadModel {
         display?.setFooterState(state)
     }
 
-    /// 会話を読む。読んだ結果は、押した投稿の位置を保って並べる。
-    /// - Parameter purpose: 開いたときや引っぱったときは`.action`。つながったときやポーリングは`.display`。
+    /// 会話を読む。読んだ結果は、選択した投稿の位置を保って並べる。
+    /// - Parameter purpose: 開いたときやpull to refreshしたときは`.action`。つながったときやポーリングは`.display`。
     private func load(purpose: RequestPurpose) {
         guard !tasks.isClosed else { return }
         setFooterState(.loading)
@@ -93,7 +93,7 @@ public final class ThreadModel {
                 if !Task.isCancelled { isLoading = false }
             }
             do {
-                // 読み直しでは、切れている間の押した投稿の編集も取り込む。会話の応答には押した投稿が含まれないため。
+                // 再読み込みでは、切れている間の選択した投稿の編集も取り込む。会話の応答には選択した投稿が含まれないため。
                 async let focus = reloadsFocus ? client.status(store.focusID) : nil
                 let context = try await client.statusContext(store.focusID)
                 let updatedFocus = try await focus
@@ -115,7 +115,7 @@ public final class ThreadModel {
     private func showLoaded(isFirstLoad: Bool) {
         guard let display else { return }
         let focus = TimelineEntry.ID.status(store.focusID)
-        // 読み直しでは、読んでいる位置を保つ。
+        // 再読み込みでは、読んでいる位置を保つ。
         display.show(store.entries, keeping: isFirstLoad ? focus : nil)
         setFooterState(.idle)
         guard isFirstLoad else { return }
@@ -149,7 +149,7 @@ public final class ThreadModel {
         streamingSubscription = nil
     }
 
-    /// 戻ったら購読し直す。つながったところで、切れていた間の返信を読み直す。
+    /// 戻ったら購読し直す。つながったところで、切れていた間の返信を再読み込みする。
     public func enterForeground() {
         isInForeground = true
         startStreaming()
@@ -165,7 +165,7 @@ public final class ThreadModel {
     private func streamingDidChange(_ activity: StreamingHub.Activity) {
         switch activity {
         case .connected, .poll:
-            // 読んでいる途中なら、その読み込みが補う。最初の読み込みに失敗していれば、ここで読み直す。
+            // 読んでいる途中なら、その読み込みが補う。最初の読み込みに失敗していれば、ここで再読み込みする。
             guard !isLoading else { return }
             load(purpose: .display)
         case .event(let event):

@@ -69,7 +69,7 @@ struct PollDisplayTests {
         #expect(display.summary == "4票・終了")
     }
 
-    /// サーバーが締め切ったと返した投票は、結果が変わらないため読み直さない。
+    /// サーバーが締め切ったと返した投票は、結果が変わらないため再読み込みしない。
     @Test func noRefreshOnceServerExpired() {
         let display = PollDisplay(poll: poll(expiresIn: -1, expired: true), choices: PollChoices(), now: now)
 
@@ -226,7 +226,7 @@ struct PollChoicesTests {
         #expect(choices.selection(of: poll()) == [0])
     }
 
-    /// 投票できたら選んだものを忘れ、失敗したら押し直せるよう残す。
+    /// 投票できたら選んだものを忘れ、失敗したら選択し直せるよう残す。
     @Test func endSubmittingForgetsSelectionOnlyOnSuccess() {
         var choices = PollChoices()
         choices.toggle(0, in: poll())
@@ -316,7 +316,7 @@ struct PollVotingTests {
         #expect(shown.statuses.first?.poll?.voted == true)
     }
 
-    /// 読み直している間に投票が反映されたら、読み直した投票の前の結果で戻さない。
+    /// 再読み込みしている間に投票が反映されたら、再読み込みした投票の前の結果で戻さない。
     @Test func refreshDuringVoteDoesNotRevertVote() async throws {
         let original = status(poll: poll())
         let shown = Shown([original])

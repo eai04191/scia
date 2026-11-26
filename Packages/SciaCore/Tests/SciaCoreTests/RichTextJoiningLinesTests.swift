@@ -29,14 +29,14 @@ struct RichTextJoiningLinesTests {
         #expect(text.blocks.first?.inlines == [.text("前", []), .text(" ", []), .link("example.com", .url(url), [])])
     }
 
-    /// リスト項目の記号は項目の頭に文字として残し、字下げはしない。
+    /// リスト項目の記号は項目の頭に文字として残し、インデントはしない。
     @Test func keepsListMarkersWithoutIndent() {
         let text = joined("<p>買うもの</p><ul><li>りんご</li><li>みかん</li></ul>")
         #expect(text.plainText == "買うもの • りんご • みかん")
         #expect(text.blocks.first?.listLevel == 0 && text.blocks.first?.quoteLevel == 0)
     }
 
-    /// 引用は字下げせずにつなぐ。
+    /// 引用はインデントせずにつなぐ。
     @Test func joinsQuotesWithoutIndent() {
         let text = joined("<p>前</p><blockquote><p>引用</p></blockquote>")
         #expect(text.plainText == "前 引用")

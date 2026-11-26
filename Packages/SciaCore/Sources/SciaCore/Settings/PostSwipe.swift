@@ -66,7 +66,7 @@ public enum PostSwipeItem: Hashable, Sendable, MenuItemKind, MenuItemPresentable
         }
     }
 
-    /// ボタンを押したときに行う操作。タップや長押しに割り当てた操作と同じ組み方で行う。
+    /// ボタンを選択したときに行う操作。タップや長押しに割り当てた操作と同じ組み方で行う。
     public var action: ObjectAction<StatusMenuItem> {
         switch self {
         case .status(let item): .item(item)

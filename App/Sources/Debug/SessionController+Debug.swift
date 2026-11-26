@@ -241,7 +241,7 @@ extension SessionController {
         }
     }
 
-    /// `scia-debug://lists/...`で、サーバーのリストを変えてから読み直し、タブの並びに反映する。
+    /// `scia-debug://lists/...`で、サーバーのリストを変えてから再読み込みし、タブの並びに反映する。
     private func changeTabSourcesForDebug(_ operation: String, _ change: @escaping @Sendable (MastodonClient) async throws -> Void) {
         let client = client
         tasks.run(.action) { [weak self] in
@@ -397,7 +397,7 @@ extension SessionController {
         }
     }
 
-    /// 開いている絵文字ピッカーで、まとまりのボタンを押したのと同じく移る。移り終えたら、落ちたフレームと、そのフレームに使った処理を
+    /// 開いている絵文字ピッカーで、グループのボタンを選択したのと同じく移る。移り終えたら、落ちたフレームと、そのフレームに使った処理を
     /// Documents/DebugEmojiPalette.logに1行ずつ書き足す。
     private func jumpEmojiPalette(toSection index: Int) {
         let windows = rootViewController.view.window?.windowScene?.windows ?? []

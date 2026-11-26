@@ -69,7 +69,7 @@ struct StatusDeletionTests {
         #expect(statuses.quoteSources == QuoteSourceChanges())
     }
 
-    /// 送り終える前に押し直しても、同じ削除を重ねて送らない。
+    /// 送り終える前に選択し直しても、同じ削除を重ねて送らない。
     @Test func skipsWhileDeletingSameStatus() async throws {
         let gate = Gate()
         var sent = 0
@@ -173,7 +173,7 @@ struct ComposeModelStatusDeletionTests {
         #expect(model.editedStatus?.id == "10")
     }
 
-    /// 編集を送っている間に消したら、送り直せるよう下書きを残す。
+    /// 編集を送っている間に消したら、再送できるよう下書きを残す。
     @Test func editBeingSentIsKept() async throws {
         let gate = Gate()
         let model = makeModel { _ in try await gate.wait() }

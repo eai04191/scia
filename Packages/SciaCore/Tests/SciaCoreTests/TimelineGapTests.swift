@@ -466,7 +466,7 @@ struct TimelineGapTests {
         #expect(filled == ["20", "19", "18"])
     }
 
-    /// ギャップを読めなかったら、行の中で知らせられるよう、どのギャップがなぜ読めなかったかを残す。読み直せたら消す。
+    /// ギャップを読めなかったら、行の中で知らせられるよう、どのギャップがなぜ読めなかったかを残す。再読み込みできたら消す。
     @Test func failedGapIsRememberedUntilItLoads() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let failsGap = Atomic(false)
@@ -797,7 +797,7 @@ struct TimelineGapTests {
             await gate.open()
             _ = try await first.value
         }) {
-            // 1回目が再生成中で空だったので、2回目は13からではなく、読めなかった10から読み直す。
+            // 1回目が再生成中で空だったので、2回目は13からではなく、読めなかった10から再読み込みする。
             // 再生成中だったことは、2回目が揃った結果を読んだので残らない。
             $0.entries = entryRows([13, 12, 11]) + [gapEntry(11, 10)] + entryRows([10, 9, 8])
             $0.isFilling = false
@@ -872,7 +872,7 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...21).reversed()))
     }
 
-    /// 補完に失敗した後に最新のページで読み直したら、次の補完は読み直したタイムラインの最新から読む。
+    /// 補完に失敗した後に最新のページで再読み込みしたら、次の補完は再読み込みしたタイムラインの最新から読む。
     @Test func reloadAfterFailedFillDropsStaleBaseline() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let failing = FailOnce()
@@ -1066,7 +1066,7 @@ struct TimelineGapTests {
     }
 
     /// 重なった補完の1回目が再生成中で一部の投稿だけを返し、置いたギャップを読んでもまだ再生成中だったとき、
-    /// 2回目はそのギャップに含めた範囲を読み直さず、範囲の重なるギャップを作らない。
+    /// 2回目はそのギャップに含めた範囲を再読み込みせず、範囲の重なるギャップを作らない。
     @Test func overlappingFillAfterRegeneratingPageDoesNotOverlapGaps() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let gate = FetchGate()
@@ -1134,8 +1134,8 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...20).reversed()))
     }
 
-    /// 最新のページで読み直したら再生成中で一部の投稿だけが返っても、返った投稿の間をギャップにして、後で読み切ったときに読み飛ばさない。
-    /// 補完に失敗した基準は読み直しで捨てるので、その間の投稿は読み直したページのギャップからしか読めない。
+    /// 最新のページで再読み込みしたら再生成中で一部の投稿だけが返っても、返った投稿の間をギャップにして、後で読み切ったときに読み飛ばさない。
+    /// 補完に失敗した基準は再読み込みで捨てるので、その間の投稿は再読み込みしたページのギャップからしか読めない。
     @Test func regeneratingReloadAfterFailedFillKeepsGapBetweenReturnedStatuses() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let failing = FailOnce()
@@ -1144,7 +1144,7 @@ struct TimelineGapTests {
             if query.sinceID != nil, failing.shouldFail() {
                 throw URLError(.notConnectedToInternet)
             }
-            // 2回目の最新のページ（読み直し）だけ、再生成中で一部の投稿を返す。
+            // 2回目の最新のページ（再読み込み）だけ、再生成中で一部の投稿を返す。
             if query.maxID == nil, query.sinceID == nil, query.minID == nil, latestLoads.withLock({ count in count += 1; return count == 2 }) {
                 return TimelinePage(statuses: [20, 11].map(server.status), isRegenerating: true)
             }
@@ -1668,7 +1668,7 @@ struct TimelineGapTests {
         #expect(Set(ids(store)) == Set(3...22), "最新のページより新しい投稿の間を読み飛ばしました: \(store.entries.map(\.debugLabel))")
     }
 
-    /// 削除でタイムラインが空になったまま補完が読んでいる間に、また補完を求められたら、読み終えた後に同じ基準から読み直す。
+    /// 削除でタイムラインが空になったまま補完が読んでいる間に、また補完を求められたら、読み終えた後に同じ基準から再読み込みする。
     @Test func fillRequestedDuringFillAfterDeletingEveryStatusRunsAfterIt() async throws {
         let server = FakeHomeServer(ids: [10])
         let gate = FetchGate()
@@ -1699,7 +1699,7 @@ struct TimelineGapTests {
         }
         server.post(20...20)
         let requested = try await store.expectChanges(during: { store in try await store.fillFromLatest() }) {
-            // タイムラインが空なので、今の補完が読んでいる基準から読み直す。
+            // タイムラインが空なので、今の補完が読んでいる基準から再読み込みする。
             $0.refillSinceID = "10"
         }
         #expect(requested == nil)

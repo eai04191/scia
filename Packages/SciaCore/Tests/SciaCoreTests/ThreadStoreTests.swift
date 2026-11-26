@@ -27,7 +27,7 @@ struct ThreadStoreTests {
         store.entries.compactMap(\.status?.id)
     }
 
-    /// 1 ← 2（押した投稿） ← 3 ← 5、2 ← 4、1 ← 6。
+    /// 1 ← 2（選択した投稿） ← 3 ← 5、2 ← 4、1 ← 6。
     private func loadedStore() -> ThreadStore {
         let store = ThreadStore(focus: status(2, replyingTo: 1))
         store.apply(StatusContext(
@@ -94,7 +94,7 @@ struct ThreadStoreTests {
         let store = loadedStore()
         #expect(store.receive(.update(status(7, replyingTo: 3))))
         store.beginLoading()
-        // 切れている間に4と7が消え、読み直した会話に含まれない。
+        // 切れている間に4と7が消え、再読み込みした会話に含まれない。
         store.apply(StatusContext(ancestors: [status(1)], descendants: [status(3, replyingTo: 2), status(5, replyingTo: 3)]))
         #expect(ids(store) == ["1", "2", "3", "5"])
     }

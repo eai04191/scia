@@ -106,8 +106,8 @@ private struct ActivityRow: View {
     }
 }
 
-/// App Storeのように、進み具合の輪と止める操作を1つにする。止められるなら中に停止の四角を置き、押すと確かめずに止める。
-/// 確かめないのは、行ごとに置いた44pt四方のボタンで、押し間違えにくいため。
+/// App Storeのように、進み具合の輪と止める操作を1つにする。止められるなら中に停止の四角を置き、選択すると確かめずに止める。
+/// 確かめないのは、行ごとに置いた44pt四方のボタンで、誤って選択しにくいため。
 /// 進み具合が分からないときと、落とし終えて写真に足している間は、満ちた輪では済んだように見えるため、欠けた輪を回す。
 private struct ProgressRingStopButton: View {
     let activity: OperationStatus.Activity
@@ -125,7 +125,7 @@ private struct ProgressRingStopButton: View {
                             .fill(.tint)
                             .frame(width: 9, height: 9)
                     }
-                    // 輪は小さいため、押せる範囲は44ptにする。
+                    // 輪は小さいため、ヒット領域は44ptにする。
                     .frame(width: 44, height: 44)
                     .contentShape(.rect)
             }
@@ -223,7 +223,7 @@ private struct FailureRow: View {
     }
 }
 
-/// どの投稿の知らせかを、投稿者と本文の冒頭で示す。
+/// どの投稿の操作かを、投稿者と本文の冒頭で示す。
 /// 名前は1行で切り、本文は次の行から出す。つなげて出すと、長い名前が行を使い切って本文が見えなくなるため。
 private struct SubjectLine: View {
     let subject: OperationStatus.Subject

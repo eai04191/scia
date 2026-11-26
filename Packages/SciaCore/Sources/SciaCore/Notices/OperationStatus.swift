@@ -7,7 +7,7 @@ public import Observation
 @MainActor
 @Observable
 public final class OperationStatus {
-    /// 知らせが結び付いた投稿。行から投稿を開くために持つ。
+    /// 行が結び付いた投稿。その行から投稿を開くために持つ。
     public struct Subject: Sendable, Equatable, Codable {
         /// 操作した要素のID。ブーストならブーストのID。
         public let statusID: Status.ID
@@ -99,7 +99,7 @@ public final class OperationStatus {
     public private(set) var failures: [Failure] = []
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var store: OperationFailureStore?
-    /// 日付が変わった回数。行の時刻を描き直させるために、時刻の表記を作るときに読む。
+    /// 日付が変わった回数。行の時刻を再描画させるために、時刻の表記を作るときに読む。
     private var dayChanges = 0
     @ObservationIgnored private var stopHandlers: [Activity.ID: @MainActor () -> Void] = [:]
 
@@ -119,7 +119,7 @@ public final class OperationStatus {
         return failure
     }
 
-    /// 失敗を1件消す。ほかのウインドウで増えた失敗を消さないよう、保存先から読み直してから外す。
+    /// 失敗を1件消す。ほかのウインドウで増えた失敗を消さないよう、保存先から再読み込みしてから外す。
     public func removeFailure(_ failureID: Failure.ID) {
         failures = (store?.load() ?? failures).filter { $0.id != failureID }
         store?.save(failures)
@@ -136,7 +136,7 @@ public final class OperationStatus {
         store = nil
     }
 
-    /// 保存先から最近の失敗を読み直す。同じアカウントをほかのウインドウで開いていると、そちらの失敗が保存先に増えているため。
+    /// 保存先から最近の失敗を再読み込みする。同じアカウントをほかのウインドウで開いていると、そちらの失敗が保存先に増えているため。
     public func reloadFailures() {
         guard let store else { return }
         failures = store.load()
@@ -183,7 +183,7 @@ public final class OperationStatus {
     }
 }
 
-/// 出たままの知らせが重なったときに、チップに出す1件を選ぶ。決まりはdocs/notices.mdの「チップ」にある。
+/// 出たままのチップが重なったときに、チップに出す1件を選ぶ。決まりはdocs/notices.mdの「チップ」にある。
 public enum PersistentNoticeChoice {
     /// 失敗を優先し、次に処理の途中、その中では新しいものを選ぶ。
     /// - Parameter items: 出た順（古いものが先）。

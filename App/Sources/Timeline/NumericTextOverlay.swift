@@ -26,7 +26,7 @@ final class NumericTextOverlay: UIView {
     private let alignment: TextAlignment
     /// 数字を入れ替える間だけ描く、SwiftUIの表示。初めて入れ替えるときに作る。
     private var hosting: UIHostingController<NumericTextContent>?
-    /// 次に始める入れ替わり。タイムラインは行の中身を動きを止めた描き直しの中で当てるため、`setText`の中では始めない。
+    /// 次に始める入れ替わり。タイムラインは行の中身を動きを止めた再描画の中で当てるため、`setText`の中では始めない。
     private var pending: (text: String, value: Double, duration: TimeInterval, delay: TimeInterval)?
     /// 重ねたラベル。
     private weak var underlay: UILabel?

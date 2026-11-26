@@ -68,7 +68,7 @@ enum TabAddFlight {
         CATransaction.begin()
         CATransaction.setCompletionBlock {
             carrier.removeFromSuperview()
-            // 飛ぶ間に窓の大きさが変わって切り替えタブが動いたり消えたりしたら、もとの場所で触覚と輪を出さない。
+            // 飛ぶ間にウィンドウの大きさが変わって切り替えタブが動いたり消えたりしたら、もとの場所でハプティクスと輪を出さない。
             guard let destination, destination.window === window, destination.convert(destination.bounds, to: window) == target else { return }
             land(on: target, in: window)
         }
@@ -76,7 +76,7 @@ enum TabAddFlight {
         CATransaction.commit()
     }
 
-    /// 3. 着いたら触覚を鳴らし、丸の上に輪を一度だけ広げる。
+    /// 3. 着いたらハプティクスを鳴らし、丸の上に輪を一度だけ広げる。
     private static func land(on target: CGRect, in window: UIWindow) {
         let motion = TabAddFlightMotion.self
         UINotificationFeedbackGenerator(view: window).notificationOccurred(.success)

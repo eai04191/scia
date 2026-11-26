@@ -43,7 +43,7 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case nameUnicodeEmojis
     /// 入りきらない名前の行末をぼかしている部分。
     case nameFade
-    /// 名前が入りきらず時刻に詰まった投稿の、名前と時刻のすき間。最小のすき間がそのまま空く。
+    /// 名前が入りきらず時刻に詰まった投稿の、名前と時刻のgap。最小のgapがそのまま空く。
     case nameTimeMinGap
     /// 消せる部品の場所。出ていればその部品を、消していれば部品があった位置を示す。
     case contextSymbolSlot
@@ -92,7 +92,7 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case bodyLineGaps
     /// 本文の、段落と段落のあいだ。
     case bodyParagraphGaps
-    /// 本文の、引用やリストの字下げの部分。
+    /// 本文の、引用やリストのインデントの部分。
     case quoteIndent
     /// 本文の、引用の段落の頭の縦線。
     case quoteBars
@@ -130,17 +130,17 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case cardPaddingBands
     /// リンクカードのサイト名と説明。
     case cardDetail
-    /// Xの投稿の囲み。
+    /// Xの投稿のカード。
     case xPost
     case xPostAvatar
     case xPostName
-    /// Xの投稿の囲みの、作者のアイコンと名前を並べた行。
+    /// Xの投稿のカードの、作者のアイコンと名前を並べた行。
     case xPostHeader
     case xPostBody
     case xPostMedia
-    /// 囲みの本文の右に小さく出した添付ファイル。本文の下に並べたときの`xPostMedia`とは示す項目が違うため分ける。
+    /// カードの本文の右に小さく出した添付ファイル。本文の下に並べたときの`xPostMedia`とは示す項目が違うため分ける。
     case xPostBesideMedia
-    /// Xの投稿の囲みの内側の余白。
+    /// Xの投稿のカードの内側の余白。
     case xPostPaddingBands
     case poll
     /// 選択肢を並べた部分。
@@ -195,7 +195,7 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case notificationHeaderGlyphs
     /// 名前の前に差し込んだアイコン。
     case notificationHeaderAvatar
-    /// 名前の前のアイコンと名前のすき間。
+    /// 名前の前のアイコンと名前のgap。
     case notificationHeaderAvatarGap
     /// まとめた通知で並べたアイコン。行の幅で切れた分は含めない。
     case groupAvatars
@@ -222,7 +222,7 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
 }
 
 extension AppearancePreviewPart {
-    /// 部品ではなく、すき間や余白、角のような場所か。場所は塗って示し、部品は中を隠さないよう外側に枠を引いて示す。
+    /// 部品ではなく、gapや余白、角のような場所か。場所は塗って示し、部品は中を隠さないよう外側に枠を引いて示す。
     public var isArea: Bool {
         switch self {
         case .rowPaddingTop, .rowPaddingBottom, .rowPaddingLeading, .rowPaddingTrailing,

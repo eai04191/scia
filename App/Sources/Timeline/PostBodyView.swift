@@ -4,7 +4,7 @@ import UIKit
 
 /// 投稿の中身。投稿のセルと通知のセルで同じ部品を使い、どの部品をどう出すかは置く側が決める。
 ///
-/// 上から、フィルターの警告、注意書き、本文、投票、添付ファイル、リンクカードか囲み（引用かXの投稿）の順に並べる。
+/// 上から、フィルターの警告、注意書き、本文、投票、添付ファイル、リンクカードか、引用かXの投稿のカードの順に並べる。
 /// 警告で折りたたんでいる間は警告だけを、注意書きで折りたたんでいる間は警告と注意書きだけを出す。
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 /// 添付ファイルを重ねて出すときは、本文の右に置き、本文はその分をあけて折り返す。投票から下の部品は、本文とサムネイルのどちらよりも下に置く。
@@ -30,7 +30,7 @@ struct PostBodyContent {
         var buttonFont: UIFont
         /// 注意書きの文字と、開閉のボタンのあいだ。
         var buttonSpacing: CGFloat
-        /// ボックスの角の丸み。
+        /// ボックスの角のradius。
         var cornerRadius: CGFloat
     }
 
@@ -69,11 +69,11 @@ struct PostBodyContent {
     var card: LinkCardView.Content?
     /// 本文か添付ファイルと、リンクカードのあいだの余白。
     var cardSpacing: CGFloat = 0
-    /// 引用かXの投稿の囲み。あれば、リンクカードの代わりに同じ位置に置く。
+    /// 引用かXの投稿のカード。あれば、リンクカードの代わりに同じ位置に置く。
     var embed: EmbeddedPostView.Content?
-    /// 本文か添付ファイルと、囲みのあいだ。
+    /// 本文か添付ファイルと、カードのあいだ。
     var embedSpacing: CGFloat = 0
-    /// 表示している投稿。リンクカードから囲みに替わったのが同じ投稿の行かを見分ける。同じXの投稿へのリンクは、別の投稿にもありうるため。
+    /// 表示している投稿。リンクカードから投稿のカードに替わったのが同じ投稿の行かを見分ける。同じXの投稿へのリンクは、別の投稿にもありうるため。
     var statusID: Status.ID?
     /// 本文のハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。投稿した人。nilなら項目を出さない。
     var hashtagAccount: Account?
@@ -94,39 +94,39 @@ struct PostBodyContent {
     var actionBarSpacing: CGFloat = 0
 }
 
-/// 囲みの押下と、囲みの中の部品の押下で呼ぶ処理。引用とXの投稿で開く先が違うため、置く側が決める。
+/// カードの押下と、カードの中の部品の押下で呼ぶ処理。引用とXの投稿で開く先が違うため、置く側が決める。
 struct EmbedActions {
-    /// 囲みが押されたときに、囲みを渡して呼ぶ。
+    /// カードが選択されたときに、カードを渡して呼ぶ。
     var open: ((EmbeddedPostView) -> Void)?
     /// 囲みのタップと長押し。渡すと、タップは`open`の代わりにこれで行い、長押しでは囲みの対象のメニューか、選んだ操作を行う。
     /// 決まりはdocs/object-actions.mdにある。
     var target: (any ObjectActionTarget)?
     /// 囲みの作者のアイコンのタップと長押し。
     var accountTarget: (any ObjectActionTarget)?
-    /// 囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
+    /// カードのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var selectMedia: ((Int, MediaGridView) -> Void)?
-    /// 囲みの添付ファイルの、閲覧注意のぼかしが押されたときに呼ぶ。
+    /// カードの添付ファイルの、閲覧注意のぼかしが選択されたときに呼ぶ。
     var revealMedia: (() -> Void)?
-    /// 囲みの本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
+    /// カードの本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var openLink: ((RichText.LinkDestination) -> Void)?
-    /// 囲みの作者のアイコンがタップされたときに呼ぶ。
+    /// カードの作者のアイコンがタップされたときに呼ぶ。
     var openAccount: (() -> Void)?
-    /// 囲みの注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。
+    /// カードの注意書きかフィルターの警告が選択されたときに、選択されたボックスの種類を渡して呼ぶ。
     var toggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
-    /// 囲みの押せる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
+    /// カードの選択できる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
     var selectNote: ((Int) -> Void)?
-    /// 囲みの切った本文の「続きを読む」が押されたときに呼ぶ。
+    /// カードの切った本文の「続きを読む」が選択されたときに呼ぶ。
     var expandBody: (() -> Void)?
 }
 
 final class PostBodyView: UIView {
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
-    /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが押されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
+    /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが選択されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
-    /// 注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    /// 注意書きかフィルターの警告が選択されたときに、選択されたボックスの種類を渡して呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onToggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
-    /// 切った本文の「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    /// 切った本文の「続きを読む」が選択されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onExpandBody: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
@@ -139,7 +139,7 @@ final class PostBodyView: UIView {
     }
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
-    /// 囲みの押下と、囲みの中の部品の押下を受ける。
+    /// カードの押下と、カードの中の部品の押下を受ける。
     var embedActions = EmbedActions() {
         didSet {
             embedInteraction?.target = embedActions.target
@@ -152,13 +152,13 @@ final class PostBodyView: UIView {
     }
     private var cardInteraction: ObjectInteraction?
     private var embedInteraction: ObjectInteraction?
-    /// 投票の選択肢やボタンが押されたときに呼ぶ。選んだ状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    /// 投票の選択肢やボタンが選択されたときに呼ぶ。選んだ状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onPollAction: ((PollView.Action) -> Void)?
-    /// リアクションのボタンが押されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
+    /// リアクションのボタンが選択されたときに、その絵文字の`Reaction.name`を渡して呼ぶ。
     var onToggleReaction: ((String) -> Void)?
     /// リアクションのボタンのタップと長押しの対象。絵文字の名前を渡して受け取る。
     var reactionTarget: ((String) -> (any ObjectActionTarget)?)?
-    /// リアクションの列の「＋」が押されたときに呼ぶ。nilなら「＋」を出さない。
+    /// リアクションの列の「＋」が選択されたときに呼ぶ。nilなら「＋」を出さない。
     var onAddReaction: (() -> Void)? {
         didSet { reactionsView?.showsAddButton = onAddReaction != nil }
     }
@@ -168,7 +168,7 @@ final class PostBodyView: UIView {
     private let textLabel = LinkLabel()
     /// 本文の先頭の空きに重ねる、翻訳のマーク。
     private let translationMark = TranslationMarkView()
-    /// 本文の最初と最後のベースラインの位置。本文の上下のすき間は字面から測るので、「投稿の見た目」のプレビューで字面の枠を求めるのに使う。
+    /// 本文の最初と最後のベースラインの位置。本文の上下のgapは字面から測るので、「投稿の見た目」のプレビューで字面の枠を求めるのに使う。
     /// 本文の上下の部品は、ラベルのベースラインではなく、この位置から置く。
     private let textFirstBaselineGuide = UILayoutGuide()
     private let textLastBaselineGuide = UILayoutGuide()
@@ -176,7 +176,7 @@ final class PostBodyView: UIView {
     /// UILabelのベースライン（`firstBaselineAnchor`など）は、TextKit 2で並べた結果を使わずにUILabelが並べ直して求めるため、使わない。
     private lazy var textKitFirstBaseline = textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.topAnchor)
     private lazy var textKitLastBaseline = textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.bottomAnchor)
-    /// 本文の最初の文字の字面の上端と、最後の文字の字面の下端の位置。本文の上下の部品は、ここからすき間を取って置く。
+    /// 本文の最初の文字の字面の上端と、最後の文字の字面の下端の位置。本文の上下の部品は、ここからgapを取って置く。
     /// ベースラインからの距離（`GlyphMetrics.textTopInset`、`GlyphMetrics.textBottomInset`）は、行より広いカスタム絵文字を縮めて置くと並べる幅で変わるので、ベースラインと一緒に並べた幅で決め直す。
     private let textGlyphsTopGuide = UILayoutGuide()
     private let textGlyphsBottomGuide = UILayoutGuide()
@@ -184,7 +184,7 @@ final class PostBodyView: UIView {
     private lazy var textGlyphsBottom = textGlyphsBottomGuide.topAnchor.constraint(equalTo: textLastBaselineGuide.topAnchor)
     /// 字面の上下の位置を決めた、本文の文字列と幅と、切って描くか。同じなら決め直さない。
     private var textGlyphsInsetsSource: (text: NSAttributedString, width: CGFloat, isTruncated: Bool)?
-    /// フィルターの注記の最初のベースラインの位置。注記の上のすき間も字面から測るので、プレビューで字面の上端を求めるのに使う。
+    /// フィルターの注記の最初のベースラインの位置。注記の上のgapも字面から測るので、プレビューで字面の上端を求めるのに使う。
     private let filterNoteBaselineGuide = UILayoutGuide()
     // 本文のほかの部品は、その中身が初めて来たときに作り、そのあとは隠して持っておく。
     // どれも持たない投稿が多いのに、行を作るたびに全部を作ると、まとめて行を作る画面の最初の表示でメインスレッドが止まるため。
@@ -194,7 +194,7 @@ final class PostBodyView: UIView {
     private var mediaView: MediaGridView?
     private var cardView: LinkCardView?
     private var embedView: EmbeddedPostView?
-    /// 囲みに替わったリンクカードの像。囲みを濃くする間、カードのあった位置に重ねて薄くする。
+    /// 投稿のカードに替わったリンクカードのスナップショット。投稿のカードを濃くする間、カードのあった位置に重ねて薄くする。
     private(set) var leavingCardSnapshot: UIView?
     /// 本文が編集で変わったら、変わらない文字を前の位置から動かす（`PostContentConfiguration.animatesTextEdit`）。
     var animatesTextEdit = false
@@ -203,7 +203,7 @@ final class PostBodyView: UIView {
     private var filterNoteLabel: UILabel?
     private var reactionsView: ReactionChipsView?
     private var actionBarView: PostActionBarView?
-    /// アクションバーのボタンが押されたときに、その項目と、押したボタンを渡して呼ぶ。
+    /// アクションバーのボタンが選択されたときに、その項目と、選択されたボタンを渡して呼ぶ。
     var onActionBarPress: ((PostActionBarItem, UIView) -> Void)?
     /// アクションバーのボタンを長押しして出すメニューの対象。
     var actionBarLongPressTarget: ((PostActionBarItem) -> (any ObjectActionTarget)?)? {
@@ -236,7 +236,7 @@ final class PostBodyView: UIView {
         Self.shown(cardView)
     }
 
-    /// 表示中の囲み。読み上げの要素に加え、ビューアの拡大と縮小の起点を探すときにも使う。
+    /// 表示中の投稿のカード。読み上げの要素に加え、ビューアの拡大と縮小の起点を探すときにも使う。
     var embed: EmbeddedPostView? {
         Self.shown(embedView)
     }
@@ -338,7 +338,7 @@ final class PostBodyView: UIView {
         if !badges.isEmpty {
             frames[.mediaBadgeSlot] = badges
         }
-        // 重ねたサムネイルには、すき間も1つのときの比率も効かないので示さない。
+        // 重ねたサムネイルには、gapも1つのときの比率も効かないので示さない。
         if grid.content?.isStacked == true {
             frames[.besideMedia] = frame
             return frames
@@ -356,7 +356,7 @@ final class PostBodyView: UIView {
         return frames
     }
 
-    /// 本文の行間、段落のあいだ、字下げの枠。行の位置は、UILabelと同じ並べ方で求める。
+    /// 本文の行間、段落のあいだ、インデントの枠。行の位置は、UILabelと同じ並べ方で求める。
     private func textLinePreviewFrames(in space: UIView) -> AppearancePreviewFrames {
         guard !textLabel.isHidden, let label = textLabel.previewFrame(in: space)?.first else { return [:] }
         let lines = textLabel.previewLines().map { line in
@@ -391,7 +391,7 @@ final class PostBodyView: UIView {
         return frames
     }
 
-    /// 本文の字面の枠。上端は最初のベースラインから、下端は最後のベースラインから、em枠で測る。並びも同じ測り方で、すき間を取っている。
+    /// 本文の字面の枠。上端は最初のベースラインから、下端は最後のベースラインから、em枠で測る。並びも同じ測り方で、gapを取っている。
     private func textGlyphsFrame(in space: UIView) -> [CGRect]? {
         guard let label = textLabel.previewFrame(in: space)?.first else { return nil }
         let top = convert(CGPoint(x: 0, y: textGlyphsTopGuide.layoutFrame.minY), to: space).y
@@ -527,9 +527,9 @@ final class PostBodyView: UIView {
         return frames
     }
 
-    /// リアクションがすべてなくなったときに、列の像をその場に残して、ボタンが消えるのと同じく縮めながら薄くして外す。
-    /// 列は並びから外れて行が縮むので、像は行の下へはみ出し、タイムラインが下の行を上へ動かして覆う（`reconfigureShiftingRowsBelow`）。
-    /// 動きは、次に並べるときに始める。タイムラインは行の中身を動きを止めた描き直しの中で当てるため、`apply`の中で始めた`UIView.animate`は効かない。
+    /// リアクションがすべてなくなったときに、列のスナップショットをその場に残して、ボタンが消えるのと同じく縮めながら薄くして外す。
+    /// 列は並びから外れて行が縮むので、スナップショットは行の下へはみ出し、タイムラインが下の行を上へ動かして覆う（`reconfigureShiftingRowsBelow`）。
+    /// 動きは、次に並べるときに始める。タイムラインは行の中身を動きを止めた再描画の中で当てるため、`apply`の中で始めた`UIView.animate`は効かない。
     private func fadeOutReactions(_ view: ReactionChipsView, duration: TimeInterval) {
         guard duration > 0, !UIAccessibility.isReduceMotionEnabled, let snapshot = view.snapshotView(afterScreenUpdates: false) else { return }
         snapshot.frame = view.frame
@@ -541,15 +541,15 @@ final class PostBodyView: UIView {
         setNeedsLayout()
     }
 
-    /// 消えていく部品の代わりに、いっとき重ねている像（替わったリンクカード、なくなったリアクションの列）。自分で薄くして外すので、部品としては動かさない。
+    /// 消えていく部品の代わりに、いっとき重ねているスナップショット（替わったリンクカード、なくなったリアクションの列）。自分で薄くして外すので、部品としては動かさない。
     var transientSnapshots: [UIView] {
         reactionFadeOutSnapshots + [leavingCardSnapshot].compactMap(\.self)
     }
 
-    /// 次に並べるときに薄くして外す、なくなったリアクションの列の像。
+    /// 次に並べるときに薄くして外す、なくなったリアクションの列のスナップショット。
     private var pendingReactionsFadeOut: (snapshot: UIView, duration: TimeInterval)?
 
-    /// リアクションの列で続いている動きと、消えかけの列の像を外す。行が別の投稿に使い回されたときに、前の投稿の動きを残さないため。
+    /// リアクションの列で続いている動きと、消えかけの列のスナップショットを外す。行が別の投稿に使い回されたときに、前の投稿の動きを残さないため。
     private func cancelReactionTransitions() {
         pendingReactionsFadeOut = nil
         for snapshot in reactionFadeOutSnapshots {
@@ -559,7 +559,7 @@ final class PostBodyView: UIView {
         reactionsView?.cancelTransitions()
     }
 
-    /// 薄くしている途中の、なくなったリアクションの列の像。
+    /// 薄くしている途中の、なくなったリアクションの列のスナップショット。
     private var reactionFadeOutSnapshots: [UIView] = []
 
     private func startPendingReactionsFadeOut() {
@@ -773,7 +773,7 @@ final class PostBodyView: UIView {
         setNeedsLayout()
     }
 
-    /// 囲みの本文を別の文章へ入れ替える前に呼ぶ。囲みの中の動きは囲みが付ける。囲みより下の部品は、次に並べるときに、前の位置から新しい位置へ動かす。
+    /// カードの本文を別の文章へ入れ替える前に呼ぶ。カードの中の動きはカードが付ける。カードより下の部品は、次に並べるときに、前の位置から新しい位置へ動かす。
     func prepareEmbedTextReplacement(shiftDuration: TimeInterval) {
         guard window != nil, shiftDuration > 0, !UIAccessibility.isReduceMotionEnabled, let embedView, !embedView.isHidden else { return }
         let below = subviews.filter { $0 !== embedView && $0.frame.minY >= embedView.frame.maxY - 1 }
@@ -808,7 +808,7 @@ final class PostBodyView: UIView {
     func apply(_ content: PostBodyContent) {
         let previous = self.content
         defer {
-            // 同じ投稿の描き直し（画像が届いた、数が変わったなど）では選んだままにし、別の投稿に替わったときと、本文が変わったか選べなくなったときにやめる。
+            // 同じ投稿の再描画（画像が届いた、数が変わったなど）では選んだままにし、別の投稿に替わったときと、本文が変わったか選べなくなったときにやめる。
             // 選んだままにするときも、絵文字の画像や絵文字そのものは替わりうるので、ラベルと同じ中身にそろえる。
             // 縮めたURLの隠した部分だけが編集されたときも、元のURLに戻して出している文字が変わり、選んだ範囲がずれるのでやめる。
             if isSelectingText {
@@ -824,7 +824,7 @@ final class PostBodyView: UIView {
             }
         }
         self.content = content
-        // 同じ投稿の描き直しで、画面に出ているときだけ、リアクションの変化を動かす。使い回したセルで別の投稿に替わったときは動かさない。
+        // 同じ投稿の再描画で、画面に出ているときだけ、リアクションの変化を動かす。使い回したセルで別の投稿に替わったときは動かさない。
         animatesReactionChange = previous?.statusID != nil && previous?.statusID == content.statusID && window != nil
         if previous?.statusID != content.statusID {
             cancelReactionTransitions()
@@ -886,16 +886,16 @@ final class PostBodyView: UIView {
         let shownMedia = besideSide == nil ? applyMedia(media, below: shownPoll, spacing: content.mediaSpacing, placement: placement) : nil
         let replacesCard = previous?.embed == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
         let fadesInEmbed = embed.map { replacesCard && window != nil && $0.transitionDuration > 0 && !UIAccessibility.isReduceMotionEnabled } ?? false
-        // 別の投稿に替わったときと、注意書きを折りたたんで囲みを隠したときは、カードの像を残さない。
-        // 同じ投稿の描き直し（画像が届いたなど）では、薄くし続ける。
+        // 別の投稿に替わったときと、注意書きを折りたたんで投稿のカードを隠したときは、リンクカードのスナップショットを残さない。
+        // 同じ投稿の再描画（画像が届いたなど）では、薄くし続ける。
         let isSameStatus = previous?.statusID == content.statusID
         if !isSameStatus || embed == nil {
             removeLeavingCardSnapshot()
         }
-        // カードは隠す前に像を取っておき、囲みと入れ替えて薄くする。
+        // リンクカードは隠す前にスナップショットを取っておき、投稿のカードと入れ替えて薄くする。
         let leavingCard = fadesInEmbed ? leaveCard() : nil
         let shownCard = applyCard(card, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
-        // 同じ投稿の囲みを描き直すだけなら、浮かび上がらせている途中の濃さを変えない。
+        // 同じ投稿のカードを再描画するだけなら、フェードインしている途中の不透明度を変えない。
         let keepsEmbedFade = isSameStatus && previous?.embed != nil && !(previous?.isCollapsed ?? false)
         let shownEmbed = applyEmbed(embed, fadesIn: fadesInEmbed, keepsFade: keepsEmbedFade, leavingCard: leavingCard, below: shownMedia ?? shownPoll, spacing: content.embedSpacing, placement: placement)
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
@@ -928,7 +928,7 @@ final class PostBodyView: UIView {
                 if animatesReactionChange {
                     fadeOutReactions(reactionsView, duration: duration)
                 }
-                // 次に付いたときに、どのボタンも新しく付いたものとして浮かび上がらせるため、空にしておく。
+                // 次に付いたときに、どのボタンも新しく付いたものとしてフェードインさせるため、空にしておく。
                 reactionsView.apply([], style: style)
                 reactionsView.isHidden = true
             }
@@ -1110,10 +1110,10 @@ final class PostBodyView: UIView {
         return cardView
     }
 
-    /// 出した囲みを返す。
-    /// - Parameter fadesIn: 同じ投稿のリンクカードから替わった（Xの投稿を読み終えた）。このときだけ、カードの像を薄くしながら囲みを浮かび上がらせる。
+    /// 出した投稿のカードを返す。
+    /// - Parameter fadesIn: 同じ投稿のリンクカードから替わった（Xの投稿を読み終えた）。このときだけ、リンクカードのスナップショットを薄くしながら投稿のカードをフェードインさせる。
     ///   行が伸びる動きはタイムラインが付ける。使い回された行で別の投稿に替わったときは、動かさずに出す。
-    /// - Parameter keepsFade: 同じ投稿の囲みを描き直すだけ。浮かび上がらせている途中なら、その濃さのまま動かし続ける。
+    /// - Parameter keepsFade: 同じ投稿のカードを再描画するだけ。フェードインしている途中なら、その不透明度のまま動かし続ける。
     private func applyEmbed(_ embed: EmbeddedPostView.Content?, fadesIn: Bool, keepsFade: Bool, leavingCard: UIView?, below shownAbove: UIView?, spacing: CGFloat, placement: Placement) -> EmbeddedPostView? {
         guard let embed else {
             embedView?.isHidden = true
@@ -1122,8 +1122,8 @@ final class PostBodyView: UIView {
         let embedView = loadedEmbedView()
         embedView.isHidden = false
         embedView.apply(embed)
-        // 動きの中で描き直されても、その動きに乗せず、すぐ消す。乗せると、濃い状態から薄くなる途中で
-        // 濃くし始め、1コマで囲みが出て見える。濃くしている途中の行が別の投稿に使い回されたときも、その動きを止める。
+        // 動きの中で再描画されても、その動きに乗せず、すぐ消す。乗せると、濃い状態から薄くなる途中で
+        // 濃くし始め、1コマでカードが出て見える。濃くしている途中の行が別の投稿に使い回されたときも、その動きを止める。
         if fadesIn {
             embedView.stopFading(at: 0)
         } else if !keepsFade {
@@ -1131,10 +1131,10 @@ final class PostBodyView: UIView {
         }
         if fadesIn {
             let statusID = content?.statusID
-            // タイムラインは動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
+            // タイムラインは動きを止めて再描画することがあり、その中ではUIView.animateが動かないため、再描画を終えてから動かす。
             DispatchQueue.main.async { [weak self] in
                 guard let self, let embedView = self.embedView else { return }
-                // 待つ間に同じ投稿の囲みが描き直された（絵文字が届いたなど）だけなら、そのまま浮かび上がらせる。
+                // 待つ間に同じ投稿のカードが再描画された（絵文字が届いたなど）だけなら、そのままフェードインさせる。
                 guard self.content?.statusID == statusID, self.content?.embed != nil, self.embed != nil else {
                     embedView.stopFading(at: 1)
                     self.removeLeavingCardSnapshot()
@@ -1147,11 +1147,11 @@ final class PostBodyView: UIView {
         return embedView
     }
 
-    /// 出しているリンクカードの像を、カードの位置に重ねて返す。カードを出していなければnil。
+    /// 出しているリンクカードのスナップショットを、カードの位置に重ねて返す。カードを出していなければnil。
     private func leaveCard() -> UIView? {
         removeLeavingCardSnapshot()
         guard let cardView = Self.shown(cardView), let snapshot = cardView.snapshotView(afterScreenUpdates: false) else { return nil }
-        // 動きの中で描き直されても、像の置き場所がその動きに乗って左上から動かないよう、動きの外で置く。
+        // 動きの中で再描画されても、スナップショットの置き場所がその動きに乗って左上から動かないよう、動きの外で置く。
         UIView.performWithoutAnimation {
             snapshot.frame = cardView.frame
             snapshot.isUserInteractionEnabled = false
@@ -1161,7 +1161,7 @@ final class PostBodyView: UIView {
         return snapshot
     }
 
-    /// カードの像を先に薄くし、囲みを少し遅れて濃くする。同時に入れ替えると、出だしで両方が濃いまま重なって読めないため（リンクカードの文字の入れ替えと同じ）。
+    /// リンクカードのスナップショットを先に薄くし、投稿のカードを少し遅れて濃くする。同時に入れ替えると、出だしで両方が濃いまま重なって読めないため（リンクカードの文字の入れ替えと同じ）。
     private func animateEmbedArrival(_ embedView: EmbeddedPostView, leavingCard: UIView?, duration: TimeInterval) {
         if let leavingCard {
             UIView.animateSpring(duration: duration * 0.4, in: leavingCard) {

@@ -1,10 +1,10 @@
 import Foundation
 
-/// 2つのプリセットで読む値の違う項目を、設定の画面の階層ごとの節に分けたもの。決まりはdocs/preset.mdの「プリセットを比較」にある。
+/// 2つのプリセットで読む値の違う項目を、設定の画面の階層ごとのセクションに分けたもの。決まりはdocs/preset.mdの「プリセットを比較」にある。
 @MainActor
 public struct PresetComparison {
     public struct Section: Identifiable {
-        /// 比べる項目の並びでの順番。見出しは、対象の操作の画面と節の見出しで同じになることがある（「操作>リンク」）ので、見出しとは別に持つ。
+        /// 比べる項目の並びでの順番。見出しは、対象の操作の画面とセクションの見出しで同じになることがある（「操作>リンク」）ので、見出しとは別に持つ。
         public let id: Int
         /// 設定の画面の階層の名前を、上から順に並べたもの。画面ではシェブロンでつなぐ。
         public let path: [String]
@@ -40,11 +40,11 @@ public struct PresetComparison {
         case separator
         /// 横並びの区切り線。`title`は横に並べる大きさの名前。
         case rowSeparator(title: String)
-        /// これより下は「その他」などの、境目の後ろの節。
+        /// これより下は「その他」などの、境目の後ろのセクション。
         case more(title: String)
     }
 
-    /// 読む値が違う項目のある節。
+    /// 読む値が違う項目のあるセクション。
     public let sections: [Section]
 
     /// - Parameters:
@@ -143,7 +143,7 @@ extension PresetComparison {
     }
 }
 
-/// 設定の画面をたどって、比べる項目を節に分けて集める。
+/// 設定の画面をたどって、比べる項目をセクションに分けて集める。
 @MainActor
 private struct CatalogBuilder {
     typealias Entry = PresetComparison.Entry
@@ -209,7 +209,7 @@ private struct CatalogBuilder {
         }, to: path)
     }
 
-    /// 同じ階層の節が続いていれば、そこに足す。空の項目は足さない。
+    /// 同じ階層のセクションが続いていれば、そこに足す。空の項目は足さない。
     private mutating func add(_ entries: [Entry], to path: [String]) {
         guard !entries.isEmpty else { return }
         if sections.last?.path == path {

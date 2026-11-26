@@ -85,7 +85,7 @@ struct StatusInteractionsTests {
         )
     }
 
-    /// 絵文字のリアクションも、押したらすぐ出し、サーバーの数で置き換える。
+    /// 絵文字のリアクションも、選択したらすぐ出し、サーバーの数で置き換える。
     @Test func showsEmojiReactionBeforeServerResponds() async throws {
         let emoji = ReactionEmoji(name: "👍")
         let shown = Shown(status(reactions: [EmojiReaction(emoji: emoji, count: 2, me: false)]))
@@ -112,7 +112,7 @@ struct StatusInteractionsTests {
         #expect(shown.history.map { $0.emojiReactions.count } == [1, 0])
     }
 
-    /// 前のリアクションと置き換えるか、お気に入りが連動するかは手元で決めない。押した絵文字だけをすぐ出し、返った列とお気に入りを丸ごと取り込む。
+    /// 前のリアクションと置き換えるか、お気に入りが連動するかは手元で決めない。選択した絵文字だけをすぐ出し、返った列とお気に入りを丸ごと取り込む。
     @Test func firefishReactionAdoptsServerListAndFavourite() async throws {
         let thumbsUp = ReactionEmoji(name: "👍")
         let blobcat = ReactionEmoji(name: "blobcat")
@@ -128,7 +128,7 @@ struct StatusInteractionsTests {
         #expect(shown.history.map(\.favourited) == [false, true])
     }
 
-    /// サーバーの機能が読める前に押したお気に入りにも、応答が返ったときに分かっている形を使い、返ったリアクションの列を取り込む。
+    /// サーバーの機能が読める前に選択したお気に入りにも、応答が返ったときに分かっている形を使い、返ったリアクションの列を取り込む。
     @Test func favouriteStartedBeforeStyleIsKnownAdoptsReactions() async throws {
         let shown = Shown(status(reactions: [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 1, me: true)]))
         let gate = Gate()
@@ -186,7 +186,7 @@ struct StatusInteractionsTests {
         #expect(shown.history.map(\.favourited) == [false, false])
     }
 
-    /// 自分が付けたほかのサーバーのカスタム絵文字を外している間に同じボタンを押しても、ほかの重ねた操作と同じく何もしない。
+    /// 自分が付けたほかのサーバーのカスタム絵文字を外している間に同じボタンを選択しても、ほかの重ねた操作と同じく何もしない。
     @Test func firefishIgnoresRepeatedRemovalOfRemoteCustomEmoji() async throws {
         let remote = ReactionEmoji(name: "neofox@misskey.example", url: URL(string: "https://misskey.example/neofox.png"))
         let shown = Shown(status(reactions: [EmojiReaction(emoji: remote, count: 2, me: true)]))
@@ -204,7 +204,7 @@ struct StatusInteractionsTests {
         #expect(try await first.value)
     }
 
-    /// 失敗したら（Chuckyaが上限で断ったときなど）、押した絵文字だけを戻す。
+    /// 失敗したら（Chuckyaが上限で断ったときなど）、選択した絵文字だけを戻す。
     @Test func firefishReactionFailureRevertsOnlyPressedEmoji() async throws {
         let thumbsUp = ReactionEmoji(name: "👍")
         let shown = Shown(status(reactions: [EmojiReaction(emoji: thumbsUp, count: 1, me: true)]))
@@ -300,7 +300,7 @@ struct StatusInteractionsTests {
         #expect(shown.status.emojiReactions == [EmojiReaction(emoji: emoji, count: 1, me: false)])
     }
 
-    /// 結果を待っている間に届いた数では、押した状態を残す。押す前の数（0）が届いても消さない。
+    /// 結果を待っている間に届いた数では、選択した状態を残す。選択する前の数（0）が届いても消さない。
     @Test func streamedReactionKeepsPressedStateWhileWaiting() async throws {
         let emoji = ReactionEmoji(name: "👍")
         let gate = Gate()
@@ -385,7 +385,7 @@ struct StatusInteractionsTests {
     }
 
     /// お気に入りの結果を待っている間にブックマークしたら、お気に入りを受け付けたときに知らせる投稿にも、ブックマークを含める。
-    /// 押したときの古い状態で、お気に入りのタイムラインにブックマークしていない行として入れないため。
+    /// 選択したときの古い状態で、お気に入りのタイムラインにブックマークしていない行として入れないため。
     @Test func settledStatusIncludesActionPressedWhileWaiting() async throws {
         let shown = Shown(try status())
         let gate = FetchGate()

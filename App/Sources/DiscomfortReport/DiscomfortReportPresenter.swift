@@ -5,7 +5,7 @@ import UIKit
 @MainActor
 enum DiscomfortReportPresenter {
     /// 状態ダンプはシートを出す前、違和感を覚えた瞬間の状態を書き出す。
-    /// 重ねた画面を閉じている途中に開いても、状態は開いた時点で取り、閉じ終えるのを待つのはシートを出すところだけにする。
+    /// モーダルビューを閉じている途中に開いても、状態は開いた時点で取り、閉じ終えるのを待つのはシートを出すところだけにする。
     /// - Parameter now: レポートを取った日時として残す今の日付。
     static func present(in window: UIWindow, now: Date = AppDependencies.now()) {
         guard let root = window.rootViewController, !(root.frontmostPresented is DiscomfortReportHostingController) else { return }

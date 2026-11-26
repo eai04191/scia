@@ -1,7 +1,7 @@
 import SciaCore
 import SwiftUI
 
-/// アカウントの切り替え、ログアウト、追加。窓の持ち主（`SceneDelegate`）が行い、セッションへ渡す。
+/// アカウントの切り替え、ログアウト、追加。ウィンドウの持ち主（`SceneDelegate`）が行い、セッションへ渡す。
 struct AccountManagement {
     /// チェックマークを付けるアカウント。ダミーのアカウントを出している間はnil。
     let currentID: @MainActor () -> Credential.ID?

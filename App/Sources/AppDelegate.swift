@@ -20,10 +20,10 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         AppDependencies.stateDumps.register("emojiImageFiles", owner: AppDependencies.emojiImageFiles) { $0.stateDump() }
         // 受け取られないまま残った共有拡張のファイルを消す。開かれたばかりの共有は新しいので消さない。
         SharedMediaInbox.app?.removeStale(now: AppDependencies.now())
-        // 絵文字ピッカーを開く前に、端末に置いた画像から絵文字ピッカーの小さい静止画を作っておく。絵文字ピッカーを開いたら止める。
+        // 絵文字ピッカーを開く前に、端末に置いた画像から絵文字ピッカーのサムネイルを作っておく。絵文字ピッカーを開いたら止める。
         AppDependencies.emojiThumbnailBuilder.start()
         // 端末に残した`api/v1/custom_emojis`の応答で、端末に置く絵文字の画像を分け直す。
-        // 応答を読んで書き出したときと、ログアウトして消したときに、分け直して先読みする。
+        // 応答を読んで書き出したときと、ログアウトして消したときに、分け直してプリフェッチする。
         AppDependencies.customEmojis.onListsChanged = { AppDependencies.emojiPrefetcher.listsChanged() }
         AppDependencies.emojiPrefetcher.start()
         return true

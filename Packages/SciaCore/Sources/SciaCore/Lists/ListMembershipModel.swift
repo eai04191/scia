@@ -3,7 +3,7 @@ public import Observation
 import os
 
 /// ユーザーのメニューの「リストに追加」のシートで、その人をどのリストに入れるか。決まりはdocs/lists.mdの「リストに追加」にある。
-/// 押したらすぐチェックマークを変え、送れなければ元に戻す。リストごとに送る順を守り、あとから押した方を先に届けない。
+/// 選択したらすぐチェックマークを変え、送れなければ元に戻す。リストごとに送る順を守り、あとから選択した方を先に届けない。
 @MainActor
 @Observable
 public final class ListMembershipModel {
@@ -23,7 +23,7 @@ public final class ListMembershipModel {
         case blocked
     }
 
-    /// リストを押したときに起きること。
+    /// リストを選択したときに起きること。
     public enum ToggleResult: Equatable, Sendable {
         /// 足すか外すのを送り始めた。
         case sent
@@ -88,7 +88,7 @@ public final class ListMembershipModel {
     public private(set) var phase: Phase = .loading
     /// 自分のリスト。サーバーが返す順。
     public private(set) var lists: [MastodonList] = []
-    /// 画面に出す、その人が入っているリスト。押した結果は、送り終える前から入れる。
+    /// 画面に出す、その人が入っているリスト。選択した結果は、送り終える前から入れる。
     public private(set) var memberListIDs: Set<String> = []
     /// その人との関係。自分なら読まないのでnil。
     public private(set) var relationship: Relationship?
@@ -122,11 +122,11 @@ public final class ListMembershipModel {
 
     /// 足す、外す、フォローに失敗したときに呼ぶ。知らせ方は作る側が決める。
     @ObservationIgnored public var onFailure: (Operation, ErrorPresentation) -> Void = { _, _ in }
-    /// フォローできたときに呼ぶ。セッションが覚えている関係を新しくする。
+    /// フォローできたときに呼ぶ。セッションがキャッシュしている関係を新しくする。
     @ObservationIgnored public var onFollowed: (Relationship) -> Void = { _ in }
     /// サーバーが受け付けた、その人が入っているリスト。送れなかったリストは、この値に戻す。
     @ObservationIgnored private var confirmedListIDs: Set<String> = []
-    /// リストごとに、最後に押した回の番号。送り終えたときに、その後に押し直していれば、戻さない。
+    /// リストごとに、最後に選択した回の番号。送り終えたときに、その後に選択し直していれば、戻さない。
     @ObservationIgnored private var selections: [String: Int] = [:]
     @ObservationIgnored private var nextSelection = 0
     /// リストごとの、送っている途中の操作。順に送る。
@@ -168,7 +168,7 @@ public final class ListMembershipModel {
         }
     }
 
-    /// リストを押した。入っていれば外し、入っていなければ足す。フォローが要るときは送らずに知らせる。
+    /// リストを選択した。入っていれば外し、入っていなければ足す。フォローが要るときは送らずに知らせる。
     public func toggle(_ listID: String) -> ToggleResult {
         guard phase == .loaded, !isFollowing else { return .unavailable }
         let isMember = memberListIDs.contains(listID)
@@ -245,7 +245,7 @@ public final class ListMembershipModel {
         selections[listID] = selection
         let previous = sending[listID]
         let api = api
-        // 送り終える前にシートを閉じても、押した足し外しは最後まで送るよう、送り終えるまでモデルを手放さない。
+        // 送り終える前にシートを閉じても、選択した足し外しは最後まで送るよう、送り終えるまでモデルを手放さない。
         let task = tasks.run(.action) { [self] in
             await previous?.value
             do {
@@ -262,7 +262,7 @@ public final class ListMembershipModel {
                 logger.info("listMembership \(change == .add ? "add" : "remove", privacy: .public) done list=\(listID, privacy: .public)")
             } catch {
                 guard let presentation = handle(error, during: change == .add ? "add" : "remove") else { return }
-                // あとから押し直していなければ、サーバーが受け付けた状態に戻す。
+                // あとから選択し直していなければ、サーバーが受け付けた状態に戻す。
                 if selections[listID] == selection {
                     if confirmedListIDs.contains(listID) {
                         memberListIDs.insert(listID)

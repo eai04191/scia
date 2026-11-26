@@ -8,7 +8,7 @@ import UIKit
 /// SFSafariViewControllerは、出し方（`modalPresentationStyle`か`transitioningDelegate`）を変えると、左端からのスワイプで閉じる仕組みを捨てる（iOS 27で確かめた）。
 /// 読み込みの間だけ伏せたシートに重ねて見せるため、出し方は標準のままにして、Safariを入れたビューのほうをずらして切り抜く。
 ///
-/// 伏せている間は、Safariを入れたビューを下へずらし、Safariのバーの上端をシートのSafariを出す場所に合わせる。Safariは上の安全領域の下にバーを描くので、安全領域の分はマスクで隠す。
+/// 伏せている間は、Safariを入れたビューを下へずらし、Safariのバーの上端をシートのSafariを出す場所に合わせる。Safariは上のセーフエリアの下にバーを描くので、セーフエリアの分はマスクで隠す。
 /// 見えているところの外で触れたことは、下のウインドウへ通す。
 /// Safariのバーの上には、シートと同じ引ける範囲（`InAppBrowserBarGrabView`）を、Safariより手前に置く。Safariの上で触れたことはこのウインドウの`hitTest`を通らずにSafariへ行くので、下のウインドウのシートの範囲では受けられないため。
 /// 伏せている間は、そこを引くかタップすると、シートを引いたかタップしたときと同じに動く（`onBarGrabPan`、`onBarGrabTap`）。全画面に広げている間は、タップで伏せる。
@@ -27,7 +27,7 @@ final class InAppBrowserOverlayWindow: UIWindow {
     /// Safariのバーの上の引ける範囲をタップしたときに呼ぶ。
     var onBarGrabTap: (() -> Void)?
     /// 全画面に広げている間に、タップで伏せられるか。伏せられないとき（iPhoneの横向きなど）は引ける範囲を出さない。
-    /// 出すと、タップで何も起きないまま、重ねた範囲のSafariのバーのボタンを押せなくなる。
+    /// 出すと、タップで何も起きないまま、重ねた範囲のSafariのバーのボタンを選択できなくなる。
     var canCollapse: (() -> Bool)? {
         didSet { updateBarGrab() }
     }
@@ -72,7 +72,7 @@ final class InAppBrowserOverlayWindow: UIWindow {
         AppDependencies.stateDumps.register("inAppBrowserOverlay", owner: self) { $0.stateDump() }
     }
 
-    /// 全画面のSafariが、伏せて広げたあとにたまにステータスバーの裏まで上がって描かれる（iPhone 16 Pro）。シミュレーターでは再現しないので、起きたときの位置と安全領域を違和感レポートで読めるようにする。
+    /// 全画面のSafariが、伏せて広げたあとにたまにステータスバーの裏まで上がって描かれる（iPhone 16 Pro）。シミュレーターでは再現しないので、起きたときの位置とセーフエリアを違和感レポートで読めるようにする。
     func stateDump() -> String {
         let safari = presenter?.presentedViewController?.viewIfLoaded
         return """
@@ -184,7 +184,7 @@ final class InAppBrowserOverlayWindow: UIWindow {
         updateBarGrab()
     }
 
-    /// 全画面のSafariのバーは上の安全領域の下にあるので、引ける範囲もそこに合わせる。
+    /// 全画面のSafariのバーは上のセーフエリアの下にあるので、引ける範囲もそこに合わせる。
     private func placeExpandedBarGrab() {
         barGrabView.frame = barGrabView.barGrab.frame(width: bounds.width, safariTop: safeAreaInsets.top)
     }
@@ -217,7 +217,7 @@ final class InAppBrowserOverlayWindow: UIWindow {
 
     /// 伏せたまま閉じるとき、Safariの閉じる動き（Safariを入れたビューの中で右へ抜ける）を、動き始めの位置で止める。Safariは下がるシートに付いていくだけに見せる。
     /// 止めている間は、閉じる動きが終わらないので、Safariは閉じ終えない。シートが下がりきったら`finishHeldSafariDismissal`で終わらせる。
-    /// 動きを写して逆向きに打ち消すと、Safariの動きとずれ、最大27pt横に動いて見えた（iOS 27のシミュレーター）。
+    /// 動きをコピーして逆向きに打ち消すと、Safariの動きとずれ、最大27pt横に動いて見えた（iOS 27のシミュレーター）。
     func holdSafariDismissalSlide() {
         guard isCollapsed, !finishedSafariDismissalHold, let safari = presenter?.presentedViewController?.viewIfLoaded else { return }
         let layer = safari.layer

@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// 投稿の高さが変わる、新着が入る、メニューを開いている、を手で組み合わせて、読んでいる位置と動きを確かめる画面。
-/// 実物の`TimelineViewController`に番号付きの投稿を並べ、モデルを通さずに、並びと描き直しを実物と同じ入口から渡す。
+/// 実物の`TimelineViewController`に番号付きの投稿を並べ、モデルを通さずに、並びと再描画を実物と同じ入口から渡す。
 final class TimelineMotionLabViewController: UIViewController {
     private static let postCount = 20
     private static let linesPerStep = 5

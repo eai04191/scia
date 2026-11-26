@@ -3,7 +3,7 @@ import UIKit
 
 /// ユーザーのアイコンを、メニューなどの記号の代わりに置く画像にする。
 enum AvatarIcon {
-    /// メニューのアイコンの一辺。本文の文字の大きさの設定に合わせる。
+    /// メニューのアイコンの一辺。Dynamic Typeの本文の大きさに合わせる。
     static var menuSide: CGFloat {
         UIFontMetrics(forTextStyle: .body).scaledValue(for: 22)
     }

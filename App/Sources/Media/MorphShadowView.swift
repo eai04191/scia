@@ -27,7 +27,7 @@ final class MorphShadowView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 影の濃さ。0なら描かない。
+    /// 影の不透明度。0なら描かない。
     var opacity: Float {
         get { caster.shadowOpacity }
         set {
@@ -38,9 +38,9 @@ final class MorphShadowView: UIView {
         }
     }
 
-    /// 複製のすぐ後ろに、同じ位置、大きさ、角度、角の丸みで置く。複製を別の層へ移したときも、同じ層へ付いていく。
-    /// バーの奥に描き分けるときは、切り抜き（`MediaBarLayering`）を影の座標で計算するので、切り抜きを描き直す前に呼ぶ。
-    /// - Parameter alpha: 影全体の濃さ。複製の濃さは写さない。複製はバーの奥に描き分ける間や、閉じる最後にタイムラインの中の複製へ受け渡す間に
+    /// 複製のすぐ後ろに、同じ位置、大きさ、角度、radiusで置く。複製を別の層へ移したときも、同じ層へ付いていく。
+    /// バーの奥に描き分けるときは、切り抜き（`MediaBarLayering`）を影の座標で計算するので、切り抜きを再描画する前に呼ぶ。
+    /// - Parameter alpha: 影全体の不透明度。複製の不透明度はコピーしない。複製はバーの奥に描き分ける間や、閉じる最後にタイムラインの中の複製へ受け渡す間に
     ///   薄くするが、影はそのあいだも残すため。
     func follow(_ morph: UIView, alpha: CGFloat) {
         attach(below: morph)

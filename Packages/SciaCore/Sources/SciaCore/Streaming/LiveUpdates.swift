@@ -3,7 +3,7 @@ import Foundation
 /// ストリーミングの接続を保ち、つながっていない間はポーリングを促す。つながらない状態が続いたら知らせる。
 ///
 /// ストリーミングに対応していないサーバーや、接続先を調べられないサーバーでも、ポーリングで新着が届くようにする。
-/// つなぎ直しは`ReconnectingStream`が続けるため、ポーリングの間につながれば、そこでポーリングをやめる。
+/// 再接続は`ReconnectingStream`が続けるため、ポーリングの間につながれば、そこでポーリングをやめる。
 public struct LiveUpdates: Sendable {
     public enum Activity: Sendable, Equatable {
         case stream(ReconnectingStream.Activity)
@@ -28,7 +28,7 @@ public struct LiveUpdates: Sendable {
     private let policy: Policy
     private let clock: any Clock<Duration>
 
-    /// - Parameter clock: ポーリングと知らせまでの時間を数える。テストでは手で進める時計を渡す。
+    /// - Parameter clock: ポーリングと切断の通知までの時間を数える。テストでは手で進める時計を渡す。
     public init(stream: ReconnectingStream, policy: Policy, clock: any Clock<Duration> = SystemTime.clock) {
         self.stream = stream
         self.policy = policy
@@ -83,7 +83,7 @@ public struct LiveUpdates: Sendable {
             // つながるまでは、切れているものとして数え始める。
             beginOutage()
             for await signal in signals {
-                // 止めた後に、たまっていたポーリングや知らせを流さない。止めた側は表示を消しているため、出し直してしまう。
+                // 止めた後に、たまっていたポーリングや切断の通知を流さない。止めた側は表示を消しているため、出し直してしまう。
                 if Task.isCancelled { break }
                 switch signal {
                 case .stream(let activity):

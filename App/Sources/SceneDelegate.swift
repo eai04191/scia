@@ -21,7 +21,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private let logger = SciaLog.logger(category: "lifecycle")
     /// このウィンドウのシーン。開いているアカウントを、ウィンドウを開き直しても使えるよう`userInfo`に残す。
     private weak var sceneSession: UISceneSession?
-    /// 保存したアカウントを読めずにログイン画面を出している。端末のロック中など一時的なことがあるので、前面に戻ったら読み直す。
+    /// 保存したアカウントを読めずにログイン画面を出している。端末のロック中など一時的なことがあるので、前面に戻ったら取得し直す。
     private var isShowingAccountsLoadFailure = false
 
     func scene(
@@ -53,7 +53,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             }
         } else if AppDependencies.isHostingUnitTests {
             // ユニットテストは、このアプリをホストにして同じプロセスとメインスレッドで走る。保存してあるアカウントでセッションを始めると、
-            // 実サーバーとの通信とストリーミング、状態ダンプの登録、キーボードの知らせを受ける投稿欄が、テストと並んで動き、
+            // 実サーバーとの通信とストリーミング、状態ダンプの登録、キーボードの通知を受ける投稿欄が、テストと並んで動き、
             // 結果が端末のログインの有無やサーバーの状態、ほかのスレッドの操作に左右されるため、何も始めない。
             window.rootViewController = UIViewController()
         } else {
@@ -291,7 +291,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }
 
-    /// アプリ内通知のチップの列を、根の画面のすぐ上に重ねる。根の画面を替えると、その上に新しい画面が載るため、重ね直す。
+    /// アプリ内通知のチップの列を、ルートの画面のすぐ上に重ねる。ルートの画面を替えると、その上に新しい画面が載るため、重ね直す。
     private func installNoticeOverlay() {
         guard let window else { return }
         if let session {
@@ -391,7 +391,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         Self.syncAllScenes()
     }
 
-    /// アカウントを足したり消したり、ログインし直したりしたら、どのウィンドウも、開くアカウントを読み直す。
+    /// アカウントを足したり消したり、ログインし直したりしたら、どのウィンドウも、開くアカウントを取得し直す。
     /// ログアウトしたアカウントを開いていたウィンドウは別のアカウントに、ログインし直したアカウントを開いていたウィンドウは新しいトークンの画面にする。
     private static func syncAllScenes() {
         for scene in UIApplication.shared.connectedScenes {

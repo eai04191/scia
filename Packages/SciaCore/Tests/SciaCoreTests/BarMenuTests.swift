@@ -25,7 +25,7 @@ struct BarMenuTests {
     }
 
     /// 中身を読む項目を含むサブメニューは、行ごと読み込み中の行にし、読むと、名前やアイコンを保ったまま、中身を読み終えたサブメニューを返す。
-    /// サブメニューの中のサブメニューと区切り線のまとまりにある項目も読み終え、中身が空になったまとまりは除く。
+    /// サブメニューの中のサブメニューと区切り線のグループにある項目も読み終え、中身が空になったグループは除く。
     @Test func submenuWithDeferredContentLoadsBeforeShowing() async throws {
         let menu = root([
             .action("共有", 1),
@@ -43,7 +43,7 @@ struct BarMenuTests {
         #expect(loaded.first?.icon?.symbolName == "person.2")
     }
 
-    /// 中身を読む項目を含まないサブメニューは、そのまま出す。最初の段の読み込み中の行と区切り線のまとまりの中は、そのまま最初の段に出す。
+    /// 中身を読む項目を含まないサブメニューは、そのまま出す。最初の段の読み込み中の行と区切り線のグループの中は、そのまま最初の段に出す。
     /// 最初の段の読み込み中の行が読んだ中身も、同じく組み替える。
     @Test func onlySubmenusWithDeferredContentChange() async throws {
         let menu = root([
@@ -80,7 +80,7 @@ struct BarMenuTests {
             ]),
         ]).loadingSubmenusBeforeShowing()
 
-        // メニューの木は送れないので、読んだ中身を名前の並びにして受け取る。
+        // メニューのツリーは送れないので、読んだ中身を名前の並びにして受け取る。
         let loading = Task { await load(menu.children, at: 0).map(describe) }
         // 1つ目を開く前に、2つ目も読み始めている。
         try await waitUntil { first.waiterCount == 1 && second.waiterCount == 1 }

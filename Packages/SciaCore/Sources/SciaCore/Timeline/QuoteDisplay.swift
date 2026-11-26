@@ -1,10 +1,10 @@
 /// 投稿の中の引用をどう出すか。決まりは`docs/quote.md`。
 public enum QuoteDisplay: Equatable, Sendable {
-    /// 引用元を囲みで出す。
+    /// 引用元をカードで出す。
     case post(Status)
     /// 引用元を出さず、出せない理由の1行を出す。
     case unavailable(Reason)
-    /// ブロックかミュートしている人の投稿。押して開くまで中身を出さず、理由の1行を出す。
+    /// ブロックかミュートしている人の投稿。選択して開くまで中身を出さず、理由の1行を出す。
     case concealed(Reason, Status)
     /// 引用元がフィルターの「隠す」に一致した。外側の投稿は出したまま、隠したことを示す1行を出す。
     case filtered
@@ -36,7 +36,7 @@ public enum QuoteDisplay: Equatable, Sendable {
 
     /// `status`の引用の出し方。引用がなければnil。ブーストなら、ブーストされた投稿を渡す。
     /// - Parameters:
-    ///   - isRevealed: ブロックかミュートしている人の引用元を、押して開いた。
+    ///   - isRevealed: ブロックかミュートしている人の引用元を、選択して開いた。
     ///   - verdict: 引用元の投稿にフィルターをどう当てるか。外側の投稿と同じタイムラインの場所で決める。
     public init?(quoting status: Status, isRevealed: Bool, verdict: (Status) -> FilterVerdict) {
         guard let quote = status.quote else { return nil }
@@ -62,11 +62,11 @@ public enum QuoteDisplay: Equatable, Sendable {
     }
 }
 
-/// 囲みの中の、引用元がさらに引用している投稿。囲みは1段だけにし、引用していることを示す1行だけを出す。
+/// カードの中の、引用元がさらに引用している投稿。カードは1段だけにし、引用していることを示す1行だけを出す。
 public enum NestedQuote: Equatable, Sendable {
-    /// 押すと、この投稿のスレッドを開く。
+    /// 選択すると、この投稿のスレッドを開く。
     case link(Status.ID)
-    /// IDが届かないため押せず、出せない理由を出す。
+    /// IDが届かないため選択できず、出せない理由を出す。
     case unavailable(QuoteDisplay.Reason)
 
     /// 引用元の投稿の`quote`（`ShallowQuote`）から決める。引用していなければnil。
@@ -86,7 +86,7 @@ public enum NestedQuote: Equatable, Sendable {
     }
 }
 
-/// タイムラインで、ブロックかミュートしている人の引用元のうち、押して開いたもの。
+/// タイムラインで、ブロックかミュートしている人の引用元のうち、選択して開いたもの。
 /// 引用した投稿のIDで覚え、同じ投稿のブーストや通知の行もそろえる。覚えるのはアプリを起動している間だけ。
 public struct QuoteReveals: Sendable, Equatable {
     private var revealed: Set<Status.ID> = []
@@ -103,11 +103,11 @@ public struct QuoteReveals: Sendable, Equatable {
     }
 }
 
-/// 引用元の、受け取ったあとの変化。編集と削除の知らせ、読み込んだあとのミュートとブロックを、どのタイムラインの囲みにも当てるためにセッションで1つ持つ。
-/// タイムラインが持つ投稿の中の引用元は書き換えず、囲みを出すときに当てる。ミュートやブロックを解除したときに、元の引用元に戻せるようにするため。
+/// 引用元の、受け取ったあとの変化。編集と削除のイベント、読み込んだあとのミュートとブロックを、どのタイムラインのカードにも当てるためにセッションで1つ持つ。
+/// タイムラインが持つ投稿の中の引用元は書き換えず、カードを出すときに当てる。ミュートやブロックを解除したときに、元の引用元に戻せるようにするため。
 /// 覚えるのはアプリを起動している間だけ。
 public struct QuoteSourceChanges: Sendable, Equatable {
-    /// 編集の知らせで届いた投稿。どの投稿が引用されているかは知らせからは分からないため、届いた編集をすべて覚える。編集の知らせは少ないので、捨てない。
+    /// 編集のイベントで届いた投稿。どの投稿が引用されているかはイベントからは分からないため、届いた編集をすべて覚える。編集のイベントは少ないので、捨てない。
     private var edited: [Status.ID: Status] = [:]
     private var deletedIDs: Set<Status.ID> = []
     /// 読み込んだあとにミュートかブロックしたアカウントと、その引用元を隠す`state`。nilは、どちらも解除したこと。
@@ -144,7 +144,7 @@ public struct QuoteSourceChanges: Sendable, Equatable {
             return Quote(state: "deleted")
         }
         guard let quoted = quote.quotedStatus else { return quote }
-        // 届いた編集より新しい版を読み直していれば、読み直した版を使う。切れている間の編集を取りこぼした知らせで、新しい版を戻さないため。
+        // 届いた編集より新しい版を再読み込みしていれば、再読み込みした版を使う。切れている間の編集を取りこぼしたイベントで、新しい版を戻さないため。
         var source = edited[id].flatMap { Self.isNewer($0, than: quoted) ? $0 : nil } ?? quoted
         // 引用元の中の引用はIDだけで届くため、削除だけを当てる。
         if let nested = source.quote, let nestedID = nested.quotedStatusID, deletedIDs.contains(nestedID) {

@@ -17,7 +17,7 @@ final class PostRenderSettings {
         let values = withObservationTracking {
             Values(settings: settings)
         } onChange: { [weak self] in
-            // AppSettingsはMainActorで変更する。通知はwillSetなので、この中では古い値を読み直さず、次の読み取りで解決する。
+            // AppSettingsはMainActorで変更する。通知はwillSetなので、この中では古い値を再読み込みせず、次の読み取りで解決する。
             MainActor.assumeIsolated { self?.cached = nil }
         }
         cached = values

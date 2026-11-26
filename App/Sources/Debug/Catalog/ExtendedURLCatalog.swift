@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// URLの後ろに続いた文字を知らせるシート。1つのURL、全体が収まる短いURL、長いURLと長い文、2つのURL、予約のときを並べる。押しても何も送らない。
+/// URLの後ろに続いた文字を知らせるシート。1つのURL、全体が収まる短いURL、長いURLと長い文、2つのURL、予約のときを並べる。選択しても何も送らない。
 enum ExtendedURLCatalog {
     @MainActor
     static func states() -> [CatalogState] {

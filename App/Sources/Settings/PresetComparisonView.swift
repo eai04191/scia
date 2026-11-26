@@ -108,7 +108,7 @@ struct PresetComparisonView: View {
         }
     }
 
-    /// 比べているプリセットがほかの窓で消されたら、標準に替える。
+    /// 比べているプリセットがほかのウィンドウで消されたら、標準に替える。
     private func dropDeleted() {
         if !library.contains(base) { base = .builtIn(.standard) }
         if !library.contains(target) { target = .builtIn(.standard) }
@@ -119,7 +119,7 @@ struct PresetComparisonView: View {
     }
 }
 
-/// 比べた1つの項目。名前の右に、比較元の値と比較先の値を矢印でつないで出す。並びは、押すと左右に並べた画面を開く。
+/// 比べた1つの項目。名前の右に、比較元の値と比較先の値を矢印でつないで出す。並びは、選択すると左右に並べた画面を開く。
 struct PresetComparisonRow: View {
     let row: PresetComparison.Row
     let baseName: String
@@ -186,7 +186,7 @@ private struct PresetLayoutComparisonView: View {
     }
 }
 
-/// 1つの並び。区切り線で分けたまとまりを、角の丸い地に載せる。
+/// 1つの並び。区切り線で分けたグループを、角の丸い地に載せる。
 private struct LayoutColumn: View {
     let lines: [PresetComparison.LayoutLine]
 
@@ -255,7 +255,7 @@ private struct LayoutColumn: View {
     }
 }
 
-/// 比べた項目の節の見出し。設定の画面の階層の名前を、シェブロンでつなぐ。
+/// 比べた項目のセクションの見出し。設定の画面の階層の名前を、シェブロンでつなぐ。
 struct PresetComparisonSectionHeader: View {
     let section: PresetComparison.Section
 

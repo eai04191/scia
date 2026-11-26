@@ -7,9 +7,9 @@ public import Observation
 public final class ConnectionDiagnostics {
     public enum StreamingState: Sendable, Equatable {
         case connected
-        /// つなぎ始めた、または切れてつなぎ直している。切れていると知らせるまでの短い間。
+        /// つなぎ始めた、または切れて再接続している。切れていると知らせるまでの短い間。
         case connecting
-        /// つながらない状態が続いている。つなぎ直しを続けながら、ポーリングでRESTから新着を読んでいる。
+        /// つながらない状態が続いている。再接続を続けながら、ポーリングでRESTから新着を読んでいる。
         case polling
         /// バックグラウンドやログアウトで、つなぐのを止めている。
         case stopped

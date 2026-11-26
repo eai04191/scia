@@ -2,15 +2,15 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 投稿などのメニューや投稿欄の＋の並びを変える画面。項目と区切り線を「その他」の境目の前と後ろの2つの節に分けて並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
-/// 中身は`MenuLayoutViewController`で、UIKitのリストで作る。SwiftUIの`List`では、つまみは編集モードでしか出ず、編集モードでは行のスイッチが押せなくなるため、
-/// スイッチを押せたまま、つまみをつかんですぐ並べ替えられる形にできない。
+/// 投稿などのメニューや投稿欄の＋の並びを変える画面。項目と区切り線を「その他」の境目の前と後ろの2つのセクションに分けて並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
+/// 中身は`MenuLayoutViewController`で、UIKitのリストで作る。SwiftUIの`List`では、つまみは編集モードでしか出ず、編集モードでは行のスイッチが操作できなくなるため、
+/// スイッチを操作できるまま、つまみをつかんですぐ並べ替えられる形にできない。
 struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     let title: String
     @Binding var layout: MenuLayout<Item>
     /// 項目の記号の代わりに出す画像。タブに置いたプロフィールのその人のアイコン。nilなら項目の記号を出す。
     var image: (Item) -> UIImage? = { _ in nil }
-    /// `image`の返す画像が変わるたびに変わる値。変わったら行を描き直す。読んだ値の変化をSwiftUIが追えるよう、描くときに読む。
+    /// `image`の返す画像が変わるたびに変わる値。変わったら行を再描画する。読んだ値の変化をSwiftUIが追えるよう、描くときに読む。
     var imageRevision: () -> Int = { 0 }
     /// 並びの下に、並びとは別に置くスイッチ。
     var options: [MenuLayoutOption] = []
@@ -29,7 +29,7 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     }
 }
 
-/// 並びのすぐ下に置くボタン。押したときの処理は、画面を作る側が決める。
+/// 並びのすぐ下に置くボタン。選択したときの処理は、画面を作る側が決める。
 struct MenuLayoutAction {
     let title: String
     let symbolName: String
@@ -45,7 +45,7 @@ struct MenuLayoutItemDeletion<Item> {
 
 /// 並びの画面に、並びとは別に置くスイッチ。1つずつ欄を分け、欄の下に説明を添える。
 /// スイッチの表示は行を作るときに読む。同じ画面を別のウインドウでも開いて片方で切り替えると、もう片方は開き直すまで前の表示のまま残る。
-/// 窓を並べられるMacとiPadでしか起きず、並びの行のように別の窓の変更を受けて描き直す作りを足す手間に見合わないため、扱わない。
+/// ウィンドウを並べられるMacとiPadでしか起きず、並びの行のように別のウィンドウの変更を受けて再描画する作りを足す手間に見合わないため、扱わない。
 struct MenuLayoutOption {
     let title: String
     let footer: String
@@ -80,7 +80,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     var onReset: (() -> Void)?
 
     /// 区切り線は同じ値が並ぶため、リストで見分けるIDを行ごとに振る。
-    /// 「その他」の境目も行として持つが、リストには出さず、節の分かれ目にする。
+    /// 「その他」の境目も行として持つが、リストには出さず、セクションの分かれ目にする。
     private struct Row: Identifiable {
         let id = UUID()
         var element: MenuLayout<Item>.Element
@@ -98,7 +98,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
 
     private enum Cell: Hashable {
         case row(UUID)
-        /// 項目のない節に置く行。空の節には指を離せる場所がなく、ほかの節から項目を動かして入れられないため、置く場所にする。
+        /// 項目のないセクションに置く行。空のセクションには指を離せる場所がなく、ほかのセクションから項目を動かして入れられないため、置く場所にする。
         case empty(Section)
         /// `actions`の何番目のボタンか。
         case action(Int)
@@ -207,7 +207,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     /// 並んでいる行のID。テストで、行を作り直さずに残したかを見るのに使う。
     var rowIDs: [UUID] { rows.map(\.id) }
 
-    /// `image`の返す画像が変わったら、項目の行を描き直す。
+    /// `image`の返す画像が変わったら、項目の行を再描画する。
     func setImageRevision(_ revision: Int) {
         guard revision != imageRevision else { return }
         imageRevision = revision
@@ -226,7 +226,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
     }
 
-    /// 見出しは並びの2つの節にだけ付け、注記は書くことのある節にだけ付ける。
+    /// 見出しは並びの2つのセクションにだけ付け、注記は書くことのあるセクションにだけ付ける。
     private func listConfiguration(for section: Section?) -> UICollectionLayoutListConfiguration {
         var configuration = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
         switch section {
@@ -280,7 +280,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         rows.firstIndex { $0.element == .more } ?? rows.endIndex
     }
 
-    /// リストの位置にある行の、`rows`の中の位置。並びの2つの節の外ならnil。
+    /// リストの位置にある行の、`rows`の中の位置。並びの2つのセクションの外ならnil。
     /// 並べ替えている間、リストは途中の並びの位置で聞くが、`rows`は指を離すまで元の並びなので、ほかの行の位置になることがある。
     private func rowIndex(at indexPath: IndexPath) -> Int? {
         let index = switch dataSource?.sectionIdentifier(for: indexPath.section) {
@@ -387,10 +387,10 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
                     if case .row(let id) = cell { rowsByID[id] } else { nil }
                 }
             }
-            // 境目を持たない並びには、境目の後ろの節がない。
+            // 境目を持たない並びには、境目の後ろのセクションがない。
             rows = rowsIn(.main) + rows.filter { $0.element == .more } + (Item.hasMoreSection ? rowsIn(.more) : [])
             save()
-            // 節が空になったり空でなくなったりしたら、「なし」の行を出し入れする。並べ替えを当てている最中には当てられないので、終えてから当てる。
+            // セクションが空になったり空でなくなったりしたら、「なし」の行を出し入れする。並べ替えを当てている最中には当てられないので、終えてから当てる。
             let placeholdersChanged = ([Section.main] + (Item.hasMoreSection ? [.more] : [])).contains { section in
                 rowsIn(section).isEmpty != transaction.finalSnapshot.itemIdentifiers(inSection: section).contains(.empty(section))
             }
@@ -404,7 +404,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
 
     private func configure(_ cell: UICollectionViewListCell, for row: Row) {
         let reorder = moveAccessory(for: row, in: cell)
-        // セルは種類をまたいで使い回され、字下げは使い回しても残るため、区切り線などの行でも付け直す。
+        // セルは種類をまたいで使い回され、インデントは使い回しても残るため、区切り線などの行でも付け直す。
         let index = rows.firstIndex { $0.id == row.id }
         cell.indentationWidth = rowGroupIndentation
         setRowGroupMembership(index.map(rowGroupIndices.contains) == true, of: cell)
@@ -438,12 +438,12 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             }
             cell.accessories = [reorder]
         case .more:
-            // 境目は行として出さず、節の分かれ目にする。
+            // 境目は行として出さず、セクションの分かれ目にする。
             break
         }
     }
 
-    /// 行を動かす部品。ふだんはドラッグするつまみで、ボタンで動かすときは上と下のボタン。端の行では、動けない向きのボタンを押せなくする。
+    /// 行を動かす部品。ふだんはドラッグするつまみで、ボタンで動かすときは上と下のボタン。端の行では、動けない向きのボタンを無効にする。
     private func moveAccessory(for row: Row, in cell: UICollectionViewListCell) -> UICellAccessory {
         guard movesWithButtons else { return .reorder(displayed: .always, options: .init(showsVerticalSeparator: false)) }
         let buttons = MenuLayoutMoveButtons(rowID: row.id, side: moveButtonSide) { [weak self, id = row.id] move in self?.moveRow(id: id, move) }
@@ -452,7 +452,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         return .customView(configuration: .init(customView: buttons, placement: .trailing(), reservedLayoutWidth: .actual, maintainsFixedSize: true))
     }
 
-    /// セルに今置いている表示のスイッチ。切り替えられるかを、セルを描き直さずに変えるために持つ。
+    /// セルに今置いている表示のスイッチ。切り替えられるかを、セルを再描画せずに変えるために持つ。
     private let switchesByCell = NSMapTable<UICollectionViewListCell, RowSwitch>.weakToStrongObjects()
 
     /// 最後の1つの表示中の項目は、切れなくする。
@@ -461,22 +461,22 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         return visibleItemCount > 1
     }
 
-    /// セルに今置いている上下のボタン。押せるかを、セルを描き直さずに変えるために持つ。
+    /// セルに今置いている上下のボタン。有効かを、セルを再描画せずに変えるために持つ。
     private let moveButtonsByCell = NSMapTable<UICollectionViewListCell, MenuLayoutMoveButtons>.weakToWeakObjects()
 
     private func canMove(_ id: UUID, _ move: MenuLayoutMove) -> Bool {
         rows.firstIndex { $0.id == id }.flatMap { move.destination(from: $0, count: movableRowCount) } != nil
     }
 
-    /// 上下のボタンの1辺。押しやすさは、ほかの行のアクセサリーに合わせる。
+    /// 上下のボタンの1辺。選択しやすさは、ほかの行のアクセサリーに合わせる。
     private let moveButtonSide: CGFloat = 36
 
-    /// 動かせる行の数。境目の後ろの節を出さない並びでは、境目より後ろへ動かすと画面から消えるため、境目の前だけを数える。
+    /// 動かせる行の数。境目の後ろのセクションを出さない並びでは、境目より後ろへ動かすと画面から消えるため、境目の前だけを数える。
     private var movableRowCount: Int {
         Item.hasMoreSection ? rows.count : moreIndex
     }
 
-    /// 並べ替えのドラッグを終えたときと同じく、保存して、行の線と字下げを引き直す。
+    /// 並べ替えのドラッグを終えたときと同じく、保存して、行の線とインデントを引き直す。
     private func moveRow(id: UUID, _ move: MenuLayoutMove) {
         guard let index = rows.firstIndex(where: { $0.id == id }), let destination = move.destination(from: index, count: movableRowCount) else { return }
         rows.insert(rows.remove(at: index), at: destination)
@@ -484,8 +484,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled) { [weak self] in self?.refreshDependentRows() }
     }
 
-    /// 表示のスイッチの入り切りと切り替えられるか、上下のボタンを押せるかは、表示を切り替えたり、行を動かしたり足したり消したりするたびに変わるので、見えている行の分を変える。
-    /// 行を描き直すと、スイッチとボタンが作り直されて、入れ替わる動きが右端に出るため、押せる状態だけを変える。
+    /// 表示のスイッチの入り切りと切り替えられるか、上下のボタンが有効かは、表示を切り替えたり、行を動かしたり足したり消したりするたびに変わるので、見えている行の分を変える。
+    /// 行を再描画すると、スイッチとボタンが作り直されて、入れ替わる動きが右端に出るため、有効かどうかだけを変える。
     /// 動かしている最中のセルは取り出せないので、並びを当て終えてから呼ぶ。
     private func refreshRowControls() {
         for row in rows where row.element != .more {
@@ -501,10 +501,10 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
     }
 
-    /// 横並びの字下げは、行を足したり消したりし終わってから付け直す。
+    /// 横並びのインデントは、行を足したり消したりし終わってから付け直す。
     private func applySnapshot(animated: Bool, completion: (() -> Void)? = nil) {
         var snapshot = NSDiffableDataSourceSnapshot<Section, Cell>()
-        // 境目を持たない並びでは、境目の後ろの節を出さない。
+        // 境目を持たない並びでは、境目の後ろのセクションを出さない。
         let sections: [(Section, ArraySlice<Row>)] = [(.main, rows[..<moreIndex])] + (Item.hasMoreSection ? [(.more, rows[min(moreIndex + 1, rows.endIndex)...])] : [])
         snapshot.appendSections(sections.map(\.0) + [.actions])
         for (section, rows) in sections {
@@ -529,7 +529,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
     }
 
-    /// 横並びの字下げと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに描き直す。
+    /// 横並びのインデントと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに再描画する。
     /// 線は、すべての行に大きさを測り直させて引き直す。並べ替えている間、リストは途中の並びの位置で線の出方を聞くが、`rows`は指を離すまで元の並びなので、ほかの行の出方で引いてしまう。
     /// 区切り線の行が動くと、その行は前後とも上下に線を引かないままなのに、下の行の出方で線を引いて残るため、出方が変わった行に絞らない。
     /// レイアウトを無効にすると、無効にする行を絞っても画面の外の行の測った高さが見積もりの高さに戻ってリストの高さが縮み、
@@ -560,8 +560,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         var bottom: Bool
     }
 
-    /// 横並びの字下げは、まとまりの項目の表示を切り替えても変わる。
-    /// data sourceへの`apply`で描き直すと、ほかの行のスイッチまで以後のタップに反応しなくなったため、見えているセルの字下げだけを変える。
+    /// 横並びのインデントは、グループの項目の表示を切り替えても変わる。
+    /// data sourceへの`apply`で再描画すると、ほかの行のスイッチまで以後のタップに反応しなくなったため、見えているセルのインデントだけを変える。
     /// 見えていない行は、出てくるときに今の行から作られる。
     private func refreshRowGroups() {
         let members = rowGroupIndices
@@ -578,13 +578,13 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
     }
 
-    /// 横並びに入る項目は、字下げし、字下げの見えないVoiceOverでは横に並ぶことを読み上げる。
+    /// 横並びに入る項目は、インデントし、インデントの見えないVoiceOverでは横に並ぶことを読み上げる。
     private func setRowGroupMembership(_ isMember: Bool, of cell: UICollectionViewListCell) {
         cell.indentationLevel = isMember ? 1 : 0
         cell.accessibilityHint = isMember ? SettingsTexts.MenuLayout.rowGroupHint : nil
     }
 
-    /// 横並びに入る項目の字下げの幅。既定の幅では、アイコンがずれて見えるだけで、まとまりに見えないため広げる。
+    /// 横並びに入る項目のインデントの幅。既定の幅では、アイコンがずれて見えるだけで、グループに見えないため広げる。
     private let rowGroupIndentation: CGFloat = 24
 
     /// メニューで横に並ぶ項目の、`rows`の中の位置。
@@ -592,8 +592,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         Self.rowGroupIndices(in: rows.map(\.element))
     }
 
-    /// 横並びの区切り線の下で、メニューで横に並ぶ項目と、その間に挟まる隠した項目の位置。字下げして、どこまでが横に並ぶかを見せる。
-    /// 区切り線か「その他」の境目でまとまりが終わり、表示する項目がその大きさで横に並ぶ数に達したあとの項目は、ふだんの行で出るので含めない。
+    /// 横並びの区切り線の下で、メニューで横に並ぶ項目と、その間に挟まる隠した項目の位置。インデントして、どこまでが横に並ぶかを見せる。
+    /// 区切り線か「その他」の境目でグループが終わり、表示する項目がその大きさで横に並ぶ数に達したあとの項目は、ふだんの行で出るので含めない。
     /// 境目の後ろで横並びが効かない並び（投稿欄のツールバー）では、境目の後ろの項目を含めない。
     static func rowGroupIndices(in elements: [MenuLayout<Item>.Element]) -> Set<Int> {
         var indices: Set<Int> = []
@@ -617,7 +617,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         return indices
     }
 
-    /// 行は描き直さない。行のラベルは行が自分で持つ選択で変わり、字下げは見えているセルだけを変える。
+    /// 行は再描画しない。行のラベルは行が自分で持つ選択で変わり、インデントは見えているセルだけを変える。
     private func setRowSize(_ size: MenuRowSize, id: UUID) {
         guard let index = rows.firstIndex(where: { $0.id == id }), case .rowSeparator = rows[index].element else { return }
         rows[index].element = .rowSeparator(size)
@@ -666,7 +666,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: true)
         switch dataSource?.itemIdentifier(for: indexPath) {
-        // 足した区切り線は、押したボタンのすぐ上に出るよう、並びのいちばん下に置く。ほかの場所に置くと、画面の外に入って、どこに足されたか分からないことがある。
+        // 足した区切り線は、選択したボタンのすぐ上に出るよう、並びのいちばん下に置く。ほかの場所に置くと、画面の外に入って、どこに足されたか分からないことがある。
         case .addSeparator:
             insert(.separator, at: rows.endIndex)
         case .addRowSeparator:
@@ -713,7 +713,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         return UIMenu(children: sections.map { UIMenu(options: .displayInline, children: $0) })
     }
 
-    /// 並べ替えは並びの2つの節の中だけで行い、下のボタンの間には入れない。節をまたいで動かせる。
+    /// 並べ替えは並びの2つのセクションの中だけで行い、下のボタンの間には入れない。セクションをまたいで動かせる。
     func collectionView(
         _ collectionView: UICollectionView,
         targetIndexPathForMoveOfItemFromOriginalIndexPath originalIndexPath: IndexPath,
@@ -722,7 +722,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     ) -> IndexPath {
         guard let dataSource, let more = dataSource.index(for: .more) else { return proposedIndexPath }
         if proposedIndexPath.section <= more { return proposedIndexPath }
-        // 下のボタンの上に来たら、「その他」の節の最後に置く。動かしている行がその節にあれば、その行の分だけ数が減る。
+        // 下のボタンの上に来たら、「その他」のセクションの最後に置く。動かしている行がそのセクションにあれば、その行の分だけ数が減る。
         let count = dataSource.snapshot().numberOfItems(inSection: .more) - (originalIndexPath.section == more ? 1 : 0)
         return IndexPath(item: count, section: more)
     }
@@ -743,7 +743,7 @@ private struct SeparatorRow: View {
     }
 }
 
-/// 横並びの区切り線の行。ラベルを押すと、横に並べる大きさを選ぶメニューを出す。
+/// 横並びの区切り線の行。ラベルを選択すると、横に並べる大きさを選ぶメニューを出す。
 private struct RowSeparatorRow: View {
     @State private var size: MenuRowSize
     private let onChange: (MenuRowSize) -> Void
@@ -777,7 +777,7 @@ private struct RowSeparatorRow: View {
                 .foregroundStyle(.secondary)
                 .fixedSize()
             }
-            // 区切り線の行のラベルなので、ティントカラーにせず、前からの控えめな色のままにする。押せることはシェブロンで示す。
+            // 区切り線の行のラベルなので、ティントカラーにせず、前からの控えめな色のままにする。選択できることはシェブロンで示す。
             .buttonStyle(.plain)
             .accessibilityLabel(SettingsTexts.MenuLayout.rowSeparatorAccessibilityLabel)
             .accessibilityValue(size.title)

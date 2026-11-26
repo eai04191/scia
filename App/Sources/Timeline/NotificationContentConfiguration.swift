@@ -33,7 +33,7 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?
-    /// 注意書きかフィルターの警告が押されたときに、押したボックスの種類を渡して呼ぶ。
+    /// 注意書きかフィルターの警告が選択されたときに、選択されたボックスの種類を渡して呼ぶ。
     var onToggleSpoiler: ((PostBodyContent.Spoiler.Kind) -> Void)?
     /// 本文が編集で変わったら、変わらない文字を前の位置から動かす（`PostContentConfiguration.animatesTextEdit`）。
     var animatesTextEdit = false
@@ -70,13 +70,13 @@ struct NotificationContentConfiguration: UIContentConfiguration {
         var symbolFont: UIFont
         /// 誰が何をしたかの行と、投稿の中身のあいだの余白。
         var bodySpacing: CGFloat
-        /// 記号と、誰が何をしたかの行の文字とのすき間。
+        /// 記号と、誰が何をしたかの行の文字とのgap。
         var symbolSpacing: CGFloat
         /// アイコンの列と、文字の列のあいだ。
         var avatarSpacing: CGFloat
         /// まとめた行で並べるアイコンの一辺。
         var groupAvatarSize: CGFloat = 0
-        /// まとめた行で並べるアイコン同士のすき間。
+        /// まとめた行で並べるアイコン同士のgap。
         var groupAvatarSpacing: CGFloat = 0
         /// まとめた行で、並べたアイコンと、誰が何をしたかの行のあいだ。
         var groupAvatarHeaderSpacing: CGFloat = 0
@@ -92,7 +92,7 @@ struct NotificationContentConfiguration: UIContentConfiguration {
 }
 
 extension NSAttributedString.Key {
-    /// まとめた通知の、誰が何をしたかの行で、押すと人のリストを開く文字（「ほか3人」）。
+    /// まとめた通知の、誰が何をしたかの行で、選択すると人のリストを開く文字（「ほか3人」）。
     static let groupAccountsLink = NSAttributedString.Key("net.mizle.scia.groupAccountsLink")
 }
 
@@ -303,7 +303,7 @@ final class NotificationContentView: UIView, UIContentView {
             .map { $0.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joinedAsTextList
-        // まとめた行の「ほか3人」は文字の中にあり、読み上げでは押せないため、操作として足す。
+        // まとめた行の「ほか3人」は文字の中にあり、読み上げでは選択できないため、操作として足す。
         let groupAccountsAction = configuration.onOpenGroupAccounts.map { open in
             UIAccessibilityCustomAction(name: PostTexts.openGroupAccounts) { _ in
                 open()
@@ -312,7 +312,7 @@ final class NotificationContentView: UIView, UIContentView {
         }
         textAccessibilityElement.accessibilityCustomActions = [groupAccountsAction].compactMap(\.self) + bodyView.spoilerAccessibilityActions() + bodyView.linkAccessibilityActions()
             + profileAccessibilityActions(for: configuration)
-        // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
+        // 枠はlayoutSubviewsで決める。大きさの変わらない再描画（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
         // 「テキストを選択」で本文を選んでいる間は、選べるテキストビューを本文の要素の後ろに置き、読み上げでも選べるようにする。
@@ -399,7 +399,7 @@ extension NotificationContentView {
         return [CGRect(x: label.minX, y: top, width: label.width, height: max(bottom - top, 0))]
     }
 
-    /// 名前の前に差し込んだアイコンと、アイコンと名前のすき間。アイコンを差し込んでいなければ空。
+    /// 名前の前に差し込んだアイコンと、アイコンと名前のgap。アイコンを差し込んでいなければ空。
     private func headerAvatarPreviewFrames() -> AppearancePreviewFrames {
         guard let text = headerLabel.attributedText, !headerLabel.isHidden else { return [:] }
         var index: Int?
@@ -417,7 +417,7 @@ extension NotificationContentView {
         }
         guard let avatar = frame(at: index) else { return [:] }
         var frames: AppearancePreviewFrames = [.notificationHeaderAvatar: [avatar]]
-        // すき間は、アイコンの後ろの空白の幅と、その字送りの和。TextKit 2で空白の後ろの文字の位置を測ると、空白の字送りがUILabelの描く位置どおりに入らない（字送りを20増やしても6.5しか動かなかった）ため、文字の属性から求める。
+        // gapは、アイコンの後ろの空白の幅と、その字送りの和。TextKit 2で空白の後ろの文字の位置を測ると、空白の字送りがUILabelの描く位置どおりに入らない（字送りを20増やしても6.5しか動かなかった）ため、文字の属性から求める。
         if index + 1 < text.length, let font = text.attribute(.font, at: index + 1, effectiveRange: nil) as? UIFont {
             let space = (" " as NSString).size(withAttributes: [.font: font]).width
             let kern = text.attribute(.kern, at: index + 1, effectiveRange: nil) as? CGFloat ?? 0

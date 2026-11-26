@@ -1,7 +1,7 @@
 public import Foundation
 
 /// 「操作の状況」の最近の失敗を、アカウントごとにUserDefaultsへ保存する。キーは`AccountScopedDefaults`で作り、ログアウトで消す。
-/// 同じアカウントを複数のウインドウで開いても上書きし合わないよう、`OperationStatus`は書く前に読み直す。
+/// 同じアカウントを複数のウインドウで開いても上書きし合わないよう、`OperationStatus`は書く前に再読み込みする。
 public struct OperationFailureStore {
     private let defaults: UserDefaults
     private let key: String

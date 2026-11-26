@@ -9,7 +9,7 @@ public struct FeaturedTag: Decodable, Hashable, Sendable {
     public let name: String
     /// このタグを付けた、その人の投稿の数。
     public let statusesCount: Int
-    /// サーバーの、その人のこのタグの付いた投稿のページ。押して開く先として読み、使えなければnil。
+    /// サーバーの、その人のこのタグの付いた投稿のページ。選択して開く先として読み、使えなければnil。
     public let url: URL?
 
     public init(id: String, name: String, statusesCount: Int, url: URL? = nil) {

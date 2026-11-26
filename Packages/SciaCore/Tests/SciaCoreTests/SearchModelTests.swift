@@ -151,7 +151,7 @@ struct SearchModelTests {
         #expect(display.footerState == .idle)
     }
 
-    /// 1つの種類が失敗しても、ほかの結果は見せ、失敗した種類の見出しの下に失敗の行を出す。押すとその種類だけ読み直す。
+    /// 1つの種類が失敗しても、ほかの結果は見せ、失敗した種類の見出しの下に失敗の行を出す。選択するとその種類だけ再読み込みする。
     @Test func failedCategoryShowsRowAndRetries() async throws {
         let failsAccounts = Mutex(true)
         let transport = Self.transport { query in
@@ -192,7 +192,7 @@ struct SearchModelTests {
         #expect(Self.rows(display) == ["[statuses]", "s7"])
         #expect(display.footerState == .reachedEnd)
 
-        // 引っぱって読み直しても、もう一度は開かない。
+        // pull to refreshしても、もう一度は開かない。
         await model.refresh()
         #expect(found.count == 1)
     }
@@ -251,7 +251,7 @@ struct SearchModelTests {
         #expect(display.contentState == .loaded)
     }
 
-    /// 最初の読み込みの途中に引っぱって読み直しても、読み込み中のまま止まらない。
+    /// 最初の読み込みの途中にpull to refreshしても、読み込み中のまま止まらない。
     @Test func refreshWhileLoadingFinishes() async throws {
         let gate = Gate()
         let transport = RoutedTransport { request in
@@ -298,7 +298,7 @@ struct SearchModelTests {
         #expect(transport.requests.map(Query.init).allSatisfy { $0.type == nil })
     }
 
-    /// 続きの読み込みに失敗したあとでも、読み直せたら失敗の表示を消す。
+    /// 続きの読み込みに失敗したあとでも、再読み込みできたら失敗の表示を消す。
     @Test func refreshClearsPagingFailure() async throws {
         let failsNext = Mutex(true)
         let transport = Self.transport { query in
@@ -321,7 +321,7 @@ struct SearchModelTests {
         #expect(display.footerState == .idle)
     }
 
-    /// 確定してから最初の結果がそろうまでは、確定した操作の結果として動きで見せる。そろったあとに読み直して届いた結果は、動かさずに、行を基準にせずスクロール位置を保つ。
+    /// 確定してから最初の結果がそろうまでは、確定した操作の結果として動きで見せる。そろったあとに再読み込みして届いた結果は、動かさずに、行を基準にせずスクロール位置を保つ。
     /// 先に届いた種類の上にあとから届いた種類が入っても、最上部の行が画面の外へ出ないようにするため。
     @Test func firstArrivalsTransitionAndLaterArrivalsKeepOffset() async throws {
         let transport = Self.transport { query in

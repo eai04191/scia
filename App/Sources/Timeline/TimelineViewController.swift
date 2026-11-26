@@ -38,15 +38,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOtherAccountAction: ((OtherAccountCommand) -> Void)?
     /// フォローリクエストの通知のメニューで、承認か却下が選ばれたときに、その通知を渡して呼ぶ。
     var onFollowRequestDecision: ((FollowRequestDecision, MastodonNotification) -> Void)?
-    /// 保留中の通知の行で、受け入れるか無視が選ばれたときに、そのまとまりを渡して呼ぶ。nilなら行をスワイプできない。
+    /// 保留中の通知の行で、受け入れるか無視が選ばれたときに、そのグループを渡して呼ぶ。nilなら行をスワイプできない。
     var onNotificationRequestDecision: ((NotificationRequestDecision, NotificationRequest) -> Void)?
     /// 保留中の通知の行がタップされたときに呼ぶ。その人からの通知を開く。
     var onOpenNotificationRequest: ((NotificationRequest) -> Void)?
     /// 通知のメニューで、通知の削除が選ばれたときに、その通知を渡して呼ぶ。
     var onDismissNotification: ((MastodonNotification) -> Void)?
-    /// まとめた通知の「ほか3人」が押されたときに呼ぶ。通知を送った人のリストを開く。
+    /// まとめた通知の「ほか3人」が選択されたときに呼ぶ。通知を送った人のリストを開く。
     var onOpenGroupAccounts: ((MastodonNotification) -> Void)?
-    /// 右上に出す、投稿欄で書き始めるボタンが押されたときに呼ぶ。
+    /// 右上に出す、投稿欄で書き始めるボタンが選択されたときに呼ぶ。
     /// アプリ内のSafariのシートの裏に隠れているときや、設定で空の投稿欄を隠しているときに、投稿欄に触れられないため、その入口にする。
     var onFocusInlineCompose: (() -> Void)?
     private lazy var focusInlineComposeItem: UIBarButtonItem = {
@@ -63,19 +63,19 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
     /// 読み込み中でないギャップが表示領域に近づいたときに、どちらの端から読むかを添えて呼ぶ。スクロールするたびに呼ぶことがある。
     var onGapApproach: ((String, TimelineStore.GapDirection) -> Void)?
-    /// 投稿の行か、投稿を含む通知の行の、中の部品が受けなかった押下で呼ぶ。押した投稿（通知なら通知の投稿）と、行のウインドウ上の枠を渡す。スレッドを開く。nilなら押せない。
+    /// 投稿の行か、投稿を含む通知の行の、中の部品が受けなかった押下で呼ぶ。選択した投稿（通知なら通知の投稿）と、行のウインドウ上の枠を渡す。スレッドを開く。nilなら選択できない。
     var onOpenThread: ((Status, CGRect) -> Void)?
-    /// 引用元の中の引用のように、IDしか分からない投稿のスレッドを開くときに、IDと、押した行のウインドウ上の枠を渡して呼ぶ。
+    /// 引用元の中の引用のように、IDしか分からない投稿のスレッドを開くときに、IDと、選択した行のウインドウ上の枠を渡して呼ぶ。
     var onOpenStatusID: ((Status.ID, CGRect) -> Void)?
-    /// スレッドの画面で押した投稿。押してもスレッドを開き直さない。
+    /// スレッドの画面で選択した投稿。選択してもスレッドを開き直さない。
     var threadFocusID: Status.ID?
-    /// スレッドを開くときに、押した行をタイムラインで見えていた位置に置くため、上の余白に足している高さ。
+    /// スレッドを開くときに、選択した行をタイムラインで見えていた位置に置くため、上の余白に足している高さ。
     private var openingInset: CGFloat = 0
     /// 画面に出るときに、この行の上端をウインドウのこの高さに置く。
     private var pendingOpening: (id: ItemID, windowY: CGFloat)?
     /// 投稿のアイコンやブーストした人の行がタップされたとき、またはメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
     var onOpenProfile: ((Account) -> Void)?
-    /// 人の行を左へスワイプして「外す」を押した。リストのメンバー、ミュートしたユーザー、ブロックしたユーザーの画面でだけ渡す。
+    /// 人の行を左へスワイプして「外す」を選択した。リストのメンバー、ミュートしたユーザー、ブロックしたユーザーの画面でだけ渡す。
     var onRemoveAccount: ((Account) -> Void)?
     /// 人の行を左へスワイプして出すボタンの名前と記号。
     var accountRemoval = (title: TimelineScreenTexts.removeAccount, symbolName: "person.badge.minus")
@@ -91,13 +91,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenAccountHashtag: ((String, Account) -> Void)?
     /// 投稿のメニューの「ハッシュタグ」の「すべての投稿」で、ハッシュタグのタイムラインを開く。`#`を除いた名前を渡す。
     var onOpenHashtag: ((String) -> Void)?
-    /// 検索の結果のうち、投稿と人のほかの行（ハッシュタグ、「すべて見る」、失敗の行）が押されたときに呼ぶ。
+    /// 検索の結果のうち、投稿と人のほかの行（ハッシュタグ、「すべて見る」、失敗の行）が選択されたときに呼ぶ。
     var onSearchRowSelect: ((SearchRow) -> Void)?
-    /// 最近の検索の見出しの「消去」を押したときに呼ぶ。
+    /// 最近の検索の見出しの「消去」を選択したときに呼ぶ。
     var onRemoveAllRecentSearches: (() -> Void)?
     /// 最近の検索の行を左へスワイプして消したときに呼ぶ。
     var onRemoveRecentSearch: ((String) -> Void)?
-    /// ナビゲーションから外された。積んで開いたタイムラインが、読み込みと購読をやめるのに使う。
+    /// ナビゲーションから外された。プッシュして開いたタイムラインが、読み込みと購読をやめるのに使う。
     var onRemovedFromParent: (() -> Void)?
     /// 画面に出始めたとき（true）と、見えなくなったとき（false）。前に出ている間だけ新着を読むタイムラインが使う。
     var onVisibilityChange: ((Bool) -> Void)?
@@ -113,9 +113,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var headerView: UIView?
     /// 画面に出るたびに呼ぶ。開くまで読まないタイムラインが、初めて開いたときに読み始めるのに使う。
     var onAppearing: (() -> Void)?
-    /// タイムラインがスクロールしたときと、安全領域やバーの高さが変わったときに呼ぶ。ヘッダーを置いた画面が、ヘッダーやバーの見た目を位置に合わせるのに使う。
+    /// タイムラインがスクロールしたときと、セーフエリアやバーの高さが変わったときに呼ぶ。ヘッダーを置いた画面が、ヘッダーやバーの見た目を位置に合わせるのに使う。
     var onScroll: ((UIScrollView) -> Void)?
-    /// ナビゲーションバーのボタンのない場所のタップを、タイムラインに通す。ヘッダーを置いた画面が、バーの下に入れたヘッダー画像を押せるようにする。
+    /// ナビゲーションバーのボタンのない場所のタップを、タイムラインに通す。ヘッダーを置いた画面が、バーの下に入れたヘッダー画像を選択できるようにする。
     var passesEmptyNavigationBarTaps = false
     /// ステータスバーの文字の色。ヘッダーを置いた画面が、ステータスバーの下に見えているものに合わせて変える。
     var statusBarStyle: UIStatusBarStyle = .default {
@@ -135,7 +135,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 作り終えてから、並べ直すたびに下の余白を測る処理をつなぐ。作る途中に当てる最初のsnapshotでも並べ直すので、先につなぐと、測る処理が作り終えていない`dataSource`を読みに行き、作り直しが入れ子になって止まらない。
     private lazy var dataSource = {
         let dataSource = makeDataSource()
-        // 中身の高さが変わらなくても、押した投稿より上の行の高さが変わると、押した投稿から下の高さが変わるので、並べ直すたびに測る。
+        // 中身の高さが変わらなくても、選択した投稿より上の行の高さが変わると、選択した投稿から下の高さが変わるので、並べ直すたびに測る。
         (collectionView as? TimelineCollectionView)?.onLayout = { [weak self] in
             guard let self, threadFocusID != nil else { return }
             updateBottomInset(layingOut: false)
@@ -150,7 +150,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var emojiURLIndex: [URL: [ItemID]]?
     /// メニューを開いている間に届いたアイコンを、メニューを組み直さずに差し替える。
     let contextMenuIcons = ContextMenuIconSwapper()
-    /// 行を触れた位置。行のタップの処理は押した位置を受け取らないため、タップでメニューを出す位置にする。
+    /// 行を触れた位置。行のタップの処理は選択した位置を受け取らないため、タップでメニューを出す位置にする。
     let touchRecorder = TouchLocationRecorder()
     /// 行の長押しにメニュー以外を選んだときに、長押しを受ける。
     var rowLongPress: ObjectLongPress?
@@ -161,7 +161,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 隣の行とアイコン同士を線でつなぐ行。並びが変わるたびに決め直す。
     private var replyConnections: [ItemID: ReplyConnection] = [:]
     /// すぐ上の行が返信先なら、返信のラベルを出さない。スレッドのように古い順に並べるタイムラインで、線で返信先が分かるため。
-    /// ただし、スレッドで押した投稿（`threadFocusID`）にはラベルを残す。新しい順に並べるタイムラインでは、返信先は下の行になるため使わない。
+    /// ただし、スレッドで選択した投稿（`threadFocusID`）にはラベルを残す。新しい順に並べるタイムラインでは、返信先は下の行になるため使わない。
     var hidesReplyLabelBelowParent = false
     private var loadingGapIDs: Set<String> = []
     /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせる。
@@ -174,11 +174,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var lastRestore = (steps: 0, settled: true)
     /// スワイプのボタンを閉じる途中に届いた並びの更新。閉じ終えたときに反映する。
     private var heldEntries: HeldEntries?
-    /// 画面に出ていない間（ほかのタブ、上に重ねた画面の下）に、絵文字やXの投稿が届いて求められた描き直し。画面に出るときに描き直す。
+    /// 画面に出ていない間（ほかのタブ、上のモーダルビューの下）に、絵文字やXの投稿が届いて求められた再描画。画面に出るときに再描画する。
     private var hiddenReconfigureIDs: Set<ItemID> = []
     private var contentSizeObserver: (any NSObjectProtocol)?
     private var windowActivationObservers: [any NSObjectProtocol] = []
-    /// 端末の文字の大きさが変わったときに、組み直す前に覚えた読んでいる位置。
+    /// 端末のDynamic Typeが変わったときに、組み直す前に覚えた読んでいる位置。
     private var contentSizeAnchor: ScrollAnchor?
     /// 表示中のギャップのID。スクロールのたびに全要素を調べないよう、別に持つ。
     private var gapIDs: [String] = []
@@ -252,7 +252,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var clock: any Clock<Duration> = AppDependencies.clock
     private let texts: Texts
     /// タイムラインを一番上から引っぱって離したときに、最新の状態を読む。読み終えるまで更新コントロールを出し続ける。
-    /// どのタイムラインでも同じ操作で読み直せるよう、タイムラインを持つ側に必ず決めさせる。
+    /// どのタイムラインでも同じ操作で再読み込みできるよう、タイムラインを持つ側に必ず決めさせる。
     private let refresh: @MainActor () async -> Void
     private let refreshControl = UIRefreshControl()
     private var refreshTask: Task<Void, Never>?
@@ -262,10 +262,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     let avatarImages: AvatarImageStore<UIImage>
     let network: NetworkConditionsMonitor
     let settings: AppSettings
-    /// 区切り線の引き方と、描き直しの要る設定の変化。予約投稿のタイムラインと同じ決まりを使う。
+    /// 区切り線の引き方と、再描画の要る設定の変化。予約投稿のタイムラインと同じ決まりを使う。
     private let listStyle: PostListStyle
     private let crashGuard: PostCrashGuard
-    /// スクロールが止まったときに見えている画像を、ビューアで開く元の画像で先読みする。セッションが入れる。nilなら先読みしない。
+    /// スクロールが止まったときに見えている画像を、ビューアで開く元の画像でプリフェッチする。セッションが入れる。nilならプリフェッチしない。
     var mediaPrefetcher: MediaPrefetcher?
     /// 添付ファイルをぼかすか。閲覧注意のぼかしを外した投稿と、メニューから隠した投稿を覚える。セッションがほかの画面とそろえる。
     var mediaCovers = MediaCovers() {
@@ -273,9 +273,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             if mediaCovers != oldValue { onUpdateMediaCovers?() }
         }
     }
-    /// `mediaCovers`が変わったときに呼ぶ。行の外でぼかしを描く部品（プロフィールの固定された投稿のカード）が描き直すのに使う。
+    /// `mediaCovers`が変わったときに呼ぶ。行の外でぼかしを描く部品（プロフィールの固定された投稿のカード）が再描画するのに使う。
     var onUpdateMediaCovers: (() -> Void)?
-    /// 設定、チューニング、回線の状態が変わって、行を描き直したときに呼ぶ。行の外で添付ファイルを描く部品（プロフィールの固定された投稿のカード）が描き直すのに使う。
+    /// 設定、チューニング、回線の状態が変わって、行を再描画したときに呼ぶ。行の外で添付ファイルを描く部品（プロフィールの固定された投稿のカード）が再描画するのに使う。
     var onApplySettingsChange: (() -> Void)?
     /// この画面で開いたり隠したりしたときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
@@ -285,7 +285,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var translations: StatusTranslationStore?
     /// このタイムラインで当てるサーバーのフィルターと、警告で折りたたんだ投稿のうち開いたもの。タイムラインを持つ側が、タイムラインの場所に合わせて入れる。
     var filterWarnings = FilterWarnings()
-    /// ブロックかミュートしている人の引用元のうち、押して開いたもの。
+    /// ブロックかミュートしている人の引用元のうち、選択して開いたもの。
     var quoteReveals = QuoteReveals()
     /// 引用元の、受け取ったあとの変化。セッションがほかの画面とそろえる。
     var quoteSourceChanges = QuoteSourceChanges() {
@@ -293,17 +293,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
     /// 投票する前に選んでいる選択肢と、結果を見ると選んだ投票、送っている途中の投票。
     var pollChoices = PollChoices()
-    /// 投票の「投票」が押されたときに、選んだ選択肢と、押した投稿（ブーストならブーストした投稿）を渡して呼ぶ。
+    /// 投票の「投票」が選択されたときに、選んだ選択肢と、選択した投稿（ブーストならブーストした投稿）を渡して呼ぶ。
     /// 送り終えたら、呼ばれた側が`finishVoting(_:succeeded:)`を呼ぶ。
     var onVote: ((Set<Int>, Status) -> Void)?
-    /// 投票の「更新」が押されたときに、押した投稿を渡して呼ぶ。読み終えたら、呼ばれた側が`finishRefreshingPoll(_:)`を呼ぶ。
+    /// 投票の「更新」が選択されたときに、選択した投稿を渡して呼ぶ。読み終えたら、呼ばれた側が`finishRefreshingPoll(_:)`を呼ぶ。
     var onRefreshPoll: ((Status) -> Void)?
     /// サーバーの、Mastodonにない機能の有無。読めたら、セッションが入れる。
     /// 絵文字のリアクションに対応していなければ、投稿にリアクションがあっても出さない（docs/emoji-reaction.md）。
     var capabilities = ServerCapabilities.mastodon {
         didSet {
             guard capabilities != oldValue, isViewLoaded else { return }
-            // 引用の決まりは、アクションバーに並べた「引用」を押せるかを変えるので、出しているすべてを描き直す。
+            // 引用の決まりは、アクションバーに並べた「引用」が有効かを変えるので、出しているすべてを再描画する。
             guard capabilities.quotes == oldValue.quotes else { return reconfigure(Set(displayedItemIDs)) }
             guard capabilities.supportsEmojiReactions != oldValue.supportsEmojiReactions else { return }
             reconfigure(Set(displayedItemIDs.filter { status(for: $0)?.displayed.emojiReactions.isEmpty == false }))
@@ -318,9 +318,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             reconfigure(Set(displayedItemIDs.filter { status(for: $0)?.displayed.emojiReactions.contains { $0.emoji.url == nil && $0.emoji.isCustom } == true }))
         }
     }
-    /// リアクションのボタンが押されたときに、押した投稿（ブーストならブーストした投稿）と絵文字を渡して呼ぶ。
+    /// リアクションのボタンが選択されたときに、選択した投稿（ブーストならブーストした投稿）と絵文字を渡して呼ぶ。
     var onToggleEmojiReaction: ((Status, ReactionEmoji) -> Void)?
-    /// リアクションの列の「＋」が押されたときに、押した投稿を渡して呼ぶ。nilなら「＋」を出さない。
+    /// リアクションの列の「＋」が選択されたときに、選択した投稿を渡して呼ぶ。nilなら「＋」を出さない。
     var onAddEmojiReaction: ((Status) -> Void)?
     /// リアクションのボタンのメニューの「リアクションした人」で、その投稿にその絵文字でリアクションした人のリストを開く。
     var onOpenEmojiReactionedBy: ((Status, ReactionEmoji) -> Void)?
@@ -337,7 +337,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 「続きを読む」で本文を広げたときに、広げたあとの状態と広げたものを渡して呼ぶ。セッションが、ほかのタイムラインにもそろえる。
     var onChangeLongBodyExpansion: ((LongBodyExpansion, LongBodyExpansion.Key) -> Void)?
 
-    /// 「投稿の見た目」と「通知の見た目」のプレビューに置くタイムライン。見本の投稿と通知を並べて見せるだけで、リンクを開くほかは、押す、長押し、スワイプ、引っぱって読み直す操作と、末尾の表示を出さない。
+    /// 「投稿の見た目」と「通知の見た目」のプレビューに置くタイムライン。見本の投稿と通知を並べて見せるだけで、リンクを開くほかは、選択、長押し、スワイプ、pull to refreshの操作と、末尾の表示を出さない。
     /// 設定の値を変えたときは、行の部品を新しい位置まで動かして見せる。決まりはdocs/appearance.mdの「プレビュー」にある。画面を読み込む前に決める。
     var isAppearancePreview = false
 
@@ -430,7 +430,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.prefetchDataSource = self
         collectionView.addGestureRecognizer(springScrollInterruption)
         if isAppearancePreview {
-            // 枠の中の見本の位置を、置いた側が決める。ナビゲーションバーの下などの安全領域で、見本を下へずらさない。
+            // 枠の中の見本の位置を、置いた側が決める。ナビゲーションバーの下などのセーフエリアで、見本を下へずらさない。
             collectionView.contentInsetAdjustmentBehavior = .never
             previewChoices = settings.appearance
         } else {
@@ -442,7 +442,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             refreshControl.addAction(UIAction { [weak self] _ in self?.beginRefresh() }, for: .valueChanged)
             collectionView.refreshControl = refreshControl
         }
-        // タイムラインが画面の高さに満たないときも、引っぱって読み直せるようにする。
+        // タイムラインが画面の高さに満たないときも、pull to refreshできるようにする。
         collectionView.alwaysBounceVertical = true
         view.addSubview(collectionView)
         // 新着のボタンは、このタイムラインの部品として画面と一緒に流れる。一番上の投稿の名前や本文を隠さないよう、時刻のある右上に置く。
@@ -482,9 +482,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// タイムラインを置いたウィンドウが前面を離れたり戻ったりしたら、覆われたときと同じく、見たと報告するかを切り替える。
-    /// Macでは、ほかのアプリが手前にあってもシーンは`foregroundActive`のままなので、Sciaが手前のアプリかの知らせも受ける。
+    /// Macでは、ほかのアプリが手前にあってもシーンは`foregroundActive`のままなので、Sciaが手前のアプリかの通知も受ける。
     private func observeWindowActivation() {
-        // シーンの`willDeactivate`は状態が変わる前に届くため、シーンの知らせでは、知らせの種類から前面かを決める。
+        // シーンの`willDeactivate`は状態が変わる前に届くため、シーンの通知では、通知の種類から前面かを決める。
         let sceneChanges: [(Notification.Name, Bool)] = [(UIScene.willDeactivateNotification, false), (UIScene.didActivateNotification, true)]
         let sceneObservers = sceneChanges.map { name, isActive in
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
@@ -513,7 +513,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     override var preferredStatusBarStyle: UIStatusBarStyle { statusBarStyle }
 
-    /// 安全領域やナビゲーションバーの高さが変わったら、チップの列を置き直す。
+    /// セーフエリアやナビゲーションバーの高さが変わったら、チップの列を置き直す。
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         noticeOverlay?.update()
@@ -523,7 +523,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 他のタブにいる間に表示が変わっても既読にしないため、画面に出たときに改めて報告する。
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
-        // 前面にないウィンドウで開いた画面は、前面に戻る知らせが届くまで報告しない。
+        // 前面にないウィンドウで開いた画面は、前面に戻る通知が届くまで報告しない。
         updateWindowInactive()
         onAppearing?()
         onVisibilityChange?(true)
@@ -582,7 +582,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         onVisibilityChange?(false)
     }
 
-    /// 相対表記の時刻を、表示中の行だけ1秒ごとに書き直す。行の高さは変わらないため、並びは描き直さない。
+    /// 相対表記の時刻を、表示中の行だけ1秒ごとに書き直す。行の高さは変わらないため、並びは再描画しない。
     private func startRefreshingTimes() {
         timeRefreshTask?.cancel()
         let clock = clock
@@ -603,8 +603,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 表示中の投票のうち、残り時間や締め切りで見え方が変わったものだけを描き直す。表示したまま締め切りを迎えた投票を、投票できる形のまま残さないため。
-    /// 投票の行の高さは形や残り時間で変わらないため、描き直しても並びは動かない。
+    /// 表示中の投票のうち、残り時間や締め切りで見え方が変わったものだけを再描画する。表示したまま締め切りを迎えた投票を、投票できる形のまま残さないため。
+    /// 投票の行の高さは形や残り時間で変わらないため、再描画しても並びは動かない。
     private func refreshVisiblePolls(now: Date) {
         var stale: Set<ItemID> = []
         for indexPath in collectionView.indexPathsForVisibleItems {
@@ -617,14 +617,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigure(stale)
     }
 
-    /// チューニングの値、回線の状態、設定が変わったら、表示中の投稿を描き直す。見えていない間と、設定の画面が手前にある間は、`listStyle`が溜める。
+    /// チューニングの値、回線の状態、設定が変わったら、表示中の投稿を再描画する。見えていない間と、設定の画面が手前にある間は、`listStyle`が溜める。
     private func observeTuning() {
         listStyle.isShown = { [weak self] in self?.viewIfLoaded?.window != nil }
         listStyle.onRedrawNeeded = { [weak self] in self?.applySettingsChange() }
         listStyle.observeRedrawNeeds()
     }
 
-    /// 設定の画面が手前にある間は、設定やチューニングが変わっても描き直さずに溜める。
+    /// 設定の画面が手前にある間は、設定やチューニングが変わっても再描画せずに溜める。
     var holdsSettingsChanges: Bool {
         get { listStyle.holdsChanges }
         set { listStyle.holdsChanges = newValue }
@@ -639,7 +639,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             return
         }
         reconfigure(Set(dataSource.snapshot().itemIdentifiers))
-        // 区切り線はリストのレイアウトが引くので、描き直しでは変わらない。引き直させる。
+        // 区切り線はリストのレイアウトが引くので、再描画では変わらない。引き直させる。
         invalidateLayoutKeepingPosition()
         onApplySettingsChange?()
     }
@@ -653,14 +653,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 前に描き直したときの、数値以外の見た目の設定。プレビューで、部品を動かすかを決める。
+    /// 前に再描画したときの、数値以外の見た目の設定。プレビューで、部品を動かすかを決める。
     private var previewChoices: AppearanceChoices?
 
     /// プレビューで、余白や大きさを変えたときは、行の中の部品と下の行を新しい位置まで動かして見せる。どこがどう変わったかを目で追えるようにするため。
     /// 文字の大きさは補間できないので、文字は新しい大きさに切り替わり、位置だけが動く。
     /// 数値以外の設定（出すかどうかや表記）を変えたときは動かさない。出していなかった部品は前の位置を持たないため、動かすと、位置0から飛んでくるように見える。
-    /// 差分を当てる描き直し（`dataSource.apply`）は、中で動きを止めて並べ直しまで済ませるので、見えている行は差分を通さずにセルの中身を差し替え、
-    /// 行の大きさと中の部品の並べ直しを動きの中で行う。見えていない行は、動かさずに描き直す。
+    /// 差分を当てる再描画（`dataSource.apply`）は、中で動きを止めて並べ直しまで済ませるので、見えている行は差分を通さずにセルの中身を差し替え、
+    /// 行の大きさと中の部品の並べ直しを動きの中で行う。見えていない行は、動かさずに再描画する。
     private func applyPreviewSettingsChange() {
         let choices = settings.appearance
         let animates = previewChoices == choices && !UIAccessibility.isReduceMotionEnabled
@@ -701,12 +701,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         dataSource.apply(snapshot, animatingDifferences: false)
     }
 
-    /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。読んでいる位置は保つ。
+    /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを再描画する。読んでいる位置は保つ。
     /// 文字が横へずれたり次の行へ移ったりする動きは、ラベルが付ける（`EmojiArrivalTransition`）。
     /// 折り返しが変わって見えている行の高さが変わるときは、下の行ごと動かしてつなぐ（`reconfigureShiftingRowsBelow`）。
-    /// 画面に出ていれば`redraw`で描き直し、出ていなければ画面に出るまで溜める。
-    /// 絵文字とXの投稿のストアは、読めなかったものを読み直してよくなったときにも知らせ、描き直した行が求めると読みに行く。
-    /// 隠れたまま描き直すと、見えていない行の分まで読みに行くため（docs/network.md）。
+    /// 画面に出ていれば`redraw`で再描画し、出ていなければ画面に出るまで溜める。
+    /// 絵文字とXの投稿のストアは、読めなかったものを再読み込みしてよくなったときにも知らせ、再描画した行が求めると読みに行く。
+    /// 隠れたまま再描画すると、見えていない行の分まで読みに行くため（docs/network.md）。
     func reconfigureWhenShown(_ ids: Set<ItemID>, redraw: (Set<ItemID>) -> Void) {
         guard !ids.isEmpty else { return }
         guard viewIfLoaded?.window != nil else {
@@ -725,7 +725,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
         let index = emojiURLIndex ?? makeEmojiURLIndex()
         emojiURLIndex = index
-        // 索引は`entries`から作るので、並びにない行も入る。並びにある行だけを描き直す。
+        // 索引は`entries`から作るので、並びにない行も入る。並びにある行だけを再描画する。
         let ids = Set(urls.flatMap { index[$0] ?? [] }).filter { dataSource.indexPath(for: $0) != nil }
         reconfigureWhenShown(ids) { reconfigureShiftingRowsBelow($0, duration: tuning.value(of: TuningCatalog.customEmojiArrivalDuration)) }
     }
@@ -748,17 +748,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return index
     }
 
-    /// 行の中身を、同じセルのまま動かさずに描き直し、高さが変わって位置がずれた見えている行と区切り線を、元の位置から新しい位置へ動かしてつなぐ。
+    /// 行の中身を、同じセルのまま動かさずに再描画し、高さが変わって位置がずれた見えている行と区切り線を、元の位置から新しい位置へ動かしてつなぐ。
     /// 上端が表示領域の上端より上にある行の高さが、使う人の操作によらず変わるときは、下の行は動かず、動かすものがない（`upwardResizingRow`、docs/vision.mdの「タイムラインの動き」）。
-    /// 押し下げられて表示領域の外へ出る行は、描き直す前に取っておいた像を動かして外へ送る。
+    /// 押し下げられて表示領域の外へ出る行は、再描画する前に取っておいたスナップショットを動かして外へ送る。
     ///
-    /// 動きは、層の位置に足し合わせる形（additive）で付ける。描き直しを続けて重ねても、前の動きの途中の位置から次の動きがつながり、
-    /// スクロールでタイムラインが行の位置を置き直しても、動きは外れない。差分を動きつきで当てる描き直しと違い、タイムラインがセルを入れ替えないので、
+    /// 動きは、層の位置に足し合わせる形（additive）で付ける。再描画を続けて重ねても、前の動きの途中の位置から次の動きがつながり、
+    /// スクロールでタイムラインが行の位置を置き直しても、動きは外れない。差分を動きつきで当てる再描画と違い、タイムラインがセルを入れ替えないので、
     /// セルの中で続いている動き（絵文字が入る文字の動きなど）も止まらない。
     /// 区切り線は、行のセルとは別のビューとしてタイムラインに並ぶため、セルと一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
     /// - Parameter anchorID: 画面上の位置を保つ行。なければ、表示領域の上端にかかっている行を基準にする。
-    /// - Parameter concealsShrink: 縮んだ行の、なくなった部品の場所に、描き直す前の像を見せて、まわりが詰めてくるのに合わせて縮める。縮む中身を自分で動かして消す描き直し（訳文、リアクション）では見せない。
-    /// - Parameter shiftLimit: 描き直した行が伸び縮みする長さの上限。分かっていれば、上下のどちらかの端からタイムラインの外へ出うる行の像だけを取る。像を取るのは重く、押した直後のコマが遅れて、動きの始まりが飛んで見えるため。nilなら、描き直す行より下のすべての行の像を取る。
+    /// - Parameter concealsShrink: 縮んだ行の、なくなった部品の場所に、再描画する前のスナップショットを見せて、まわりが詰めてくるのに合わせて縮める。縮む中身を自分で動かして消す再描画（訳文、リアクション）では見せない。
+    /// - Parameter shiftLimit: 再描画した行が伸び縮みする長さの上限。分かっていれば、上下のどちらかの端からタイムラインの外へ出うる行のスナップショットだけを取る。スナップショットを取るのは重く、選択した直後のコマが遅れて、動きの始まりが飛んで見えるため。nilなら、再描画する行より下のすべての行のスナップショットを取る。
     func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval, shiftLimit: CGFloat? = nil, concealsShrink: Bool = true) {
         guard !ids.isEmpty else { return }
         guard animatesRowShift(duration: duration) else {
@@ -767,7 +767,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         let before = visibleRows(snapshottingBelow: ids, within: shiftLimit)
         let separatorsBefore = visibleSeparators()
-        // 縮むかは描き直すまで分からないので、描き直す行の像は先に取っておく。
+        // 縮むかは再描画するまで分からないので、再描画する行のスナップショットは先に取っておく。
         let resizedBefore = ids.compactMap { id in
             cell(for: id).map { (id: id, height: $0.bounds.height, contentBottom: contentBottom(of: $0), maxY: $0.convert($0.bounds, to: nil).maxY, parts: rowParts(of: $0), snapshot: concealsShrink ? $0.snapshotView(afterScreenUpdates: false) : nil) }
         }
@@ -798,7 +798,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                     moved.append(row.cell)
                 }
             } else if let indexPath = dataSource.indexPath(for: id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame {
-                // 押し下げられて表示領域の外へ出た行は、タイムラインがセルを外すので、描き直す前に取っておいた像を動かして外へ送る。
+                // 押し下げられて表示領域の外へ出た行は、タイムラインがセルを外すので、再描画する前に取っておいたスナップショットを動かして外へ送る。
                 let minY = collectionView.convert(frame, to: nil).minY
                 sendOut(old.snapshot, from: old.minY, to: minY, duration: duration)
             }
@@ -828,10 +828,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 描き直したあとに見えている行の、上端と下端が描き直しで動いた長さ（画面の座標）。
-    /// 描き直す前は表示領域の外にあり、描き直して表示領域に入った行（長い本文を折りたたんで、下の行が上がってきたなど）は、前の位置が分からないので、
-    /// 前から出ていた一番近い行から求める。高さが変わるのは描き直した行だけなので、そのあいだに並ぶ行は、上にある前から出ていた行の下端と同じだけ動いている。
-    /// 上に前から出ていた行がなければ、下にある前から出ていた行の上端に合わせる。あいだに、前の高さの分からない描き直した行があれば求めない。
+    /// 再描画したあとに見えている行の、上端と下端が再描画で動いた長さ（画面の座標）。
+    /// 再描画する前は表示領域の外にあり、再描画して表示領域に入った行（長い本文を折りたたんで、下の行が上がってきたなど）は、前の位置が分からないので、
+    /// 前から出ていた一番近い行から求める。高さが変わるのは再描画した行だけなので、そのあいだに並ぶ行は、上にある前から出ていた行の下端と同じだけ動いている。
+    /// 上に前から出ていた行がなければ、下にある前から出ていた行の上端に合わせる。あいだに、前の高さの分からない再描画した行があれば求めない。
     private func rowEdgeShifts(before: [ItemID: (minY: CGFloat, maxY: CGFloat)], after: [ItemID: (minY: CGFloat, maxY: CGFloat)], resized: Set<ItemID>) -> [ItemID: (top: CGFloat, bottom: CGFloat)] {
         let order = after.keys.compactMap { id in dataSource.indexPath(for: id).map { (id, $0) } }.sorted { $0.1 < $1.1 }.map(\.0)
         var shifts: [ItemID: (top: CGFloat, bottom: CGFloat)] = [:]
@@ -856,7 +856,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return shifts
     }
 
-    /// `reconfigureShiftingRowsBelow`が、`duration`で動かしてつなぐか。動かさないときは、動きなしで描き直す。
+    /// `reconfigureShiftingRowsBelow`が、`duration`で動かしてつなぐか。動かさないときは、動きなしで再描画する。
     private func animatesRowShift(duration: TimeInterval) -> Bool {
         duration > 0 && view.window != nil && !UIAccessibility.isReduceMotionEnabled
     }
@@ -869,14 +869,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 行の中身の部品と、描き直す前の、親の座標での上端、高さ、隠れていたか、行のセルの座標での枠。
+    /// 行の中身の部品と、再描画する前の、親の座標での上端、高さ、隠れていたか、行のセルの座標での枠。
     private typealias RowPart = (view: UIView, minY: CGFloat, height: CGFloat, wasHidden: Bool, frameInCell: CGRect)
 
     /// 行の中身のビューと、その部品。中身が投稿でも通知でもない行ではnil。
     private func rowParts(of cell: UICollectionViewCell) -> (content: UIView, parts: [RowPart])? {
         let content = cell.contentView
         guard let body = (content as? PostContentView)?.postBody ?? (content as? NotificationContentView)?.postBody else { return nil }
-        // 本文が、消えていく部品の代わりにいっとき重ねている像は、本文が自分で薄くして外すので、部品に数えない。数えると、新しく現れた部品として切り抜き、見えていた像が最初のコマで隠れる。
+        // 本文が、消えていく部品の代わりにいっとき重ねているスナップショットは、本文が自分で薄くして外すので、部品に数えない。数えると、新しく現れた部品として切り抜き、見えていたスナップショットが最初のコマで隠れる。
         let transient = body.transientSnapshots
         let views = content.subviews + body.subviews.filter { view in !transient.contains { $0 === view } }
         return (content, views.map { ($0, $0.frame.minY, $0.frame.height, $0.isHidden, $0.convert($0.bounds, to: cell)) })
@@ -886,15 +886,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 行の中の座標で位置が変わった部品は、前の位置から、下の行や区切り線と同じスプリングで動かす。動かさないと、行の下端に付いた部品（アクションバーなど）が一度に移り、
     /// すぐ下の区切り線だけが動いて見える。本文が自分で付ける動き（届いた絵文字、訳文、本文より下の部品）は、そのまま使う。
     ///
-    /// 伸びた部品は、前の高さから切り抜きを広げる。新しく現れた部品（描き直す前は隠れていたか、なかった部品）は、最後の位置に置いたまま切り抜きを広げる。
-    /// 下に前から出ていた部品があれば、切り抜きの下の端をその部品の上の端に合わせて動かす。現れた部品の上の端から広げると、本文の下の部品（画像、Xの投稿の囲みなど）が、下がってくるアクションバーより先に見え、重なる。
+    /// 伸びた部品は、前の高さから切り抜きを広げる。新しく現れた部品（再描画する前は隠れていたか、なかった部品）は、最後の位置に置いたまま切り抜きを広げる。
+    /// 下に前から出ていた部品があれば、切り抜きの下の端をその部品の上の端に合わせて動かす。現れた部品の上の端から広げると、本文の下の部品（画像、Xの投稿のカードなど）が、下がってくるアクションバーより先に見え、重なる。
     /// 切り抜かないと、伸びた分や現れた部品が、動いている途中のまわりの部品に重なる。
     ///
     /// 下端を保って上へ伸び縮みした行（`keepsBottom`）では、中身全体を、伸びた分だけ下から動かす。部品の動きと足し合わさり、変わった箇所より下の部品は差し引きで止まり、上の部品だけが動く。
     /// 新しく現れた部品は、中身全体の動きを打ち消して、下の端から現す。上の部品が上へ退くのに合わせて現れる。
     ///
-    /// 縮んだときは、なくなった部品の場所に、描き直す前の像を見せる。
-    /// - Parameter snapshot: 描き直す前の行の像。
+    /// 縮んだときは、なくなった部品の場所に、再描画する前のスナップショットを見せる。
+    /// - Parameter snapshot: 再描画する前の行のスナップショット。
     private func shiftParts(of cell: UICollectionViewCell, from before: (content: UIView, parts: [RowPart])?, growth: CGFloat, keepsBottom: Bool, snapshot: UIView?, oldHeight: CGFloat, duration: TimeInterval) {
         guard let before, before.content === cell.contentView, abs(growth) > 0.5 else { return }
         // 部品のビューには、現れるときに初めて作られるものがある（リンクカードなど）。前の一覧にないものも、隠れていた部品と同じに扱う。
@@ -931,14 +931,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 上端を保って下へ縮んだ行で、なくなった部品と、縮んだ部品のなくなった下の部分に、描き直す前の像のその部分を見せ、下の部品が上がってくるのに合わせて、下の端から縮める。
-    /// 見せないと、なくなった中身の場所が、下の部品が上がってくるまで空く。行全体の像は見せない。像には、動いている下の部品（アクションバーなど）も写っているので、本物と二重になる。
+    /// 上端を保って下へ縮んだ行で、なくなった部品と、縮んだ部品のなくなった下の部分に、再描画する前のスナップショットのその部分を見せ、下の部品が上がってくるのに合わせて、下の端から縮める。
+    /// 見せないと、なくなった中身の場所が、下の部品が上がってくるまで空く。行全体のスナップショットは見せない。スナップショットには、動いている下の部品（アクションバーなど）も写っているので、本物と二重になる。
     /// 本文を載せた入れ物は扱わない。中の部品がなくなって縮むので、なくなったのは下の部分ではないため。
     private func concealDownwardShrink(of cell: TimelineCell, with snapshot: UIView, parts: [RowPart], oldHeight: CGFloat, shrink: CGFloat, duration: TimeInterval) {
         let areas = parts.compactMap { part -> CGRect? in
             guard !part.wasHidden, part.frameInCell.height > 0.5, !(part.view is PostBodyView) else { return nil }
             if part.view.isHidden { return part.frameInCell }
-            // 出たまま縮んだ本文は、なくなった文字を自分で薄くして消す（`EmojiLabel.prepareTextEdit`）。像を見せると、動いている文字と、像の中の文字が食い違う。
+            // 出たまま縮んだ本文は、なくなった文字を自分で薄くして消す（`EmojiLabel.prepareTextEdit`）。スナップショットを見せると、動いている文字と、スナップショットの中の文字が食い違う。
             guard !(part.view is EmojiLabel) else { return nil }
             let lost = part.frameInCell.height - part.view.bounds.height
             guard lost > 0.5 else { return nil }
@@ -969,7 +969,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         snapshot.layer.mask = mask
     }
 
-    /// 下端を保って上へ縮んだ行で、なくなった部品（描き直す前は出ていて、今は隠れている部品）のあった場所に、描き直す前の像のその部分を見せ、上の中身が下りてくるのに合わせて、上の端から縮める。
+    /// 下端を保って上へ縮んだ行で、なくなった部品（再描画する前は出ていて、今は隠れている部品）のあった場所に、再描画する前のスナップショットのその部分を見せ、上の中身が下りてくるのに合わせて、上の端から縮める。
     /// 見せないと、なくなった部品の場所が、上の中身が下りてくるまで空く。下へ縮むときの`concealDownwardShrink`の、向きを逆にしたもの。
     /// 高さが減っただけの部品は扱わない。どこがなくなったかが分からないため。本文は、なくなった文字を自分で薄くして消す。
     private func concealUpwardShrink(of cell: TimelineCell, with snapshot: UIView, parts: [RowPart], oldHeight: CGFloat, shrink: CGFloat, duration: TimeInterval) {
@@ -977,7 +977,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         guard let first = gone.first else { return }
         let area = gone.dropFirst().reduce(first) { $0.union($1) }
         snapshot.isUserInteractionEnabled = false
-        // 像は、下端を今の行の下端に合わせて置く。行は下端を保って縮んだので、像の中の部品は、描き直す前と同じ画面上の位置に来る。
+        // スナップショットは、下端を今の行の下端に合わせて置く。行は下端を保って縮んだので、スナップショットの中の部品は、再描画する前と同じ画面上の位置に来る。
         snapshot.frame = CGRect(x: 0, y: cell.bounds.height - oldHeight, width: cell.bounds.width, height: oldHeight)
         cell.showShrinkSnapshot(snapshot)
         let mask = CALayer()
@@ -989,7 +989,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         mask.position = CGPoint(x: 0, y: area.maxY)
         CATransaction.commit()
         // 上の中身は、縮んだ分だけ下りてくる。切り抜きの上の端を、その下の端と一緒に動かす。
-        // 切り抜きは、なくなった部品の枠の中から始める。縮んだ分には部品とのすき間も入っているので、縮んだ分から始めると、下りてくる中身の下の端と、像の上の端が重なる。
+        // 切り抜きは、なくなった部品の枠の中から始める。縮んだ分には部品とのgapも入っているので、縮んだ分から始めると、下りてくる中身の下の端と、スナップショットの上の端が重なる。
         let conceal = CASpringAnimation.rowSpring(keyPath: "bounds.size.height", duration: duration)
         conceal.fromValue = min(shrink, area.height)
         conceal.toValue = 0
@@ -1036,7 +1036,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         view.layer.mask = mask
     }
 
-    /// 新しく現れた部品のすぐ下にあり、描き直す前から出ていた部品の上端の、描き直す前と後の位置を、現れた部品の座標で返す。下に出ていた部品がなければnil。
+    /// 新しく現れた部品のすぐ下にあり、再描画する前から出ていた部品の上端の、再描画する前と後の位置を、現れた部品の座標で返す。下に出ていた部品がなければnil。
     /// 下の部品は、前の位置から新しい位置へ動く。現れた部品の切り抜きの下端をその上端に合わせて動かせば、下がってくる部品（アクションバーなど）が、現れた部品に重ならない。
     private func followedEdge(of view: UIView, in cell: UICollectionViewCell, among staying: [RowPart]) -> (from: CGFloat, to: CGFloat)? {
         let frame = view.convert(view.bounds, to: cell)
@@ -1085,7 +1085,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return cell.bounds.height - margin
     }
 
-    /// 行の高さの変化を、下の行ごと動かして描き直している最中。描き直す行の中身に、本文の文字も動かしてよいと伝える。
+    /// 行の高さの変化を、下の行ごと動かして再描画している最中。再描画する行の中身に、本文の文字も動かしてよいと伝える。
     private(set) var isShiftingRows = false
 
     /// 足し合わせる行の動きに付ける名前を、重ねても取り替えないよう分ける。
@@ -1105,8 +1105,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 伸びた行のセルを、下の行の動きと同じスプリングで、前の高さから新しい高さまで切り抜いて見せる。
-    /// 伸びた行の中身は一度に新しい高さで並ぶため、切り抜かないと、不透明なセルの背景と中身が、下がってくる途中の下の行と、押し出される行の像を覆う。
-    /// 像はタイムラインに足すが、タイムラインが並べ直すときにセルを手前へ戻すので、重なり順では避けられない。
+    /// 伸びた行の中身は一度に新しい高さで並ぶため、切り抜かないと、不透明なセルの背景と中身が、下がってくる途中の下の行と、押し出される行のスナップショットを覆う。
+    /// スナップショットはタイムラインに足すが、タイムラインが並べ直すときにセルを手前へ戻すので、重なり順では避けられない。
     /// 伸びている途中にまた伸びたら（広げている途中に絵文字が届いて折り返しが増えたなど）、同じ切り抜きを、今見えている高さから新しい高さへ動かし直す。
     private func revealGrowth(of cell: UICollectionViewCell, from oldHeight: CGFloat, duration: TimeInterval) {
         let newHeight = cell.bounds.height
@@ -1135,7 +1135,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     private static let growthMaskName = "rowGrowth"
 
-    /// 表示領域の外へ出た行の像を、前の位置から新しい位置へ動かしてから外す。
+    /// 表示領域の外へ出た行のスナップショットを、前の位置から新しい位置へ動かしてから外す。
     private func sendOut(_ snapshot: UIView?, from oldMinY: CGFloat, to newMinY: CGFloat, duration: TimeInterval) {
         guard let snapshot, abs(newMinY - oldMinY) > 0.5 else { return }
         snapshot.isUserInteractionEnabled = false
@@ -1143,7 +1143,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let origin = collectionView.convert(CGPoint(x: 0, y: newMinY), from: nil)
         snapshot.frame.origin.y = origin.y
         shiftRow(snapshot.layer, by: newMinY - oldMinY, duration: duration)
-        // 像を動かすスプリングが止まるまで残す。
+        // スナップショットを動かすスプリングが止まるまで残す。
         let remove = CABasicAnimation(keyPath: "opacity")
         remove.fromValue = 1
         remove.toValue = 1
@@ -1152,11 +1152,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         snapshot.layer.add(remove, forKey: "rowShiftEnd")
     }
 
-    /// 見えている行の、画面（ウインドウ）での上端と下端と、表示領域の外へ押し出されたときに動かす像。
+    /// 見えている行の、画面（ウインドウ）での上端と下端と、表示領域の外へ押し出されたときに動かすスナップショット。
     /// 画面の座標で比べるのは、読んでいる位置を保つためにスクロール位置を補正した分を、行の動きに数えないため。
     /// 動きの途中の行も、動きを足す前の位置で測る。前の動きは足し合わせたまま続くので、次の動きはずれた分だけを足せばつながる。
-    /// - Parameter changed: 描き直す行。像は、そのうち一番上の見えている行より下の行だけ取る。行が大きく伸びると、その下の何行もが外へ押し出されるため。
-    /// - Parameter shiftLimit: 行が動く長さの上限。渡すと、その長さだけ上か下へ動いたらタイムラインの外へ出る行の像だけを取る。
+    /// - Parameter changed: 再描画する行。スナップショットは、そのうち一番上の見えている行より下の行だけ取る。行が大きく伸びると、その下の何行もが外へ押し出されるため。
+    /// - Parameter shiftLimit: 行が動く長さの上限。渡すと、その長さだけ上か下へ動いたらタイムラインの外へ出る行のスナップショットだけを取る。
     /// 行が伸びれば下の行は下へ、縮めば上へ動き、どちらの端から出るかは、位置を保つ行がどこにあるかで変わるため、両方の端で決める。
     private func visibleRows(snapshottingBelow changed: Set<ItemID>, within shiftLimit: CGFloat? = nil) -> [ItemID: (cell: UICollectionViewCell, minY: CGFloat, maxY: CGFloat, snapshot: UIView?)] {
         let rows: [(id: ItemID, cell: UICollectionViewCell, frame: CGRect)] = collectionView.visibleCells.compactMap { cell in
@@ -1174,7 +1174,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 押し出された行の像を、動き終えたら外す。
+    /// 押し出された行のスナップショットを、動き終えたら外す。
     @MainActor
     private final class RowShiftCompletion: NSObject, @MainActor CAAnimationDelegate {
         private let handler: () -> Void
@@ -1188,7 +1188,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 通知のアイコンは文字に差し込んでいるため、届いたらその人からの通知を描き直す。投稿のアイコンはビューが自分で受け取る。
+    /// 通知のアイコンは文字に差し込んでいるため、届いたらその人からの通知を再描画する。投稿のアイコンはビューが自分で受け取る。
     private func avatarImageDidLoad(_ key: AvatarImageKey) {
         let ids = dataSource.snapshot().itemIdentifiers.filter { id in
             guard case .notification(let notification) = entries[id] else { return false }
@@ -1197,7 +1197,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigure(Set(ids))
     }
 
-    /// 引用の囲みに出す引用元の本文、注意書き、作者の名前の絵文字も含める。引用元は、囲みと同じく受け取ったあとの変化を当てた版から集める。
+    /// 引用のカードに出す引用元の本文、注意書き、作者の名前の絵文字も含める。引用元は、カードと同じく受け取ったあとの変化を当てた版から集める。
     static func emojiURLs(of status: Status, quoteSources: QuoteSourceChanges, localReactionEmojis: [String: CustomEmoji] = [:], accountEmojis: (Account) -> [CustomEmoji]) -> Set<URL> {
         let shown = status.displayed
         let quoted = quoteSources.applying(to: shown).quote?.quotedStatus.map { $0.emojis + accountEmojis($0.account) } ?? []
@@ -1228,7 +1228,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 内容が変わってセルの高さが変わっても、読んでいる位置が動かないように描き直す。
+    /// 内容が変わってセルの高さが変わっても、読んでいる位置が動かないように再描画する。
     /// - Parameter anchorID: 画面上の位置を保つ要素。なければ、表示領域の上端にかかっている要素にする。
     func reconfigure(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil) {
         guard !ids.isEmpty else { return }
@@ -1237,7 +1237,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         applyPreservingAnchor(snapshot, keeping: anchorID, resizing: ids)
     }
 
-    /// アクションバーの引き出しを開いている投稿。同時に1つだけ開く。タイムラインを閉じるか起動し直すと閉じた状態に戻る（docs/post-action-bar.mdの「引き出し」）。
+    /// アクションバーを開いている投稿。同時に1つだけ開く。タイムラインを閉じるか起動し直すと閉じた状態に戻る（docs/post-action-bar.mdの「開閉」）。
     var openActionBarItemID: ItemID?
     /// 「投稿の見た目」のプレビューで、いつも出す設定でなくてもアクションバーを出す。アクションバーの分類の見本で立てる。
     var showsActionBarInPreview = false
@@ -1248,12 +1248,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。ビューアや全画面のアプリ内のSafariで覆っている間は追従しない。
     /// `topID`を渡すと、その要素を表示領域の上端に置く。既読位置から読み始めるときに使う。
     /// - Parameter keepsOffset: タイムラインの中身を取り替える。要素を基準にせず、スクロール位置をそのまま保つ。
-    ///   プロフィールのタブの切り替えのように、ヘッダーを押した場所に残し、その下の中身だけを入れ替えたいときに使う。
+    ///   プロフィールのタブの切り替えのように、ヘッダーを選択した場所に残し、その下の中身だけを入れ替えたいときに使う。
     ///   新しいタイムラインが短くていまの位置までスクロールできなければ、末尾までスクロールしたところで止める。
     /// - Parameter animatesRemoval: 使う人の操作（フォローリクエストの承認、投稿の削除など）で行を消す。
     ///   操作の結果が分かるよう、消える行を閉じ、下の行を詰める動きで消す。消せないときは、ほかの更新と同じく動かさずに位置を保つ。
     /// - Parameter base: `newEntries`は、この並びに行を足すか除くかしただけで、残る行の中身を変えていない。
-    ///   前回並べた配列と同じものなら、描き直す行を探すために行の中身を比べるのを省く。タイムラインが長いと、比べるだけで重くなるため。
+    ///   前回並べた配列と同じものなら、再描画する行を探すために行の中身を比べるのを省く。タイムラインが長いと、比べるだけで重くなるため。
     func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false, animatesRemoval: Bool = false, keepingRowContentsOf base: [TimelineEntry]? = nil) {
         updateEntries(newEntries, keeping: anchorID, placingAtTop: topID, keepsOffset: keepsOffset, animatesRemoval: animatesRemoval, animatesChanges: false, keepingRowContentsOf: base)
         // 画面を出したときに、まだ並べる投稿がなかったら、並べたときに組んでおく。
@@ -1284,8 +1284,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             return
         }
         let previous = entries
-        // 読み込み中の表示から最初の行を出すときは、表示を薄くしながら行を浮かび上がらせる。
-        // 読み込みが速く、読み込み中の表示を画面に置く前に行が届いたときも、行は浮かび上がらせる。
+        // 読み込み中の表示から最初の行を出すときは、表示を薄くしながら行をフェードインさせる。
+        // 読み込みが速く、読み込み中の表示を画面に置く前に行が届いたときも、行はフェードインさせる。
         let revealsFromLoading = contentState == .loading && headerView == nil && previous.isEmpty && !newEntries.isEmpty
         let loadingSnapshot = revealsFromLoading ? loadingViewSnapshot() : nil
         let keepsRowContents = base.map { Self.sharesStorage($0, appliedEntries) } ?? false
@@ -1308,7 +1308,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         snapshot.appendItems(newIDs)
         // 差分はIDで取られるため、同じIDのまま内容が変わった要素は明示的にセルを再構成する。
         let changedIDs = keepsRowContents ? [] : newEntries.filter { entry in previous[entry.id].map { $0 != quarantined(entry) } ?? false }.map(\.id)
-        // 隣の行が変わって線のつながりだけが変わった行も描き直す。線は行の高さを変えないため、消す動きを止める理由にはしない。
+        // 隣の行が変わって線のつながりだけが変わった行も再描画する。線は行の高さを変えないため、消す動きを止める理由にはしない。
         // 線のない行は前後とも線がないので、線のあった行と、ある行だけを比べる。
         let previousConnections = replyConnections
         replyConnections = ReplyConnection.connections(in: newEntries)
@@ -1324,16 +1324,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         defer {
             if bodyChanged { requestTranslationsAroundVisibleRows() }
         }
-        // 絵文字のリアクションだけが変わった行は、並びを置き換えたあとで、ボタンの出入りと数を動かし、高さが変わる分を下の行ごと動かして描き直す（docs/emoji-reaction.mdの「動き」）。
+        // 絵文字のリアクションだけが変わった行は、並びを置き換えたあとで、ボタンの出入りと数を動かし、高さが変わる分を下の行ごと動かして再描画する（docs/emoji-reaction.mdの「動き」）。
         let reactionChangedIDs = Set(changedIDs.filter { id in
             guard let old = previous[id]?.postStatus, let new = entries[id]?.postStatus else { return false }
             return new.differsOnlyInEmojiReactions(from: old)
         })
-        // リアクションのボタンは、出入りを自分で動かすので、縮む前の像は重ねない。
+        // リアクションのボタンは、出入りを自分で動かすので、縮む前のスナップショットは重ねない。
         defer { reconfigureShiftingRowsBelow(reactionChangedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.reactionTransitionDuration), concealsShrink: false) }
-        // ほかの中身が変わった行（編集、取り直した投稿など）は、高さが変わるものとして、並びを置き換えたあとで、下の行ごと動かして描き直す。
-        // 高さを変えない中身だけが変わった行は、下の行の像を取らずに済むよう、並びと一緒に動かさずに描き直す。
-        // 並びも変わるときは、行の出入りと高さの変化が重なり、位置を保つ基準が並びの置き換えと描き直しとで変わるので、並びと一緒に動かさずに描き直す。
+        // ほかの中身が変わった行（編集、取り直した投稿など）は、高さが変わるものとして、並びを置き換えたあとで、下の行ごと動かして再描画する。
+        // 高さを変えない中身だけが変わった行は、下の行のスナップショットを取らずに済むよう、並びと一緒に動かさずに再描画する。
+        // 並びも変わるときは、行の出入りと高さの変化が重なり、位置を保つ基準が並びの置き換えと再描画とで変わるので、並びと一緒に動かさずに再描画する。
         let keepsOrder = dataSource.snapshot().itemIdentifiers == newIDs
         let resizedIDs = !keepsOrder ? [] : Set(changedIDs.filter { id in
             guard let old = previous[id]?.postStatus, let new = entries[id]?.postStatus else { return true }
@@ -1341,7 +1341,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }).subtracting(reactionChangedIDs)
         defer {
             reconfigureShiftingRowsBelow(resizedIDs, keeping: anchorID, duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
-            // 取り直す投稿は、行に出している中身から決める。下の`reportVisibleItems`は、ここで描き直す前の中身を読むので、描き直したあとに報告し直す。
+            // 取り直す投稿は、行に出している中身から決める。下の`reportVisibleItems`は、ここで再描画する前の中身を読むので、再描画したあとに報告し直す。
             // 報告し直さないと、編集でリンクが足された投稿のカードを、次にスクロールするまで取り直さない。
             if !resizedIDs.isEmpty {
                 reportVisibleItems()
@@ -1352,7 +1352,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: true) }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesRemoval=true")
         } else if animatesChanges, !revealsFromLoading, view.window != nil, !UIAccessibility.isReduceMotionEnabled {
-            // 読み込み中の表示から最初の行を出すときは、下で行を浮かび上がらせるので、ここでは動かさない。
+            // 読み込み中の表示から最初の行を出すときは、下で行をフェードインさせるので、ここでは動かさない。
             FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: true) }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesChanges=true")
         } else if let topID {
@@ -1372,7 +1372,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             isRestoringAnchor = false
             logger.info("setEntries count=\(newEntries.count, privacy: .public) keepsOffset=true")
         } else if followsTop {
-            // 最初に並べるときは、行が浮かび上がって見えないよう、アニメーションしない。
+            // 最初に並べるときは、行がフェードインして見えないよう、アニメーションしない。
             let animates = !previous.isEmpty && settings.insertionMotion.animates(reducesMotion: UIAccessibility.isReduceMotionEnabled)
             if animates {
                 // 行はアニメーションなしで足し、いままで最上部にあった行を同じ位置に残す。足した行の高さぶん下にずれた位置から、
@@ -1393,7 +1393,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             let offsetBefore = collectionView.contentOffset.y
             let heightBefore = collectionView.contentSize.height
             let phase = scrollPhase
-            // このあと下の行ごと動かして描き直す行も、高さが変わるので、位置を保つ基準にしない。
+            // このあと下の行ごと動かして再描画する行も、高さが変わるので、位置を保つ基準にしない。
             let anchor = applyPreservingAnchor(snapshot, keeping: anchorID, resizing: Set(snapshot.reconfiguredItemIdentifiers).union(resizedIDs).union(reactionChangedIDs))
             let kept = anchor.flatMap { distanceFromVisibleTop(of: $0.id) }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) anchor=\(anchor.map { Self.label($0.id) } ?? "nil", privacy: .public) requested=\(anchorID.map(Self.label) ?? "nil", privacy: .public) distance=\(Self.number(anchor?.distanceFromVisibleTop), privacy: .public)→\(Self.number(kept), privacy: .public) offset=\(Self.number(offsetBefore), privacy: .public)→\(Self.number(self.collectionView.contentOffset.y), privacy: .public) contentHeight=\(Self.number(heightBefore), privacy: .public)→\(Self.number(self.collectionView.contentSize.height), privacy: .public) restoreSteps=\(self.lastRestore.steps, privacy: .public) settled=\(self.lastRestore.settled, privacy: .public) scroll=\(phase, privacy: .public)")
@@ -1413,7 +1413,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         updateNewArrivalsButtonArrow()
     }
 
-    /// 全面に出している読み込み中の表示の像を、同じ位置に重ねて返す。表示を外したあとも、薄くし終えるまで残すため。
+    /// 全面に出している読み込み中の表示のスナップショットを、同じ位置に重ねて返す。表示を外したあとも、薄くし終えるまで残すため。
     private func loadingViewSnapshot() -> UIView? {
         let duration = tuning.value(of: TuningCatalog.accountSwitchDuration)
         guard duration > 0, view.window != nil, contentUnavailableConfiguration != nil,
@@ -1426,7 +1426,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return snapshot
     }
 
-    /// 読み込み中の表示を外して最初の行を出したとき、表示の像を薄くし、見えている行を浮かび上がらせる。1コマで入れ替えないため。
+    /// 読み込み中の表示を外して最初の行を出したとき、表示のスナップショットを薄くし、見えている行をフェードインさせる。1コマで入れ替えないため。
     /// アカウントを切り替えたときと起動したときの、最初の読み込みで通る。
     private func revealFirstEntries(over loadingSnapshot: UIView?) {
         let duration = tuning.value(of: TuningCatalog.accountSwitchDuration)
@@ -1498,7 +1498,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// スクロールしている、またはまとめて行う操作のために投稿を選んでいる。モデルが新着を挿入するのは、これが終わってからにする。
-    /// 選んでいる間に新着で行がずれると、押そうとした行を押し損なうため。
+    /// 選んでいる間に新着で行がずれると、選択しようとした行を選択し損なうため。
     /// コンテキストメニューを出している間は含めない。新着は、追従せずに位置を保って、すぐ上に積む。
     var isUserInteracting: Bool {
         isUserScrolling || isSelectingPosts
@@ -1522,7 +1522,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let animatesChanges: Bool
     }
 
-    /// コンテキストメニューを出した。出している間は、最上部にいても新着に追従しない。新着を含む並びの更新と描き直しは、読んでいる行の位置を保って、すぐ反映する。
+    /// コンテキストメニューを出した。出している間は、最上部にいても新着に追従しない。新着を含む並びの更新と再描画は、読んでいる行の位置を保って、すぐ反映する。
     /// 最上部で出している間に新着が入ると、上に積まれて最上部ではなくなるので、閉じたあとも追従には戻らず、新着のボタンで出す。
     func menuWillShow() {
         isShowingMenu = true
@@ -1575,13 +1575,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// スクロールの操作が終わったことを知らせる。溜めていた新着の挿入と、既読の位置の保存はここから始まる。
-    /// 投稿を選んでいる間は知らせず、選び終えたときに知らせる。選んでいる間に新着が入ると、押そうとした行がずれるため。
+    /// 投稿を選んでいる間は知らせず、選び終えたときに知らせる。選んでいる間に新着が入ると、選択しようとした行がずれるため。
     func reportInteractionSettled() {
         guard !isSelectingPosts else { return }
         onInteractionSettle?()
     }
 
-    /// `setUnreadCount`を呼んだ回数。新着ボタンを描き直す前の並べ直しの中から呼ばれたかを見分ける。
+    /// `setUnreadCount`を呼んだ回数。新着ボタンを再描画する前の並べ直しの中から呼ばれたかを見分ける。
     private var unreadCountUpdates = 0
 
     /// 既読より新しい投稿の数。0なら新着ボタンを隠す。
@@ -1649,7 +1649,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 使う人の操作で最上部へ動かしている間は隠す。
     /// 新着に追従して最上部へ動かしている間は、出し入れを変えない。隠れていれば、新着が画面に入るまでの間だけ出てしまうため隠したままにし、
     /// 出ていれば（ウィンドウが前面にない間など、追従した新着が未読に残るとき）、件数が変わるだけなので、消して出し直さない。
-    /// 出し入れは濃さで動かす。消え終えてから隠すので、消える途中にまた出すときは、見えている濃さから戻す。
+    /// 出し入れは不透明度で動かす。消え終えてから隠すので、消える途中にまた出すときは、見えている不透明度から戻す。
     private func updateNewArrivalsButtonVisibility() {
         let hidesWhileScrolling = isScrollingToTop && (isScrollingToNewestByUser || !newArrivalsButtonShown)
         let isShown = unreadCount > 0 && !hidesWhileScrolling
@@ -1685,7 +1685,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     // MARK: アプリ内通知
 
-    /// 押し直せば済む失敗を、チップの列に数秒出す。決まりはdocs/notices.mdの「置き場所」にある。
+    /// 選択し直せば済む失敗を、チップの列に数秒出す。決まりはdocs/notices.mdの「置き場所」にある。
     func showNotice(_ notice: Notice) {
         showNotice(notice, duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration))
     }
@@ -1738,7 +1738,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             configuration.secondaryAttributedText = message.attributedText(textStyle: .body)
             return configuration
         case .unavailable:
-            // 読み直しても読めないので、再試行のボタンは置かない。
+            // 再読み込みしても読めないので、再試行のボタンは置かない。
             var configuration = UIContentUnavailableConfiguration.empty()
             configuration.text = texts.unavailable
             return configuration
@@ -1853,7 +1853,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             UserAction.tapNewArrivals(screen: texts.dumpName).record()
         })
         // Macでウインドウが前面にない間は、色付きの下地が淡い灰色に変わる。白い文字のままでは読めないため、文字を下地に合わせる。
-        // 色は動的な色で渡さず、前面かどうかが変わったところで決め直す。Macでは、ボタンが色を解決するtintの知らせが、
+        // 色は動的な色で渡さず、前面かどうかが変わったところで決め直す。Macでは、ボタンが色を解決するtintの変化のコールバックが、
         // 前面かどうかの変化より先に届くため、動的な色では1回前の状態の色が残り、青い下地に黒い文字になる（issue #1と同じずれ）。
         button.configurationUpdateHandler = { button in
             (button as? TintFollowingButton)?.appliesGlassAccent()
@@ -1931,7 +1931,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// スレッドでは、押した投稿を表示領域の上端まで上げられるだけの余白を、タイムラインの下に足す。
+    /// スレッドでは、選択した投稿を表示領域の上端まで上げられるだけの余白を、タイムラインの下に足す。
     /// 投稿欄のカプセルなどが下端を覆う分は、ナビゲーションがsafe areaに入れるので、ここでは足さない。
     /// 投稿を選んでいる間は、投稿欄がカプセルを隠して覆う高さを0と知らせるので、ここで分けない。
     /// スレッドでは並べ直すたびに測り直すので、アクションバーの開閉、注意書きの開閉、長い本文の展開などの経路ごとには呼ばない。
@@ -1943,7 +1943,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.contentInset.bottom = fill
     }
 
-    /// 押した投稿から下の行が表示領域の高さに足りない分。足りないと、押した投稿を押した位置に置いたままにできず、タイムラインが端まで戻ってしまうため。
+    /// 選択した投稿から下の行が表示領域の高さに足りない分。足りないと、選択した投稿を選択した位置に置いたままにできず、タイムラインが端まで戻ってしまうため。
     private func threadFocusBottomFill(layingOut: Bool) -> CGFloat {
         guard let threadFocusID, let indexPath = dataSource.indexPath(for: .status(threadFocusID)) else { return 0 }
         if layingOut {
@@ -2086,7 +2086,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         recognizer.onRelease = { [weak self] in
             guard let self, springScrollTicker == nil else { return }
             springScrollInterruption.isEnabled = false
-            // 止めた指をドラッグせずに離すと、スクロールの止まりの知らせが来ないので、ここで知らせる。ドラッグしたなら、その止まりの知らせに任せる。
+            // 止めた指をドラッグせずに離すと、スクロールが止まったコールバックが来ないので、ここで知らせる。ドラッグしたなら、そのコールバックに任せる。
             guard !isUserScrolling else { return }
             reportInteractionSettled()
         }
@@ -2138,7 +2138,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         prefetchMediaIfSettled(among: ids)
     }
 
-    /// スクロールが止まっていれば、`ids`の行に出ている画像を先読みする（docs/image-loading.mdの「ビューアで開く画像のプリフェッチ」）。
+    /// スクロールが止まっていれば、`ids`の行に出ている画像をプリフェッチする（docs/image-loading.mdの「ビューアで開く画像のプリフェッチ」）。
     /// 動いている間は止め、流し見で通り過ぎた投稿を読まない。止まったときに差し替え、画面から外れた画像の読み込みを止める。
     private func prefetchMediaIfSettled(among ids: [ItemID]) {
         guard let mediaPrefetcher else { return }
@@ -2310,7 +2310,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             // システムのリストの部品で組む行。投稿や人の行と揃えるため、文字の列から引く。
             return textColumn
         case .gap, .unreadable:
-            // システムのリストの部品で組む行。任せると、すき間の行は行の余白から、読めなかった投稿の行は記号の右の文字から引き、右端も手前で止まって投稿の行の線と揃わないため、文字の列から引く。
+            // システムのリストの部品で組む行。任せると、ギャップの行は行の余白から、読めなかった投稿の行は記号の右の文字から引き、右端も手前で止まって投稿の行の線と揃わないため、文字の列から引く。
             return textColumn
         }
     }
@@ -2358,7 +2358,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             guard let self, let entry = self.entries[id] else { return }
             // 別の行を出し始めたセルは、中身を動きの外で並べる。Macでウインドウの幅を変えたときのように、タイムラインが動きの中で並べ直すと、
             // 初めて画面に入った行の写真やボタンまで動きに乗り、大きさ0の左上から滑ってきて見えるため。
-            // 同じ行の描き直し（リンクカードが届いたときなど）は、これまでどおり呼んだ側の動きに任せる。
+            // 同じ行の再描画（リンクカードが届いたときなど）は、これまでどおり呼んだ側の動きに任せる。
             let startsNewRow = cell.itemID != id
             cell.itemID = id
             cell.crashGuard = self.crashGuard
@@ -2442,7 +2442,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             content.text = SearchScreenTexts.showAll
             content.textProperties.color = .tintColor
         case .failed(_, let failure):
-            // 押すと読み込み直すため、押せることを色で示す。理由は下に小さく添える。
+            // 選択すると再読み込みするため、選択できることを色で示す。理由は下に小さく添える。
             content.text = TimelineScreenTexts.loadFailureTapToRetry
             content.textProperties.color = .tintColor
             content.secondaryAttributedText = failure.attributedText(textStyle: .footnote)
@@ -2483,7 +2483,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             content.text = TimelineScreenTexts.loading
             content.textProperties.color = .secondaryLabel
         } else if let failure {
-            // 押すと読み込み直すため、押せることを色で示す。理由は下に小さく添える。
+            // 選択すると再読み込みするため、選択できることを色で示す。理由は下に小さく添える。
             content.text = TimelineScreenTexts.loadFailureTapToRetry
             content.textProperties.color = .tintColor
             content.secondaryAttributedText = failure.attributedText(textStyle: .footnote)
@@ -2564,7 +2564,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 画面に出ている行の前と後ろそれぞれで、本文を先に作る行の数。
     private static let preparedBodyRows = 12
-    /// 見本の描き直しを動かす長さ。SwiftUIの`.smooth`の既定の長さと同じ。
+    /// 見本の再描画を動かす長さ。SwiftUIの`.smooth`の既定の長さと同じ。
     private static let smoothDuration: TimeInterval = 0.5
 
     /// - Parameters:
@@ -2576,7 +2576,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let appearance = appearance(for: status)
         let builder = postContentBuilder(for: status)
         let connection = itemID.flatMap { replyConnections[$0] } ?? ReplyConnection()
-        // スレッドで押した投稿は、開いた時点では返信先がまだ並んでおらずラベルを出しているため、返信先が並んでもラベルを残す。
+        // スレッドで選択した投稿は、開いた時点では返信先がまだ並んでおらずラベルを出しているため、返信先が並んでもラベルを残す。
         // 消すと、読み終えた瞬間に名前と本文がラベルの1行分だけ上へ跳ねる。
         let hidesReplyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove && shown.id != threadFocusID
         let replyLabel = hidesReplyLabel ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
@@ -2718,7 +2718,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
     #endif
 
-    /// プレビューの見本で、本文やリンクカードのリンクを押す操作だけを残す。見本の写真のクレジットのリンクを開けるようにするため。
+    /// プレビューの見本で、本文やリンクカードのリンクを選択する操作だけを残す。見本の写真のクレジットのリンクを開けるようにするため。
     /// ほかの操作（サムネイル、投票、注意書きの開閉、名前やアイコンなど）は、見本を変えたり別の画面を開いたりするので外す。
     static func keepingOnlyLinks(_ configuration: PostContentConfiguration) -> PostContentConfiguration {
         var kept = configuration
@@ -2736,10 +2736,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         kept.onPollAction = nil
         kept.onToggleReaction = nil
         kept.reactionTarget = nil
-        // アクションバーのボタンは、見本では押しても何もしない。
+        // アクションバーのボタンは、見本では選択しても何もしない。
         kept.onActionBarPress = nil
         kept.actionBarLongPressTarget = nil
-        // 「＋」は渡すかどうかで出すかが決まるので、出すものは押しても何もしない処理にして残す。
+        // 「＋」は渡すかどうかで出すかが決まるので、出すものは選択しても何もしない処理にして残す。
         kept.onAddReaction = configuration.onAddReaction.map { _ in {} }
         kept.embedActions = EmbedActions(openLink: configuration.embedActions.openLink)
         // リンクのタップと長押しの設定によらず、タップで開く。
@@ -2752,7 +2752,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         !isAppearancePreview && entry.operatedPost != nil
     }
 
-    /// 投稿にアクションバーを出すか。いつも出す設定か、引き出しを開いている投稿で出す。
+    /// 投稿にアクションバーを出すか。いつも出す設定か、アクションバーを開いている投稿で出す。
     /// 「投稿の見た目」のプレビューと、アイテムのIDを渡さずに組む見本では、いつも出す設定のときだけ出す。見本の投稿はタイムラインのアイテムとして並ばないため、アイテムのIDでは決めない。
     func showsActionBar(itemID: ItemID?, shown: Status) -> Bool {
         guard !isAppearancePreview, let itemID else { return settings.appearance.showsActionBar || showsActionBarInPreview }
@@ -2760,8 +2760,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return appearance(for: shown).showsActionBar || openActionBarItemID == itemID
     }
 
-    /// アクションバーの中身。押せない項目は、メニューと同じ組み方で決めて薄く描く。
-    /// 組むだけで通信しない投稿のメニューの木で決める。メニューを出すときと違い、メニューに出る人の関係は読み直さず、カスタム絵文字の画像も読まない。
+    /// アクションバーの中身。無効の項目は、メニューと同じ組み方で決めて薄く描く。
+    /// 組むだけで通信しない投稿のメニューのツリーで決める。メニューを出すときと違い、メニューに出る人の関係は再読み込みせず、カスタム絵文字の画像も読まない。
     /// - Parameter canSelectText: これから置く本文を選べるか。投稿のセルはまだこの中身を置いていないので、置いてある本文からは決めない。
     private func actionBarContent(for status: Status, itemID: ItemID?, countFont: UIFont, canSelectText: Bool) -> PostActionBarContent {
         let shown = status.displayed
@@ -2775,8 +2775,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 項目を出せるかや今の名前を決めるための、投稿のメニューの木。アクションバーのボタンと投稿のスワイプのボタンで使う。
-    /// 組むだけで通信しない。メニューを出すときと違い、メニューに出る人の関係は読み直さず、カスタム絵文字の画像も読まない。
+    /// 項目を出せるかや今の名前を決めるための、投稿のメニューのツリー。アクションバーのボタンと投稿のスワイプのボタンで使う。
+    /// 組むだけで通信しない。メニューを出すときと違い、メニューに出る人の関係は再読み込みせず、カスタム絵文字の画像も読まない。
     func offlineStatusMenuTree(for status: Status, id: ItemID, canSelectText: Bool) -> StatusMenuTree {
         let notification: MastodonNotification? = if case .notification(let notification) = entry(for: id) { notification } else { nil }
         var tree = statusMenuTree(status: status, notification: notification, id: id, canSelectText: canSelectText)
@@ -2788,14 +2788,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 中身を置いたときに、本文を「テキストを選択」で選べるか。本文があり、注意書きで折りたたんでいないときに選べる。
-    /// 長い本文を切るかは、並べた幅で決まるので、ここでは分からない。切った本文では、押すと選べないことをチップで知らせる（docs/object-actions.mdの「項目を行う」）。
-    /// 切ったかを並べたあとに読んでボタンを描き直すには、投稿を組み直す経路が要り、それに見合わないため、切る本文でも押せる色で描く。
+    /// 長い本文を切るかは、並べた幅で決まるので、ここでは分からない。切った本文では、選択すると選べないことをチップで知らせる（docs/object-actions.mdの「項目を行う」）。
+    /// 切ったかを並べたあとに読んでボタンを再描画するには、投稿を組み直す経路が要り、それに見合わないため、切る本文でも有効の色で描く。
     private static func showsSelectableBody(_ configuration: PostContentConfiguration) -> Bool {
         configuration.filterWarning?.isCollapsed != true && configuration.spoiler?.isCollapsed != true && !configuration.body.string.allSatisfy(\.isWhitespace)
     }
 
-    /// 投稿の下のアクションバーの引き出しを開閉する。開いている投稿で押せば閉じ、別の投稿で開けば前の投稿のアクションバーは閉じる。
-    /// 押した投稿の画面上の位置を保ち、まわりのアイテムごと動かしてつなぐ（docs/vision.mdの「タイムラインの動き」）。
+    /// 投稿の下のアクションバーを開閉する。開いている投稿で選択すれば閉じ、別の投稿で開けば前の投稿のアクションバーは閉じる。
+    /// 選択した投稿の画面上の位置を保ち、まわりのアイテムごと動かしてつなぐ（docs/vision.mdの「タイムラインの動き」）。
     /// その投稿にアクションバーがいつも出ているとき（いつも出す設定か、すべての部品を見せるスレッドの中心の投稿）は、何もせず、nilを返す。
     /// - Returns: 開閉したら、動きが着くまでの時間（スプリングの知覚上の長さ）。動かさずに開閉したら0。
     @discardableResult
@@ -2812,11 +2812,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return animatesRowShift(duration: duration) ? duration : 0
     }
 
-    /// 引き出しのアクションバーを、初めて開く前に1つ組んでおいたか。
+    /// 開閉するアクションバーを、初めて開く前に1つ組んでおいたか。
     private var hasPreparedActionBar = false
 
     /// タップか長押しかスワイプに「アクションバーを開く」を割り当てていれば、タイムラインを出したあとに、見えている投稿のアクションバーを1つ組んで捨てる。
-    /// 起動して初めて開くときは、アクションバーの部品と記号の画像を初めて作り、投稿のメニューの木も初めて組むので、押してから最初のコマまでが2回目より大きく遅れ、
+    /// 起動して初めて開くときは、アクションバーの部品と記号の画像を初めて作り、投稿のメニューのツリーも初めて組むので、選択してから最初のコマまでが2回目より大きく遅れ、
     /// 動き始めのコマが飛んで見えた（シミュレーターで、初めては73ミリ秒、2回目は6ミリ秒）。先に組んでおけば、初めて開くときも2回目と同じになる。
     /// いつも出す設定では、投稿を組むときにアクションバーも組むので、ここでは組まない。
     private func prepareActionBarIfNeeded() {
@@ -2846,7 +2846,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// アクションバーを開閉して投稿が伸び縮みする長さの上限。本文とのあいだ、上下の余白、アイコンの大きさから、件数の文字の高さを見込んで大きめに決める。
-    /// タイムラインの外へ出うるアイテムの像を取るのに使う。少なく見込むと、外へ出るアイテムが像なしで一度に消えるため、大きめにする。
+    /// タイムラインの外へ出うるアイテムのスナップショットを取るのに使う。少なく見込むと、外へ出るアイテムがスナップショットなしで一度に消えるため、大きめにする。
     private var actionBarHeightUpperBound: CGFloat {
         let icon = settings.value(of: AppearanceCatalog.actionBarIconSize)
         let lineHeight = max(icon * 2, PostTypography(settings: settings).font(.time).lineHeight * 2)
@@ -2881,7 +2881,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// アクションバーを現す切り抜きの動きの名前。
     static let actionBarRevealName = "actionBarReveal"
 
-    /// 縮む前の像を縮める切り抜きの動きの名前。
+    /// 縮む前のスナップショットを縮める切り抜きの動きの名前。
     static let shrinkName = "rowShrink"
 
     /// 長い本文を切る行数。「投稿の見た目」の値で決める。
@@ -2892,9 +2892,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         )
     }
 
-    /// 切った本文を「続きを読む」で広げる。同じ投稿を出している行（ブースト、通知、引用の囲み）もまとめて描き直す。
-    /// 広げる行は上端を動かさずに下へ伸びるので、行の位置を保って描き直し、下の行を元の位置から動かしてつなぐ。
-    /// - Parameter anchorID: 押した行。同じ投稿の行が上にも並んでいると、その行も伸びるため、押した行の画面上の位置を保つ。
+    /// 切った本文を「続きを読む」で広げる。同じ投稿を出している行（ブースト、通知、引用のカード）もまとめて再描画する。
+    /// 広げる行は上端を動かさずに下へ伸びるので、行の位置を保って再描画し、下の行を元の位置から動かしてつなぐ。
+    /// - Parameter anchorID: 選択した行。同じ投稿の行が上にも並んでいると、その行も伸びるため、選択した行の画面上の位置を保つ。
     func expandBody(_ key: LongBodyExpansion.Key, keeping anchorID: ItemID? = nil) {
         longBodyExpansion.expand(key)
         onChangeLongBodyExpansion?(longBodyExpansion, key)
@@ -2902,10 +2902,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigureShiftingRowsBelow(Set(itemIDs(expanding: key)), keeping: operatedAnchor(anchorID), duration: tuning.value(of: TuningCatalog.longBodyExpandDuration))
     }
 
-    /// ほかのタイムラインで広げた本文を、このタイムラインにもそろえる。使う人がこのタイムラインで行った操作ではないので、動かさずに描き直し、読んでいる行の位置を保つ。
+    /// ほかのタイムラインで広げた本文を、このタイムラインにもそろえる。使う人がこのタイムラインで行った操作ではないので、動かさずに再描画し、読んでいる行の位置を保つ。
     func applyLongBodyExpansion(_ expansion: LongBodyExpansion, changed key: LongBodyExpansion.Key) {
         longBodyExpansion = expansion
-        // まだ開いていない画面は、開いたときにこの状態で描く。描き直しのために画面を読み込ませない。
+        // まだ開いていない画面は、開いたときにこの状態で描く。再描画のために画面を読み込ませない。
         guard isViewLoaded else { return }
         reconfigure(Set(itemIDs(expanding: key)))
     }
@@ -2921,11 +2921,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 注意書きかフィルターの警告を開閉する。同じ投稿をブーストした行と通知の行もまとめて描き直す。
-    /// 行の高さが変わるため、押した行の画面上の位置を保つ。同じ投稿の行が上にも並んでいると、その行も伸び縮みするため、
-    /// 表示領域の上端の行を基準にすると、押した行がずれる。
-    /// - Parameter kind: 押したボックス。
-    /// - Parameter anchorID: 押した行。なければ、表示領域の上端にかかっている行を基準にする。
+    /// 注意書きかフィルターの警告を開閉する。同じ投稿をブーストした行と通知の行もまとめて再描画する。
+    /// 行の高さが変わるため、選択した行の画面上の位置を保つ。同じ投稿の行が上にも並んでいると、その行も伸び縮みするため、
+    /// 表示領域の上端の行を基準にすると、選択した行がずれる。
+    /// - Parameter kind: 選択したボックス。
+    /// - Parameter anchorID: 選択した行。なければ、表示領域の上端にかかっている行を基準にする。
     func toggleSpoiler(_ kind: PostBodyContent.Spoiler.Kind = .contentWarning, of status: Status, keeping anchorID: ItemID? = nil) {
         switch kind {
         case .contentWarning: spoilerExpansion.toggle(status)
@@ -2935,13 +2935,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigureShiftingRowsBelow(Set(itemIDs(showing: status)), keeping: operatedAnchor(anchorID), duration: tuning.value(of: TuningCatalog.longBodyExpandDuration))
     }
 
-    /// 使う人の操作で行を描き直すときに、位置を保つ行。押した行が渡されなければ、表示領域の上端にかかっている行にする。
-    /// 基準を渡さずに描き直すと、使う人の操作によらない変化として、上端が表示領域より上にある行を上へ伸ばす（`upwardResizingRow`）。
+    /// 使う人の操作で行を再描画するときに、位置を保つ行。選択した行が渡されなければ、表示領域の上端にかかっている行にする。
+    /// 基準を渡さずに再描画すると、使う人の操作によらない変化として、上端が表示領域より上にある行を上へ伸ばす（`upwardResizingRow`）。
     func operatedAnchor(_ anchorID: ItemID?) -> ItemID? {
         anchorID ?? currentAnchor()?.id
     }
 
-    /// `status`を出している行。ブーストした行、通知の行と、引用の囲みに出している行も含める。
+    /// `status`を出している行。ブーストした行、通知の行と、引用のカードに出している行も含める。
     func itemIDs(showing status: Status) -> [ItemID] {
         let shownID = status.displayed.id
         return displayedItemIDs.filter { id in
@@ -3015,7 +3015,7 @@ extension TimelineViewController: UICollectionViewDelegate {
     }
 
     /// 下端の覆われた部分はsafe areaから外れ、表示領域が変わるので、そこに隠れた要素を表示中として報告しないよう、報告し直す。
-    /// safe areaが変わった知らせの時点では、タイムラインの余白はまだ変わっていないため、ここで報告する。
+    /// safe areaが変わったコールバックの時点では、タイムラインの余白はまだ変わっていないため、ここで報告する。
     func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
         guard scrollView.adjustedContentInset.bottom != reportedBottomInset else { return }
         reportedBottomInset = scrollView.adjustedContentInset.bottom
@@ -3136,7 +3136,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
               let menu = contextMenu(for: entry, id: id)
         else { return nil }
-        // 指の位置にメニューを出せるよう、押した場所をidentifierに持たせる。
+        // 指の位置にメニューを出せるよう、選択した場所をidentifierに持たせる。
         return UIContextMenuConfiguration(identifier: NSValue(cgPoint: point), previewProvider: nil) { _ in menu }
     }
 
@@ -3171,14 +3171,14 @@ extension TimelineViewController: UICollectionViewDelegate {
         case (.gap, _): true
         case (_, .unreadable(let item)): item.url != nil || item.isCrashQuarantined
         case (_, .search(let row)): !row.isHeading
-        // 投稿、通知、人のリストの行は、タップに選んだ操作を行う。既定の操作が行えない行（スレッドの中心の投稿、投稿のない通知）は、今どおり押せないままにする。
+        // 投稿、通知、人のリストの行は、タップに選んだ操作を行う。既定の操作が行えない行（スレッドの中心の投稿、投稿のない通知）は、今どおり選択できないままにする。
         case (_, .status), (_, .pinned), (_, .notification), (_, .account), (_, .notificationRequest): rowTarget(at: indexPath)?.acceptsTap ?? false
         default: false
         }
     }
 
     func collectionView(_ collectionView: UICollectionView, shouldHighlightItemAt indexPath: IndexPath) -> Bool {
-        // 本文を選んでいる間は、どの行のタップでも選ぶのをやめられるよう、押せない行でも選ぶ処理まで進める。
+        // 本文を選んでいる間は、どの行のタップでも選ぶのをやめられるよう、選択できない行でも選ぶ処理まで進める。
         if isSelectingText { return true }
         return self.collectionView(collectionView, shouldSelectItemAt: indexPath)
     }
@@ -3187,7 +3187,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         textSelectionBody?.isSelectingText == true
     }
 
-    /// `id`の行に出している本文のうち、「テキストを選択」で選べるもの。行が画面にないとき、別の投稿（引用の囲みなど）のメニューのとき、選べないときはnil。
+    /// `id`の行に出している本文のうち、「テキストを選択」で選べるもの。行が画面にないとき、別の投稿（引用のカードなど）のメニューのとき、選べないときはnil。
     func selectableBody(for id: ItemID, statusID: Status.ID) -> PostBodyView? {
         guard let indexPath = dataSource.indexPath(for: id), let contentView = collectionView.cellForItem(at: indexPath)?.contentView else { return nil }
         let body = (contentView as? PostContentView)?.postBody ?? (contentView as? NotificationContentView)?.postBody
@@ -3410,13 +3410,13 @@ extension TimelineViewController {
         }
     }
 
-    /// 画面に出るときに、`id`の行の上端を、ウインドウの`windowY`の高さに置く。スレッドを、押した行をタイムラインで見えていた位置に置いて開くのに使う。
-    /// 画面に出るまでは、安全領域とバーの高さが分からないため、出るときに置く。
+    /// 画面に出るときに、`id`の行の上端を、ウインドウの`windowY`の高さに置く。スレッドを、選択した行をタイムラインで見えていた位置に置いて開くのに使う。
+    /// 画面に出るまでは、セーフエリアとバーの高さが分からないため、出るときに置く。
     func placeOnAppearing(_ id: ItemID, atWindowY windowY: CGFloat) {
         pendingOpening = (id, windowY)
     }
 
-    /// 開いた時点では押した行の上に並ぶ行がないため、上の余白を足して、押した行を押した位置まで下げる。
+    /// 開いた時点では選択した行の上に並ぶ行がないため、上の余白を足して、選択した行を選択した位置まで下げる。
     private func applyPendingOpening() {
         guard let opening = pendingOpening, let window = view.window else { return }
         pendingOpening = nil
@@ -3424,14 +3424,14 @@ extension TimelineViewController {
         guard let indexPath = dataSource.indexPath(for: opening.id),
               var frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
         else { return }
-        // 押した行と同じく、ブーストした人や返信先の行を除いた投稿の中身の上端を、押した位置に合わせる。
+        // 選択した行と同じく、ブーストした人や返信先の行を除いた投稿の中身の上端を、選択した位置に合わせる。
         // タイムラインではブーストの行でも、スレッドではブーストした人の行がないため、行の上端で合わせると中身が1行分ずれて重なって見える。
         if let cell = collectionView.cellForItem(at: indexPath) {
             frame.origin.y += Self.contextHeight(of: cell)
         }
         let rowTopInView = frame.minY - collectionView.contentOffset.y
         let targetInView = collectionView.convert(CGPoint(x: 0, y: opening.windowY), from: window).y - collectionView.contentOffset.y
-        // 押した行の上端がバーの下に隠れていたときは、余白は足さず、同じだけ隠れた位置に置く。
+        // 選択した行の上端がバーの下に隠れていたときは、余白は足さず、同じだけ隠れた位置に置く。
         let extra = max(targetInView - rowTopInView, 0)
         isRestoringAnchor = true
         defer { isRestoringAnchor = false }
@@ -3498,10 +3498,10 @@ extension TimelineViewController {
         return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
     }
 
-    /// 表示領域の上端にかかっている行が、使う人の操作によらず描き直され、上端が表示領域の上端より上、下端が表示領域の中にあるなら、その行と今の高さ。
+    /// 表示領域の上端にかかっている行が、使う人の操作によらず再描画され、上端が表示領域の上端より上、下端が表示領域の中にあるなら、その行と今の高さ。
     /// この行の高さが変わったら、上端ではなく下端の位置を保つ。上端を保つと、伸びた分だけ、下の見えている行がすべて動く。下端を保てば、伸びた分は表示領域の上へ出て、下の行は動かない。
     /// 下端が表示領域の下端より下にある行は、表示領域を覆っていて、どちらの端を保てば読んでいる位置が動かないかは、変わった箇所によるため、上端を保つままにする。
-    /// 下に、描き直さない見えている行がないときも、上端を保つままにする。
+    /// 下に、再描画しない見えている行がないときも、上端を保つままにする。
     private func upwardResizingRow(_ ids: Set<ItemID>, among remaining: Set<ItemID>) -> (id: ItemID, height: CGFloat)? {
         guard !ids.isEmpty, let top = currentAnchor(among: remaining), ids.contains(top.id) else { return nil }
         let halfPixel = 0.5 / max(collectionView.traitCollection.displayScale, 1)
@@ -3510,7 +3510,7 @@ extension TimelineViewController {
               let indexPath = dataSource.indexPath(for: top.id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame,
               frame.maxY < visibleBottom
         else { return nil }
-        // 下に、描き直さない見えている行がなければ、下端を保っても動かずに済む行がない。設定が変わってすべての行を描き直すときなどで、上端を保つままにする。
+        // 下に、再描画しない見えている行がなければ、下端を保っても動かずに済む行がない。設定が変わってすべての行を再描画するときなどで、上端を保つままにする。
         let keepsRowBelow = collectionView.indexPathsForVisibleItems.contains { other in
             guard let id = dataSource.itemIdentifier(for: other), remaining.contains(id), !ids.contains(id),
                   let otherFrame = collectionView.layoutAttributesForItem(at: other)?.frame
@@ -3523,8 +3523,8 @@ extension TimelineViewController {
     /// スナップショットを当て、更新前の基準の要素を同じ位置に戻す。戻した基準を返す。
     /// `anchorID`がないか、表示領域の外にあれば、表示領域の上端にあった要素を基準にする。
     /// 画面外の要素の位置を保つと、その要素と表示領域の間で増えた分だけ、読んでいる行が動くため（ギャップの読み込みを待つ間にギャップを越えて読み進めたときなど）。
-    /// - Parameter ids: 中身を描き直す行。上端が表示領域の上端より上にある行が含まれていて、その高さが変わったら、その行の下端を保つ（`upwardResizingRow`）。
-    ///   描き直しても高さが変わらなければ、上端を保つ。描き直す行には、高さの変わらない行も入るため（同じ絵文字を使う行など）。
+    /// - Parameter ids: 中身を再描画する行。上端が表示領域の上端より上にある行が含まれていて、その高さが変わったら、その行の下端を保つ（`upwardResizingRow`）。
+    ///   再描画しても高さが変わらなければ、上端を保つ。再描画する行には、高さの変わらない行も入るため（同じ絵文字を使う行など）。
     @discardableResult
     private func applyPreservingAnchor(_ snapshot: NSDiffableDataSourceSnapshot<Section, ItemID>, keeping anchorID: ItemID? = nil, resizing ids: Set<ItemID> = []) -> ScrollAnchor? {
         isRestoringAnchor = true
@@ -3615,7 +3615,7 @@ extension TimelineViewController {
 extension TimelineViewController: NoticeScreen {
     /// チップの列の上端。この画面の座標。ナビゲーションバーの下に置く。一番上から引っぱっても下げない。
     /// 新着のボタンが出ていてもずらさず、上に重ねる。ボタンは件数の目安で、隠れてもステータスバーやタブから最上部へ戻れるが、
-    /// 出たままのチップは、押そうとしている間にボタンの出入りで動くと押せなくなるため。
+    /// 出たままのチップは、選択しようとしている間にボタンの出入りで動くと選択できなくなるため。
     var noticeTop: CGFloat {
         view.safeAreaInsets.top + 8
     }
@@ -3625,7 +3625,7 @@ extension TimelineViewController: NoticeScreen {
     }
 }
 
-/// タイムラインのコレクションビュー。本文のリンクを押して少し止めてから引いても、スクロールできるようにする。
+/// タイムラインのコレクションビュー。本文のリンクを押下して少し止めてから引いても、スクロールできるようにする。
 final class TimelineCollectionView: UICollectionView {
     /// ほかのアプリからのドロップをタイムラインでは受けず、画面全体の受け口（`MediaDropTarget`）に回して添付する。
     /// コレクションビューは、ドロップのデリゲートがなくても、Macではファイルのドロップを受け付けて何もせずに終える（Macでログを見て確かめた）。
@@ -3685,7 +3685,7 @@ extension TimelineViewController: MediaMenuHost {
         menuDidHide()
     }
 
-    /// プレビューの見本では、メディアを押しても何もしない。
+    /// プレビューの見本では、メディアを選択しても何もしない。
     var offersMediaActions: Bool {
         !isAppearancePreview
     }

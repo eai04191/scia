@@ -194,7 +194,7 @@ struct MediaUploadTests {
         #expect(clock.sleeps.reduce(.zero, +) > .seconds(10 * 60))
     }
 
-    /// 削除した投稿の添付は、サーバーが投稿から外し終えるまで404が返るので、1秒おきに読み直し、外れたら返す。
+    /// 削除した投稿の添付は、サーバーが投稿から外し終えるまで404が返るので、1秒おきに再読み込みし、外れたら返す。
     @Test func waitUntilReleasedPollsWhileAttachedToDeletedStatus() async throws {
         let transport = StubTransport([
             .json(#"{"error":"Record not found"}"#, statusCode: 404),

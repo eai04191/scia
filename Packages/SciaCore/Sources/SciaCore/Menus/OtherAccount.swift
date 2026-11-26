@@ -2,9 +2,9 @@ public import Foundation
 
 /// 投稿のメニューの「別のアカウントで」で、ログインしているほかのアカウント1つとして、投稿と、投稿に出る人を操作する。決まりはdocs/other-accounts.mdにある。
 ///
-/// 投稿のIDはサーバーごとに違うため、そのアカウントのサーバーで、投稿のURIを探して引き直す。見つけた投稿はURIごとに覚え、
-/// 操作の結果もその投稿に反映する。人は、見つけた投稿の投稿者とメンションの、そのサーバーでのIDで扱い、関係はこのアカウントで覚える。
-/// 今のアカウントのタイムラインの投稿や、覚えている関係は変えない。
+/// 投稿のIDはサーバーごとに違うため、そのアカウントのサーバーで、投稿のURIを探して引き直す。見つけた投稿はURIごとにキャッシュし、
+/// 操作の結果もその投稿に反映する。人は、見つけた投稿の投稿者とメンションの、そのサーバーでのIDで扱い、関係はこのアカウントでキャッシュする。
+/// 今のアカウントのタイムラインの投稿や、キャッシュした関係は変えない。
 @MainActor
 public final class OtherAccount {
     /// APIを呼ぶ口。テストでは差し替える。
@@ -85,7 +85,7 @@ public final class OtherAccount {
     private var failures: [String: any Error] = [:]
     /// URIごとの、操作で投稿を変えた回数。探している間に操作で変わったら、探す前の状態の結果で上書きしないために使う。
     private var revisions: [String: Int] = [:]
-    /// URIごとの、走っている検索。同じ投稿を探しているときは、送り直さずに待つ。
+    /// URIごとの、走っている検索。同じ投稿を探しているときは、再送せずに待つ。
     private var searches: [String: Task<Void, Never>] = [:]
     private lazy var interactions = StatusInteractions(operations: operations.interactions) { [weak self] id, transform in
         self?.update(id, transform)
@@ -98,7 +98,7 @@ public final class OtherAccount {
     private var peopleNotFound: Set<AccountLookup> = []
     /// プロフィールのURLごとの、最後に探せなかった理由。探せたら消す。
     private var peopleFailures: [AccountLookup: any Error] = [:]
-    /// プロフィールのURLごとの、走っている人の検索。同じ人を探しているときは、送り直さずに待つ。
+    /// プロフィールのURLごとの、走っている人の検索。同じ人を探しているときは、再送せずに待つ。
     private var peopleSearches: [AccountLookup: Task<Void, Never>] = [:]
     /// そのアカウント自身のプロフィール。読めるまでnil。
     public private(set) var profile: Account?
@@ -115,7 +115,7 @@ public final class OtherAccount {
         tasks.onClose { [weak relationships] in relationships?.close() }
     }
 
-    /// そのアカウント自身のプロフィールを、まだ読んでいなければ読む。読めなければ、次に呼ばれたときに読み直す。
+    /// そのアカウント自身のプロフィールを、まだ読んでいなければ読む。読めなければ、次に呼ばれたときに再読み込みする。
     public func loadProfile() {
         guard profile == nil, profileLoad == nil else { return }
         profileLoad = tasks.run(.display) { [weak self, operations] in
@@ -139,7 +139,7 @@ public final class OtherAccount {
     /// サーバーの機能の有無を読んでいる途中か。
     public var isLoadingCapabilities: Bool { capabilitiesState == .loading }
 
-    /// そのアカウントのサーバーの機能の有無を読む。読めたら読み直さず、読めなかったら次に呼ばれたときに読み直す。
+    /// そのアカウントのサーバーの機能の有無を読む。読めたら再読み込みせず、読めなかったら次に呼ばれたときに再読み込みする。
     public func loadCapabilities() {
         guard capabilitiesState == .unknown else { return }
         capabilitiesState = .loading
@@ -176,14 +176,14 @@ public final class OtherAccount {
         return profile
     }
 
-    /// 覚えている、そのアカウントから見た`status`（ブーストなら元の投稿）。探していなければnil。
+    /// キャッシュしている、そのアカウントから見た`status`（ブーストなら元の投稿）。探していなければnil。
     public func known(_ status: Status) -> Status? {
         status.displayed.uri.flatMap { statuses[$0] }
     }
 
-    /// そのアカウントのサーバーで、`status`（ブーストなら元の投稿）をURIで探す。見つけたら覚える。
+    /// そのアカウントのサーバーで、`status`（ブーストなら元の投稿）をURIで探す。見つけたらキャッシュする。
     /// URIが同じ投稿だけを使う。検索はURIに近いほかの投稿を返すことがあり、違う投稿を操作しないため。
-    /// 前に見つけた投稿を探せなかったときは、覚えている投稿を返す。
+    /// 前に見つけた投稿を探せなかったときは、キャッシュした投稿を返す。
     public func lookup(_ status: Status) async -> Lookup {
         guard let uri = status.displayed.uri else { return .notFound }
         let search: Task<Void, Never>
@@ -219,7 +219,7 @@ public final class OtherAccount {
         }
     }
 
-    /// 前に見つけた`status`を探し直し、見つかった投稿でメニューに出る人の関係も読み直す。「別のアカウントで」を出したメニューを開くときに呼び、次に開いたときから使う。
+    /// 前に見つけた`status`を探し直し、見つかった投稿でメニューに出る人の関係も再読み込みする。「別のアカウントで」を出したメニューを開くときに呼び、次に開いたときから使う。
     /// - Parameters:
     ///   - people: 投稿のほかにメニューに出る人（ブーストした人、通知した人）。まだ見つけていない人を探す。
     ///   - relationIDs: 見つかった投稿で、関係の項目を出す人のID。組んだメニューの`otherAccountRelationIDs`を渡す。
@@ -230,17 +230,17 @@ public final class OtherAccount {
         reloadRelations(relationIDs(found, self))
     }
 
-    /// 覚えている、そのサーバーで見つけた`account`と同じ人。プロフィールのURLで探す。まだ探していないか、見つからなければnil。
+    /// キャッシュしている、そのサーバーで見つけた`account`と同じ人。プロフィールのURLで探す。まだ探していないか、見つからなければnil。
     public func person(_ account: Account) -> Account? {
         account.url.flatMap(person(at:))
     }
 
-    /// 覚えている、そのサーバーで見つけた、プロフィールのURLが`url`の人。まだ探していないか、見つからなければnil。
+    /// キャッシュしている、そのサーバーで見つけた、プロフィールのURLが`url`の人。まだ探していないか、見つからなければnil。
     public func person(at url: URL) -> Account? {
         person(.profileURL(url))
     }
 
-    /// 覚えている、そのサーバーで`lookup`で見つけた人。まだ探していないか、見つからなければnil。
+    /// キャッシュしている、そのサーバーで`lookup`で見つけた人。まだ探していないか、見つからなければnil。
     public func person(_ lookup: AccountLookup) -> Account? {
         people[lookup.normalized]
     }
@@ -255,13 +255,13 @@ public final class OtherAccount {
         case failed(any Error)
     }
 
-    /// そのアカウントのサーバーで、プロフィールのURLが`url`の人を探す。見つけた人は覚え、覚えていればそのまま返す。
+    /// そのアカウントのサーバーで、プロフィールのURLが`url`の人を探す。見つけた人はキャッシュし、キャッシュにあればそのまま返す。
     /// ユーザーのメニューの「別のアカウントで」で使う。
     public func lookUpPerson(at url: URL) async -> PersonLookup {
         await lookUpPerson(.profileURL(url))
     }
 
-    /// そのアカウントのサーバーで、`lookup`の人を探す。ハンドルで探すときは、書かれたハンドルと同じ人だけを使う。見つけた人は覚え、覚えていればそのまま返す。
+    /// そのアカウントのサーバーで、`lookup`の人を探す。ハンドルで探すときは、書かれたハンドルと同じ人だけを使う。見つけた人はキャッシュし、キャッシュにあればそのまま返す。
     public func lookUpPerson(_ lookup: AccountLookup) async -> PersonLookup {
         let lookup = lookup.normalized
         await resolve(lookups: [lookup])
@@ -276,7 +276,7 @@ public final class OtherAccount {
         return people[.profileURL(url)] == nil && !peopleNotFound.contains(.profileURL(url))
     }
 
-    /// `accounts`のうちまだ見つけていない人を、そのサーバーでプロフィールのURLで探して覚える。
+    /// `accounts`のうちまだ見つけていない人を、そのサーバーでプロフィールのURLで探してキャッシュする。
     /// 人のIDはサーバーごとに違い、見つけた投稿には投稿者とメンションのほかの人のIDが入っていないため。
     /// URLが同じ人だけを使う。違う人を操作しないため。見つからない、探せない人は、次に呼ばれたときに探し直す。
     public func resolve(_ accounts: [Account]) async {
@@ -324,13 +324,13 @@ public final class OtherAccount {
         }
     }
 
-    /// そのアカウントと`ids`の人の関係を、まとめて1回で読み直す。
+    /// そのアカウントと`ids`の人の関係を、まとめて1回で再読み込みする。
     public func reloadRelations(_ ids: [String]) {
         guard !ids.isEmpty else { return }
         relationships.reload(ids, purpose: .action)
     }
 
-    /// そのアカウントとして、そのサーバーでのIDの相手へ関係の変更を送り、結果を覚える。
+    /// そのアカウントとして、そのサーバーでのIDの相手へ関係の変更を送り、結果をキャッシュする。
     public func change(_ change: UserRelationChange, of relation: UserRelation) async throws -> Relationship {
         let relationship: Relationship
         do {
@@ -350,13 +350,13 @@ public final class OtherAccount {
         relationships.forgetRelations(onDomain: domain) { accts[$0] }
     }
 
-    /// そのアカウントのシート（メモ、リストに追加）で変わった関係を覚える。次に開いたメニューの項目に出す。
+    /// そのアカウントのシート（メモ、リストに追加）で変わった関係をキャッシュする。次に開いたメニューの項目に出す。
     public func didChange(_ relationship: Relationship) {
         relationships[relationship.id] = relationship
     }
 
     /// そのアカウントとしてのユーザーのメニューの、関係の項目を組むもの。
-    /// 関係の項目のほか（メンション、コピー、メモ、通報、リストに追加）は、組む並びから除くので呼ばれない。押した変更は、メニューの命令として返す。
+    /// 関係の項目のほか（メンション、コピー、メモ、通報、リストに追加）は、組む並びから除くので呼ばれない。選択した変更は、メニューの命令として返す。
     public var userActions: UserMenuActions {
         UserMenuActions(
             mention: { _ in },
@@ -404,13 +404,13 @@ public final class OtherAccount {
         try await interactions.set(.emojiReaction(emoji), to: true, on: status)
     }
 
-    /// そのアカウントの投稿`status`を削除し、覚えている投稿からも除く。
+    /// そのアカウントの投稿`status`を削除し、キャッシュした投稿からも除く。
     public func delete(_ status: Status) async throws {
         try await operations.deleteStatus(status.id)
         didDelete(status.id)
     }
 
-    /// そのアカウントの投稿が消えたので、覚えている投稿から除く。削除して書き直す元の投稿を投稿欄が消したときにも呼ぶ。
+    /// そのアカウントの投稿が消えたので、キャッシュした投稿から除く。削除して書き直す元の投稿を投稿欄が消したときにも呼ぶ。
     /// 探している途中の検索の結果で、消えた投稿を戻さない。
     public func didDelete(_ id: Status.ID) {
         for (uri, known) in statuses where known.id == id {
@@ -419,7 +419,7 @@ public final class OtherAccount {
         }
     }
 
-    /// そのアカウントで編集した投稿を、サーバーが返した編集のあとの投稿で覚え直す。
+    /// そのアカウントで編集した投稿を、サーバーが返した編集のあとの投稿でキャッシュし直す。
     /// 次に開いたメニューの編集を、編集の前の添付で始めず、探している途中の検索の結果でも戻さない。
     public func didEdit(_ edited: Status) {
         update(edited.id) { _ in edited }
@@ -452,7 +452,7 @@ extension OtherAccount {
         })
     }
 
-    /// そのアカウントのサーバーで探せなかったことを、理由を添えて出す押せない行。
+    /// そのアカウントのサーバーで探せなかったことを、理由を添えて出す無効の行。
     /// メニューの行には理由の文字しか置けないので、ログアウトされていれば、ログインし直す項目を続けて置く。失敗の理由を出す部品と同じく、どこで失敗してもその場でログインし直せるようにするため。
     static func lookupFailureNodes<Command>(title: String, error: any Error, logIn: (RequestAccount) -> Command) -> [MenuNode<Command>] {
         let reason = ErrorPresentation(error)

@@ -10,7 +10,7 @@ public struct PersistentNotices {
         case download
         /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中。見つかると別の画面に移るため、アプリ全体のもの。
         case profileLookup
-        /// 押しても応答が届くまで画面が変わらない操作で、読むのが長引いている。IDで開くスレッド、編集や書き直しの元の本文など。画面を移っても続くため、アプリ全体のもの。
+        /// 選択しても応答が届くまで画面が変わらない操作で、読むのが長引いている。IDで開くスレッド、編集や書き直しの元の本文など。画面遷移しても続くため、アプリ全体のもの。
         case slowFetch
         /// 投稿の削除の応答が長引いている。読むのを待つ操作と同時に進むことがあるため、別に持つ。
         case slowDeletion
@@ -58,7 +58,7 @@ public struct PersistentNotices {
     }
 
     /// チップに出す1件。失敗を優先し、次に処理の途中、その中では新しいものを選ぶ。
-    /// 2件以上なら残りの件数を、選んだアプリ内通知が添えていた件数に足して添え、押すと`showAll`で「操作の状況」の画面を開く。
+    /// 2件以上なら残りの件数を、選んだアプリ内通知が添えていた件数に足して添え、選択すると`showAll`で「操作の状況」の画面を開く。
     /// - Parameter showAll: nilなら「操作の状況」を開けないので、選んだアプリ内通知の続きを出す。
     public func chipNotice(showAll: (@MainActor () -> Void)?) -> Notice? {
         guard let (chosen, others) = PersistentNoticeChoice.choose(entries.map(\.notice), isFailure: { $0.kind == .failure }) else { return nil }

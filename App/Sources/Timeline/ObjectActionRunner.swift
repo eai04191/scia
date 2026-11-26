@@ -12,43 +12,43 @@ struct MenuLifecycle {
 }
 
 extension ObjectEntity {
-    /// `view`の窓に開いたアカウントの設定で、`trigger`に主な操作を選んでいるか。
+    /// `view`のウィンドウに開いたアカウントの設定で、`trigger`に主な操作を選んでいるか。
     @MainActor
     func performsPrimary(_ trigger: ObjectTrigger, in view: UIView) -> Bool {
         performsPrimary(trigger, settings: view.traitCollection.appSettings)
     }
 }
 
-/// 押された対象。部品は、タップと長押しをこれに渡す。項目の種類の違う対象を同じ部品で扱えるよう、型を消して持つ。
+/// 選択された対象。部品は、タップと長押しをこれに渡す。項目の種類の違う対象を同じ部品で扱えるよう、型を消して持つ。
 @MainActor
 protocol ObjectActionTarget {
     /// メニュー。設定の並びで組む。出す項目がなければnil。
     func menu() -> UIMenu?
-    /// タップを受けるか。主な操作がいま行えない部品（スレッドの中心の投稿、投稿のない通知）は、タップに主な操作を選んでいれば、今どおり押せないままにする。
+    /// タップを受けるか。主な操作がいま行えない部品（スレッドの中心の投稿、投稿のない通知）は、タップに主な操作を選んでいれば、今どおり選択できないままにする。
     var acceptsTap: Bool { get }
     /// 長押しにメニュー以外を選び、この部品で行えるか。行えなければ、メニューを出す。決まりはdocs/object-actions.mdの「長押しで項目を行う」にある。
     func performsLongPress() -> Bool
-    /// `trigger`に選んだ操作を行う。`view`は押した部品、`point`はその座標で、メニューはそこに出す。
+    /// `trigger`に選んだ操作を行う。`view`は選択した部品、`point`はその座標で、メニューはそこに出す。
     func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint)
     var lifecycle: MenuLifecycle { get }
 }
 
-/// 押された対象と、その主な操作の処理と、メニューの組み方。決まりはdocs/object-actions.mdの「項目を行う」にある。
-/// タップや長押しに割り当てた1項目をどう行うかは、SciaCoreで組んだメニューの木を見て決める（`MenuItemOutcome`）。
+/// 選択された対象と、その主な操作の処理と、メニューの組み方。決まりはdocs/object-actions.mdの「項目を行う」にある。
+/// タップや長押しに割り当てた1項目をどう行うかは、SciaCoreで組んだメニューのツリーを見て決める（`MenuItemOutcome`）。
 @MainActor
 struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: ObjectActionTarget {
     let entity: ObjectEntity<Item>
     var settings: AppSettings
     /// 主な操作がいま行えるか。
     var primaryIsAvailable = true
-    /// 主な操作。今のタップの処理で行う。メニューの項目を組んで行うと、開く動きの起点などがタップと違うため。押した部品を渡す。
+    /// 主な操作。今のタップの処理で行う。メニューの項目を組んで行うと、開く動きの起点などがタップと違うため。選択した部品を渡す。
     let primary: (UIView) -> Void
     /// 渡した並びでメニューを組む。nilなら設定の並びで組む。出す項目がなければnil。
     let buildMenu: (MenuLayout<Item>.Groups?) -> BuiltMenu<Command>?
     let lifecycle: MenuLifecycle
     /// 使えない項目を選んだことを、数秒で消えるチップで知らせる。
     let notify: (Notice) -> Void
-    /// 「アクションバーを開く」で、投稿の下のアクションバーを開閉する。押した部品を渡し、開閉したら動きが着くまでの秒数を、しなければnilを返す。アクションバーを出せない部品（引用の囲み、通知）ではnil。
+    /// 「アクションバーを開く」で、投稿の下のアクションバーを開閉する。選択した部品を渡し、開閉したら動きが着くまでの秒数を、しなければnilを返す。アクションバーを出せない部品（引用のカード、通知）ではnil。
     var openActionBar: ((UIView) -> TimeInterval?)?
 
     private var actions: ObjectActions<Item> {
@@ -90,7 +90,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
                 notify(.objectActionUnavailable(itemTitle: ObjectAction<Item>.openActionBarTitle, reason: nil))
                 return
             }
-            // 長押しでは、長押しを受けた時点で触覚を返しているので重ねない。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+            // 長押しでは、長押しを受けた時点でハプティクスを返しているので重ねない。決まりはdocs/post-action-bar.mdの「開閉」にある。
             if let landing = openActionBar(view), trigger == .tap {
                 playActionBarHaptic(in: view, at: point, landing: landing)
             }
@@ -99,7 +99,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
         }
     }
 
-    /// アクションバーをタップで開閉したときの触覚。チューニングで選べば、動きが着いたときに鳴らす。決まりはdocs/post-action-bar.mdの「引き出し」にある。
+    /// アクションバーをタップで開閉したときのハプティクス。チューニングで選べば、動きが着いたときに鳴らす。決まりはdocs/post-action-bar.mdの「開閉」にある。
     private func playActionBarHaptic(in view: UIView, at point: CGPoint, landing: TimeInterval) {
         let tuning = AppDependencies.tuning
         let style = tuning.value(of: TuningCatalog.actionBarDrawerHapticStyle)
@@ -130,7 +130,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
         case .unavailable(let reason):
             notify(unavailable(item, reason: reason))
         case .submenu(let submenu):
-            // サブメニューの名前だけの1行のメニューを出すと、もう1回押さないと中身に届かないため、中身を出す。
+            // サブメニューの名前だけの1行のメニューを出すと、もう1回選択しないと中身に届かないため、中身を出す。
             guard let built else { return }
             TapMenuPresenter.shared.present(UIMenu(title: submenu.headingTitle, subtitle: submenu.subtitle, children: built.elements(submenu.children)), in: view, at: point, lifecycle: lifecycle)
         case .menu(let nodes):
@@ -139,7 +139,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
         }
     }
 
-    /// 使えない項目を選んだことの知らせ。押せない理由があれば、それを文言にする。
+    /// 使えない項目を選んだことを伝えるチップ。無効の理由があれば、それを文言にする。
     private func unavailable(_ item: Item, reason: String?) -> Notice {
         .objectActionUnavailable(itemTitle: item.title, reason: reason)
     }
@@ -147,7 +147,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: Obje
 
 /// タップでメニューを出す。
 ///
-/// `UIContextMenuInteraction`には、コードからメニューを出す公開APIがない。押した位置に1ptの見えない`UIButton`を置き、
+/// `UIContextMenuInteraction`には、コードからメニューを出す公開APIがない。選択した位置に1ptの見えない`UIButton`を置き、
 /// `showsMenuAsPrimaryAction`にして`performPrimaryAction()`（iOS 17.4）を送る。`UIControl`では、`performPrimaryAction()`を送ってもメニューが出ない。
 /// ボタンは触れたタッチを受けないので、スクロールや部品のタップを奪わない。
 @MainActor
@@ -163,7 +163,7 @@ final class TapMenuPresenter {
         button.preferredMenuElementOrder = .fixed
     }
 
-    /// メニューだけを押した位置に出す。行や画像は持ち上げない。
+    /// メニューだけを選択した位置に出す。行や画像は持ち上げない。
     /// ボタンから出すメニューは、構成のプレビュー（`previewProvider`）を描かない。長押しの持ち上げるプレビューを渡すと、元の場所は隠されるのに
     /// プレビューが描かれず、本文の行やサムネイルが消えて見えたため、いつも指の位置の見えない目印をプレビューにする。
     func present(_ menu: UIMenu, in view: UIView, at point: CGPoint, lifecycle: MenuLifecycle) {
@@ -179,7 +179,7 @@ final class TapMenuPresenter {
         body()
     }
 
-    /// 押した部品から一番近い画面のviewに置く。ウインドウの直下に置くと、応答の連鎖にメニューを出す画面がなく、メニューが出ない。
+    /// 選択した部品から一番近い画面のviewに置く。ウインドウの直下に置くと、応答の連鎖にメニューを出す画面がなく、メニューが出ない。
     private func place(in view: UIView, at point: CGPoint) -> Bool {
         let controller = sequence(first: view as UIResponder, next: \.next).lazy.compactMap { $0 as? UIViewController }.first
         guard let container = controller?.view else { return false }
@@ -210,7 +210,7 @@ private final class AnchorMenuButton: UIButton {
 
     override func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
         super.contextMenuInteraction(interaction, willEndFor: configuration, animator: animator)
-        // 閉じ終わる前に別のメニューを出しても、閉じたほうの知らせを取り違えないよう、閉じ始めに決めておく。
+        // 閉じ終わる前に別のメニューを出しても、閉じたほうのコールバックを取り違えないよう、閉じ始めに決めておく。
         // ボタンはアプリで1つなので、閉じた画面とメニューの中身を次に開くまで握らないよう、ここで手放す。
         let lifecycle = lifecycle
         self.lifecycle = MenuLifecycle()
@@ -239,7 +239,7 @@ private final class AnchorMenuButton: UIButton {
 @MainActor
 final class ObjectLongPress: NSObject, UIGestureRecognizerDelegate {
     private let recognizer = UILongPressGestureRecognizer()
-    /// 押した位置（`view`の座標）で、長押しを受けるか。
+    /// 選択した位置（`view`の座標）で、長押しを受けるか。
     private let accepts: (CGPoint) -> Bool
     private let perform: (CGPoint) -> Void
     init(on view: UIView, accepts: @escaping (CGPoint) -> Bool, perform: @escaping (CGPoint) -> Void) {
@@ -287,7 +287,7 @@ enum ObjectLift {
     case shape
 }
 
-/// 自分ではタップも長押しも受けない部品（アイコン、引用の囲みなど）に、対象のタップと長押しを付ける。
+/// 自分ではタップも長押しも受けない部品（アイコン、引用のカードなど）に、対象のタップと長押しを付ける。
 @MainActor
 final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
     private static let logger = SciaLog.logger(category: "menu")
@@ -295,7 +295,7 @@ final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
     private let lift: ObjectLift
     var target: (any ObjectActionTarget)?
     private var longPress: ObjectLongPress?
-    /// 部品がボタンのように自分でタップを受けるとき、その処理は押した位置を受け取らないため、触れた位置を覚えてメニューを出す位置にする。
+    /// 部品がボタンのように自分でタップを受けるとき、その処理は選択した位置を受け取らないため、触れた位置を覚えてメニューを出す位置にする。
     private let touchRecorder = TouchLocationRecorder()
 
     /// - Parameter tapsSelf: 部品のタップもここで受ける。部品がボタンのように自分でタップを受けるなら、falseにしてその処理から`handleTap(at:)`を呼ぶ。
@@ -353,7 +353,7 @@ final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
     }
 
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
-        // 閉じ終わる前に部品が別の対象に使い回されても、閉じたほうの知らせを取り違えないよう、閉じ始めに決めておく。
+        // 閉じ終わる前に部品が別の対象に使い回されても、閉じたほうのコールバックを取り違えないよう、閉じ始めに決めておく。
         guard let lifecycle = target?.lifecycle else {
             // 出したときの対象に閉じたことを知らせられないので、出した側は開いたままと見なし続ける。
             Self.logger.notice("context menu ended without target: willShow is not paired with didHide")
@@ -389,7 +389,7 @@ final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
     }
 }
 
-/// 触れた位置を覚えるだけで、認識しない。タイムラインの行のタップのように、タップの処理が押した位置を受け取らないときに、メニューを出す位置にする。
+/// 触れた位置を覚えるだけで、認識しない。タイムラインの行のタップのように、タップの処理が選択した位置を受け取らないときに、メニューを出す位置にする。
 final class TouchLocationRecorder: UIGestureRecognizer {
     private(set) var lastLocation: CGPoint?
 

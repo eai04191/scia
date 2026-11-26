@@ -49,7 +49,7 @@ enum DebugFaultMenu {
         ]
     }
 
-    /// 戻す操作がなく、起動し直すまで続く障害。起こした後はチェックマークを付けて押せなくする。
+    /// 戻す操作がなく、起動し直すまで続く障害。起こした後はチェックマークを付けて無効にする。
     private static func untilRestart(_ title: String, image: String?, isOn: Bool, action: @escaping @MainActor () -> Void) -> UIAction {
         UIAction(
             title: title,

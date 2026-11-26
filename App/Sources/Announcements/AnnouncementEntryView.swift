@@ -15,9 +15,9 @@ final class AnnouncementEntryView: UIView {
 
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
-    /// リアクションを押したときに、その絵文字の名前を渡して呼ぶ。
+    /// リアクションを選択したときに、その絵文字の名前を渡して呼ぶ。
     var onToggleReaction: ((String) -> Void)?
-    /// 「＋」を押したときに呼ぶ。
+    /// 「＋」を選択したときに呼ぶ。
     var onAddReaction: (() -> Void)?
 
     private let dateLabel = UILabel()

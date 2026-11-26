@@ -10,7 +10,7 @@ struct APIResponseTextTests {
         }
     }
 
-    /// キーはサーバーが返した並びのまま、1段2文字で字下げする。空の配列と辞書は1行にする。
+    /// キーはサーバーが返した並びのまま、1段2文字でインデントする。空の配列と辞書は1行にする。
     @Test func keepsKeyOrderAndIndents() throws {
         let data = Data(#"{"url":"https://example.social/@alice/1","language":"zh","tags":[ ],"poll":{},"emojis":[1,{"a":2}]}"#.utf8)
         #expect(try APIResponseText.formatted(data).text == """
@@ -29,14 +29,14 @@ struct APIResponseTextTests {
         """)
     }
 
-    /// 数とtrue、false、nullは応答の文字のまま出す。読み直すと`1.0`は`1`、`-0`は`0`になってしまう。同じキーが2つあっても両方出す。
+    /// 数とtrue、false、nullは応答の文字のまま出す。パースし直すと`1.0`は`1`、`-0`は`0`になってしまう。同じキーが2つあっても両方出す。
     @Test func keepsLiteralsAsWritten() throws {
         let data = Data(#"[1.0,-0,1E-7,0.30000000000000004,12345678901234567890,true,null,{"a":1,"a":2}]"#.utf8)
         let text = try APIResponseText.formatted(data).text
         #expect(text == "[\n  1.0,\n  -0,\n  1E-7,\n  0.30000000000000004,\n  12345678901234567890,\n  true,\n  null,\n  {\n    \"a\": 1,\n    \"a\": 2\n  }\n]")
     }
 
-    /// 文字列の中のエスケープは読める文字に戻す。`/`と日本語はエスケープせず、改行などの制御文字は読み直せる形でエスケープし直す。
+    /// 文字列の中のエスケープは読める文字に戻す。`/`と日本語はエスケープせず、改行などの制御文字はパースし直せる形でエスケープし直す。
     @Test func unescapesStrings() throws {
         let data = Data(#"{"content":"<p>札幌 😀 \"q\" \\ https:\/\/x\/ 1\n2\u0001"}"#.utf8)
         let text = try APIResponseText.formatted(data).text

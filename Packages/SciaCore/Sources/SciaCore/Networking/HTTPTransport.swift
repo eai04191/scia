@@ -1,7 +1,7 @@
 public import Foundation
 
 /// HTTPリクエストを送る口。アプリでは`URLSessionTransport`が実装し、テストではstubに差し替える。
-/// 再開の時刻、送り直し、大きさの上限といった決まりは、この口ではなく、これを包む`HTTPClient`が守る。
+/// 再開の時刻、再送、大きさの上限といった決まりは、この口ではなく、これを包む`HTTPClient`が守る。
 public protocol HTTPTransport: Sendable {
     /// 応答を、本文までまとめて受け取る。
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse)
@@ -40,7 +40,7 @@ extension HTTPTransport {
 /// 本文を送った割合を受け取る。アップロードの進み具合を見せるために、送る呼び出しを包んで値を入れる。
 /// 呼び出しの形を変えずに、間の`MastodonClient`や`FaultInjectingTransport`を素通りさせて`URLSessionTransport`まで届けるため、タスクローカルにする。
 public enum UploadProgress {
-    /// 0から1。送り直したときは、また0から届く。
+    /// 0から1。再送したときは、また0から届く。
     @TaskLocal public static var report: (@Sendable (Double) -> Void)?
 }
 
@@ -51,6 +51,6 @@ public enum ResponseSource: Sendable {
     /// 通信の層を通さず、アプリが端末に置いたファイルから読んだ（`StoredImageFetch`）。
     case file
 
-    /// 受け取る。読み直しが通信になっているかを数えるために、読む呼び出しを包んで値を入れる。`UploadProgress`と同じ理由でタスクローカルにする。
+    /// 受け取る。再読み込みが通信になっているかを数えるために、読む呼び出しを包んで値を入れる。`UploadProgress`と同じ理由でタスクローカルにする。
     @TaskLocal public static var report: (@Sendable (ResponseSource) -> Void)?
 }

@@ -37,7 +37,7 @@ struct AnimatedImageTests {
         #expect(image.frameWidth == 32 && image.frameHeight == 32)
     }
 
-    /// コマは、1枚の画像に左上から行ごとに、2pxのすき間を空けて並べる。5コマなら3列2行で、`contentsRect`はそのコマの部分だけを指す。
+    /// コマは、1枚の画像に左上から行ごとに、2pxのgapを空けて並べる。5コマなら3列2行で、`contentsRect`はそのコマの部分だけを指す。
     @Test func arrangesFramesInSheetFromTopLeft() async throws {
         let image = try #require(await AnimatedImage.decode(animation(.gif, size: 10, delays: Array(repeating: 0.1, count: 5)), maxPixelSize: 96))
 
@@ -119,8 +119,8 @@ struct AnimatedImageTests {
         #expect(await AnimatedImage.decode(data as Data, maxPixelSize: 96) == nil)
     }
 
-    /// 並べた画像は、すき間と空いたコマの分だけコマの合計より大きいので、並べた画像でも上限を確かめる。
-    /// 96pxの225コマは、コマの合計が約7.9MBで上限に収まるが、15列15行にすき間を空けて並べると8MBを超える。
+    /// 並べた画像は、gapと空いたコマの分だけコマの合計より大きいので、並べた画像でも上限を確かめる。
+    /// 96pxの225コマは、コマの合計が約7.9MBで上限に収まるが、15列15行にgapを空けて並べると8MBを超える。
     @Test func sheetIncludingGuttersRespectsMemoryLimit() async throws {
         #expect(try await AnimatedImage.decode(animation(.gif, size: 96, delays: Array(repeating: 0.1, count: 225)), maxPixelSize: 96) == nil)
     }

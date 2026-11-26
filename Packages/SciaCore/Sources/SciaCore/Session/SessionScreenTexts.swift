@@ -8,7 +8,7 @@ public enum InAppBrowserSheetTexts {
     }
 }
 
-/// 投稿を読み直したAPIの応答のJSONの画面の文言。題は、開く項目の名前（`StatusMenuItem.apiResponse`）を使う。
+/// 投稿を再読み込みしたAPIの応答のJSONの画面の文言。題は、開く項目の名前（`StatusMenuItem.apiResponse`）を使う。
 public enum APIResponseTexts {
     public static let copy = "コピー"
     public static let loadFailure = "APIの応答を読み込めませんでした"

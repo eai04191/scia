@@ -10,7 +10,7 @@ import UIKit
 /// - 小さい画像は、空き容量にかかわらず持つ。最初のフレームから粗い絵が出て、枠は空かない
 /// - 描く大きさの画像は、必須でない用途の空きが足りるときだけ持つ。持てる端末では、最初から鮮明な絵が出る
 ///
-/// 形式は、カスタム絵文字の小さい静止画（`EmojiThumbnails`）と同じく、LZ4で圧縮して1つのファイルに並べ、メモリに写して読む。
+/// 形式は、カスタム絵文字のサムネイル（`EmojiThumbnails`）と同じく、LZ4で圧縮して1つのファイルに並べ、メモリにマップして読む。
 /// 置き場所は、描く大きさと絵ごとのフォルダー。絵文字は`scia-glyph:`のURLで引く。文字として描かれる絵文字（twemojiの「©」など）は、外観で色が変わるので、形だけで持ち（`scia-glyph-shape:`）、
 /// 描くときに今の外観の文字の色を付ける。外観が変わるたびに全部を作り直すと、SE3で約7〜8秒のCPUの時間がかかるため。
 final class EmojiGlyphArchive: Sendable {
@@ -41,9 +41,9 @@ final class EmojiGlyphArchive: Sendable {
         let full: EmojiThumbnails
     }
 
-    /// 小さい画像の高さのピクセル数。カスタム絵文字の小さい静止画と同じ。
+    /// 小さい画像の高さのピクセル数。カスタム絵文字のサムネイルと同じ。
     static let smallPixelHeight = 32
-    /// 描く大きさの画像を作り始める前と、作った量が増えるたびに、必須でない用途の空きを読み直す間隔（バイト）。カスタム絵文字の先読みと同じ。
+    /// 描く大きさの画像を作り始める前と、作った量が増えるたびに、必須でない用途の空きを読み直す間隔（バイト）。カスタム絵文字のプリフェッチと同じ。
     static let capacityCheckInterval = 10 * 1_024 * 1_024
 
     let directory: URL
@@ -185,7 +185,7 @@ final class EmojiGlyphArchive: Sendable {
 
     /// `text`の画像。描く大きさの画像があればそれを、なければ小さい画像を返す。どちらもなければnil。
     /// `geometry`が今の大きさと絵でなく、どのプリセットも使わない絵なら、使わない。
-    /// プリセットの使う絵の画像は、窓ごとにアカウントの絵が違うときも使えるよう、今の大きさと絵でなくても返す（docs/preset.md）。
+    /// プリセットの使う絵の画像は、ウィンドウごとにアカウントの絵が違うときも使えるよう、今の大きさと絵でなくても返す（docs/preset.md）。
     func glyph(for text: String, geometry: Geometry) -> Glyph? {
         let isCurrent = files.withLock { $0?.geometry } == geometry
         guard isCurrent || keptStyles.withLock({ $0.contains(geometry.style) }),
@@ -290,7 +290,7 @@ final class EmojiGlyphArchive: Sendable {
         return hasInk
     }
 
-    /// 書いている分を待つ。テストで、書き終えてから読み直すのに使う。
+    /// 書いている分を待つ。テストで、書き終えてから再読み込みするのに使う。
     func flush() async {
         guard let files = files.withLock({ $0 }) else { return }
         await files.small.flush()

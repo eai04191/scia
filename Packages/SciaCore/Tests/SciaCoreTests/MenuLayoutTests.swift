@@ -22,7 +22,7 @@ private enum TestMenuItem: String, MenuItemKind {
     ])
 }
 
-/// 既定で区切り線に挟まれた、1つだけのまとまりの項目を持つ、テスト用のメニュー。
+/// 既定で区切り線に挟まれた、1つだけのグループの項目を持つ、テスト用のメニュー。
 private enum SoloMenuItem: String, MenuItemKind {
     case a
     case solo
@@ -55,7 +55,7 @@ struct MenuLayoutTests {
         #expect(groups.more.map(\.items) == [[.delete]])
     }
 
-    /// 出す場所で除いた項目は、まとまりから外し、空になったまとまりは出さない。ほかの項目の並びは変えない。
+    /// 出す場所で除いた項目は、グループから外し、空になったグループは出さない。ほかの項目の並びは変えない。
     @Test func excludingDropsItemsAndEmptyGroups() {
         let groups = TestMenuItem.defaultLayout.groups.excluding([.c, .b])
 
@@ -76,7 +76,7 @@ struct MenuLayoutTests {
         #expect(kept.more.map(\.items) == [[.delete]])
     }
 
-    /// 非表示の項目を除いた結果、空になったまとまりは出さない。区切り線が続いても空のまとまりを作らない。
+    /// 非表示の項目を除いた結果、空になったグループは出さない。区切り線が続いても空のグループを作らない。
     @Test func emptyGroupsAreDropped() {
         let layout = MenuLayout<TestMenuItem>(elements: [
             .separator,
@@ -94,7 +94,7 @@ struct MenuLayoutTests {
         #expect(layout.groups.more.map(\.items) == [])
     }
 
-    /// 横並びの区切り線は、並びの先頭や「その他」の境目のすぐ下でも、その下のまとまりを横に並べる。次の区切り線で横並びは終わる。
+    /// 横並びの区切り線は、並びの先頭や「その他」の境目のすぐ下でも、その下のグループを横に並べる。次の区切り線で横並びは終わる。
     @Test func rowSeparatorMakesFollowingGroupARow() {
         let layout = MenuLayout<TestMenuItem>(elements: [
             .rowSeparator(.medium),
@@ -112,7 +112,7 @@ struct MenuLayoutTests {
         #expect(layout.groups.more == [.init([.delete], row: .small)])
     }
 
-    /// 中身がすべて非表示の横並びのまとまりは出さず、横並びを次のまとまりに持ち越さない。
+    /// 中身がすべて非表示の横並びのグループは出さず、横並びを次のグループに持ち越さない。
     @Test func emptyRowGroupDoesNotCarryOver() {
         let layout = MenuLayout<TestMenuItem>(elements: [
             .item(.a, isVisible: true),
@@ -205,7 +205,7 @@ struct MenuLayoutTests {
         #expect(layout.elements.prefix(4) == [.item(.b, isVisible: true), .separator, .item(.c, isVisible: true), .item(.a, isVisible: true)])
     }
 
-    /// 既定で区切り線に挟まれた1つだけのまとまりの項目は、保存した並びでも前後の区切り線と一緒に入り、1つだけのまとまりになる。
+    /// 既定で区切り線に挟まれた1つだけのグループの項目は、保存した並びでも前後の区切り線と一緒に入り、1つだけのグループになる。
     @Test func newItemBringsSurroundingSeparators() {
         let layout = MenuLayout<SoloMenuItem>(tokens: ["item:a", "item:b", "more", "item:c"])
 
@@ -220,7 +220,7 @@ struct MenuLayoutTests {
         ])
     }
 
-    /// 差し込む位置のすぐ後ろが区切り線なら、区切り線を足さずにその後ろのまとまりに入れ、すでにある区切り線と並べない。
+    /// 差し込む位置のすぐ後ろが区切り線なら、区切り線を足さずにその後ろのグループに入れ、すでにある区切り線と並べない。
     @Test func newItemReusesExistingSeparator() {
         let layout = MenuLayout<SoloMenuItem>(tokens: ["item:a", "separator", "item:b", "more", "item:c"])
 

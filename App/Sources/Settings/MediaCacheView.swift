@@ -3,9 +3,9 @@ import QuickLookThumbnailing
 import SciaCore
 import SwiftUI
 
-/// メディアのキャッシュの段（表示済みか先読み）に残っているファイルを、最後に使った順に並べる画面。
-/// 表示済みは、ビューアで開いた画像と、共有や保存で落としたもの。先読みは、ビューアで開く前に読んでおいた画像。
-/// 押すとQuick Lookで開き、そこから共有や保存をする。どの投稿のものかは記録していないので出さない。
+/// メディアのキャッシュの段（表示済みかプリフェッチ）に残っているファイルを、最後に使った順に並べる画面。
+/// 表示済みは、ビューアで開いた画像と、共有や保存で落としたもの。プリフェッチは、ビューアで開く前に読んでおいた画像。
+/// 選択するとQuick Lookで開き、そこから共有や保存をする。どの投稿のものかは記録していないので出さない。
 struct MediaCacheView: View {
     /// 並べる処理と開く処理。部品カタログでは、アプリのキャッシュに触れずに状態を作るために差し替える。
     struct Actions {
@@ -14,7 +14,7 @@ struct MediaCacheView: View {
         var open: @Sendable (MediaFileCache.Entry.ID) async throws -> URL?
     }
 
-    /// 並べる段。`mediaFiles`（表示済み）か`mediaPrefetch`（先読み）。
+    /// 並べる段。`mediaFiles`（表示済み）か`mediaPrefetch`（プリフェッチ）。
     let category: StorageBreakdown.Category
     let actions: Actions
     @State private var entries: [MediaFileCache.Entry]?

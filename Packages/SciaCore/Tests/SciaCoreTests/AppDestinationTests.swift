@@ -125,7 +125,7 @@ struct AppDestinationTests {
         #expect(AppDestination(url) == destination, "\(url.absoluteString)")
     }
 
-    /// ミュートとブロックの人のリストは、アカウントの画面のサーバーでの設定の項目なので、ほかの人のリストと違いタブに積まずにシートで出す。
+    /// ミュートとブロックの人のリストは、アカウントの画面のサーバーでの設定の項目なので、ほかの人のリストと違いタブにプッシュせずにシートで出す。
     @Test func moderationListsAreSheets() {
         #expect(!AppDestination.accounts(.muted).showsTab)
         #expect(!AppDestination.accounts(.blocked).showsTab)
@@ -243,7 +243,7 @@ struct AppDestinationTests {
         #expect(!AppDestination.thread(statusID: "123").logDescription.contains("123"))
     }
 
-    /// タブを見せる行き先は、上に重ねた画面を閉じてから開く。重ねたままでは見えず、積むのもやめるため。
+    /// タブを見せる行き先は、上のモーダルビューを閉じてから開く。モーダルビューを出したままでは見えず、プッシュするのもやめるため。
     /// 手前に重ねる行き先は、下の画面を残して重ねる。ビューアのメニューから開いた設定を閉じると、ビューアに戻るため。
     @Test func tellsWhichDestinationsShowTabs() {
         #expect(AppDestination.tab(.home).showsTab)

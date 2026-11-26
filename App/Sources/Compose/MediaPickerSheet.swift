@@ -10,7 +10,7 @@ import UIKit
 final class MediaPickerSheet: NSObject, TrackedSheet {
     /// 選択が変わるたびに、今の選択を順に渡す。
     var onSelectionChange: ([PHPickerResult]) -> Void = { _ in }
-    /// 開閉。閉じることが決まった知らせ、閉じ終わりの知らせもここで受ける。
+    /// 開閉。閉じることが決まったコールバック、閉じ終わりのコールバックもここで受ける。
     let lifecycle: SheetLifecycle
 
     private let picker: PHPickerViewController
@@ -26,7 +26,7 @@ final class MediaPickerSheet: NSObject, TrackedSheet {
     /// - Parameters:
     ///   - selectedIDs: 前に選んだメディアのID。開き直したときに選んだ状態で出す。
     ///   - selectionLimit: 選べる枚数の上限。接続先のサーバーの添付の上限にする。
-    ///   - lowHeight: 低いときのシートの高さ。画面の下の安全領域は含まない。
+    ///   - lowHeight: 低いときのシートの高さ。画面の下のセーフエリアは含まない。
     init(selectedIDs: [String], selectionLimit: Int, lowHeight: CGFloat) {
         self.selectedIDs = selectedIDs
         resetsScrollOnDetentChange = selectedIDs.isEmpty
@@ -75,7 +75,7 @@ final class MediaPickerSheet: NSObject, TrackedSheet {
 extension MediaPickerSheet: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         let ids = results.compactMap(\.assetIdentifier)
-        // 選択をその場で受け取る設定では、✓を押すと今の選択がそのままもう一度届く。選択が変わらずに届いたら✓とみなして閉じる。
+        // 選択をその場で受け取る設定では、✓を選択すると今の選択がそのままもう一度届く。選択が変わらずに届いたら✓とみなして閉じる。
         if ids == selectedIDs {
             logger.info("media picker: same selection arrived, treating as done (count=\(ids.count))")
             close(notifiesWillClose: true)

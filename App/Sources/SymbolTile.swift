@@ -23,7 +23,7 @@ struct SymbolTile: View {
             .imageScale(.medium)
             // 記号は、下へ行くほどわずかに下の色が透ける。
             .foregroundStyle(LinearGradient(colors: [.white, Color(uiColor: .dimmedWhiteText(alpha: 0.97))], startPoint: .top, endPoint: .bottom))
-            // 記号の影は下にだけ落ち、上と横にはほとんど出ない。濃さは記号によって違い、歯車の歯の下はアクセシビリティの円の下より濃かったので、両方の差の合計が小さくなる値にした。
+            // 記号の影は下にだけ落ち、上と横にはほとんど出ない。不透明度は記号によって違い、歯車の歯の下はアクセシビリティの円の下より濃かったので、両方の差の合計が小さくなる値にした。
             .shadow(color: .black.opacity(0.12), radius: 0.6 * decorationScale, y: decorationScale)
             .frame(width: side, height: side)
             .background { tile }
@@ -42,7 +42,7 @@ struct SymbolTile: View {
 
     private static var extentRatios: [String: CGFloat] = [:]
 
-    /// 記号を描いたときの、見た目の縦横の大きいほうの、描いた大きさに対する割合。`UIImage`の大きさは見た目より大きく出るので、描いた画素の範囲で測る。記号ごとに1回だけ描いて覚える。
+    /// 記号を描いたときの、見た目の縦横の大きいほうの、描いた大きさに対する割合。`UIImage`の大きさは見た目より大きく出るので、描いた画素の範囲で測る。記号ごとに1回だけ描いてキャッシュする。
     static func visualExtentRatio(of systemImage: String) -> CGFloat? {
         if let ratio = extentRatios[systemImage] { return ratio }
         let pointSize: CGFloat = 100

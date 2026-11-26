@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SciaCore
 
-/// 一時的な失敗で自動で送り直すのは、何度送っても結果が変わらないGETと、`Idempotency-Key`付きの投稿だけ。
+/// 一時的な失敗で自動で再送するのは、何度送っても結果が変わらないGETと、`Idempotency-Key`付きの投稿だけ。
 @Suite(.requestPurpose(.action))
 struct RetryTests {
     private static let noWait = RetryPolicy(maxRetries: 2, initialDelay: .zero)
@@ -49,7 +49,7 @@ struct RetryTests {
         #expect(await transport.requests.count == 3)
     }
 
-    /// 結果が変わらない失敗は送り直さない。
+    /// 結果が変わらない失敗は再送しない。
     @Test(arguments: [400, 401, 404, 422, 500])
     func doesNotRetryOtherStatuses(statusCode: Int) async throws {
         let transport = StubTransport([.json(#"{"error":"x"}"#, statusCode: statusCode)])
@@ -59,7 +59,7 @@ struct RetryTests {
         #expect(await transport.requests.count == 1)
     }
 
-    /// 再開の時刻が分かる429や503は、送り直さずに自動の通信を止める。
+    /// 再開の時刻が分かる429や503は、再送せずに自動の通信を止める。
     @Test func doesNotRetryWhenServerAsksToWait() async throws {
         let transport = StubTransport([.json("<html>503</html>", statusCode: 503, headers: ["Retry-After": "30"])])
 
@@ -78,7 +78,7 @@ struct RetryTests {
         #expect(requests.allSatisfy { $0.value(forHTTPHeaderField: "Idempotency-Key") == "key-1" })
     }
 
-    /// お気に入りなどは、届いていたかどうか分からないまま送り直さない。
+    /// お気に入りなどは、届いていたかどうか分からないまま再送しない。
     @Test func postWithoutIdempotencyKeyIsNotRetried() async throws {
         let transport = StubTransport([.failure(.networkConnectionLost)])
 

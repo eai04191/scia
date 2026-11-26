@@ -92,7 +92,7 @@ private struct ModifiedTitle: View {
     let isModified: Bool
 
     var body: some View {
-        // インジケーターの幅は変えていなくても取っておく。変えてインジケーターが出たときに名前が折り返すと、行が高くなり、押している部品が指の下から動くため。
+        // インジケーターの幅は変えていなくても取っておく。変えてインジケーターが出たときに名前が折り返すと、行が高くなり、押下中の部品が指の下から動くため。
         HStack(spacing: 6) {
             // 名前は部品が読み上げるので、VoiceOverで同じ名前を2回たどらせない。
             Text(title)

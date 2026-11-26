@@ -5,7 +5,7 @@ import UIKit
 /// RichTextRendererで描いた本文の、リンクの部分をタップできるラベル。リンクの外のタップは受けず、セルなど後ろのビューに渡す。
 final class LinkLabel: EmojiLabel {
     /// メニューの並び。
-    /// 窓に開いたアカウントの設定。ラベルは投稿の本文などの中で何段も親から作られるので、窓から読む。
+    /// ウィンドウに開いたアカウントの設定。ラベルは投稿の本文などの中で何段も親から作られるので、ウィンドウから読む。
     var settings: AppSettings { traitCollection.appSettings }
     /// リンクのタップで、タップと長押しの設定によらず、いつも開く。メニューも出さない。「投稿の見た目」のプレビューの見本で使う。
     var opensLinksOnTapOnly = false
@@ -16,9 +16,9 @@ final class LinkLabel: EmojiLabel {
     var hashtagAccount: Account?
 
     /// リンクの上の押下だけを受ける、ラベルと同じ大きさの透明な部品。
-    /// MacのDesigned for iPadでは、アクティブでないウィンドウへの最初のクリックを、押された場所のビューが`UIControl`のときだけアプリに渡し、
-    /// それ以外はウィンドウを前に出すだけで捨てる。ラベルにタップのジェスチャーを付けるだけだと、リンクを押してもまずウィンドウが前に出るだけになるため、
-    /// リンクの上で押されたビューが`UIControl`になるようにする。
+    /// MacのDesigned for iPadでは、アクティブでないウィンドウへの最初のクリックを、クリックされた場所のビューが`UIControl`のときだけアプリに渡し、
+    /// それ以外はウィンドウを前に出すだけで捨てる。ラベルにタップのジェスチャーを付けるだけだと、リンクをクリックしてもまずウィンドウが前に出るだけになるため、
+    /// リンクの上で押下されたビューが`UIControl`になるようにする。
     private lazy var hitArea = LinkHitArea(label: self)
 
     /// 長い本文を切る行数。nilなら切らない。決まりはdocs/long-post.mdにある。
@@ -42,7 +42,7 @@ final class LinkLabel: EmojiLabel {
             setNeedsLayout()
         }
     }
-    /// 「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、`truncation`をnilにするまで見た目は変わらない。
+    /// 「続きを読む」が選択されたときに呼ぶ。広げた状態を持つのは置く側で、`truncation`をnilにするまで見た目は変わらない。
     var onExpand: (() -> Void)?
     /// 幅ごとに決めた、本文を出す行数。高さを測るたびに並べ直さないよう、文字列か切る行数が変わるまで使い回す。
     private var lineLimits: [CGFloat: Int] = [:]
@@ -205,7 +205,7 @@ final class LinkLabel: EmojiLabel {
     }
 
     /// リンクの外では当たりにならず、押下は後ろのビューに渡る。リンクの上では、重ねた`hitArea`が当たりになる。
-    /// ラベル自身が当たりになると、Xの投稿の囲みのようにボタンの中に置いたとき、リンクの外を押してもボタンが反応しない。
+    /// ラベル自身が当たりになると、Xの投稿のカードのようにボタンの中に置いたとき、リンクの外を選択してもボタンが反応しない。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let view = super.hitTest(point, with: event)
         return view === self ? nil : view
@@ -263,7 +263,7 @@ final class LinkLabel: EmojiLabel {
 
 
 
-/// 切った本文の最後の行の末尾に重ねる「続きを読む」。押せる範囲は、文字の周りに少し広げる。
+/// 切った本文の最後の行の末尾に重ねる「続きを読む」。ヒット領域は、文字の周りに少し広げる。
 /// 読み上げでは、本文の要素の操作で広げるので、要素にしない。
 /// スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
 final class ReadMoreButton: UIControl {
@@ -399,7 +399,7 @@ protocol LinkMenuHost: AnyObject {
 /// スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
 /// リンクの上の長押しは、セルの後ろのコレクションビューに渡らず投稿のメニューにならないため、この部品でリンクのメニューを出す。
 /// メニューは、コントロールに組み込まれたメニュー（`isContextMenuInteractionEnabled`）ではなく、別に付けた`UIContextMenuInteraction`で出す。
-/// 組み込まれたメニューでは、長押しで開いても触覚フィードバックが出ないため。
+/// 組み込まれたメニューでは、長押しで開いてもハプティクスが出ないため。
 final class LinkHitArea: UIControl {
     private weak var label: LinkLabel?
     private var longPress: ObjectLongPress?
@@ -434,7 +434,7 @@ final class LinkHitArea: UIControl {
         target(at: point)?.perform(.tap, in: self, at: point)
     }
 
-    /// 押したリンクの行き先の対象（リンク、ユーザー、ハッシュタグ）。リンクの外ならnil。決まりはdocs/object-actions.mdにある。
+    /// 選択したリンクの行き先の対象（リンク、ユーザー、ハッシュタグ）。リンクの外ならnil。決まりはdocs/object-actions.mdにある。
     /// 主な操作（開く）は、今のタップの処理のまま行う。
     private func target(at point: CGPoint) -> (any ObjectActionTarget)? {
         guard let label, let destination = label.link(at: convert(point, to: label)) else { return nil }
@@ -479,7 +479,7 @@ final class LinkHitArea: UIControl {
         let point = convert(location, to: label)
         // 出す項目をすべて隠していれば、メニューを出さない。
         guard let destination = label.link(at: point), let menu = menu(for: destination, at: point) else { return nil }
-        // 浮かせるリンクを選び直せるよう、押した場所をidentifierに持たせる。
+        // 浮かせるリンクを選び直せるよう、押下した場所をidentifierに持たせる。
         return UIContextMenuConfiguration(identifier: NSValue(cgPoint: point), previewProvider: nil) { _ in menu }
     }
 
@@ -498,12 +498,12 @@ final class LinkHitArea: UIControl {
         animator.addCompletion { host?.linkMenuDidHide() }
     }
 
-    /// 押したリンクの文字だけを浮かせる。部品はラベルと同じ大きさで透明なため、そのままでは本文の全体が浮く。
+    /// 選択したリンクの文字だけを浮かせる。部品はラベルと同じ大きさで透明なため、そのままでは本文の全体が浮く。
     /// ラベルそのものを渡すと、UIKitがメニューを出している間ラベルを隠し、浮かせたリンクのほかの本文が消えるため、ラベルのスナップショットを浮かせる。
-    /// スナップショットは、リンクの文字の枠でちょうど切り抜く。浮かせる面はリンクの枠より余白の分広く、切り抜かないと隣の文字まで面に写り、元の本文と二重に見えるため。
+    /// スナップショットは、リンクの文字の枠でちょうど切り抜く。浮かせる面はリンクの枠より余白の分広く、切り抜かないと隣の文字まで面に入り、元の本文と二重に見えるため。
     /// スナップショットは画面に置かないので、開き始めの約3コマは本文に残ったリンクと浮かせた面が二重に見え、閉じた直後の約3コマはリンクの両隣の文字が欠ける。
-    /// リンクだけを写したビューをリンクの真上に置き、ラベルからリンクの部分を抜いてそのビューを浮かせると、開閉の両端はずれなくなる。
-    /// ただ、メニューを出す前に指を動かして取りやめると、UIKitは置いたビューを隠したまま縮めて戻し、面にも中身を写さないので、約0.4秒リンクの場所が空白になる。
+    /// リンクだけを撮ったスナップショットをリンクの真上に置き、ラベルからリンクの部分を抜いてそのビューを浮かせると、開閉の両端はずれなくなる。
+    /// ただ、メニューを出す前に指を動かして取りやめると、UIKitは置いたビューを隠したまま縮めて戻し、面にも中身を描かないので、約0.4秒リンクの場所が空白になる。
     /// 公開APIでは取りやめの間にビューを見せ直せないため、取りやめでも文字が見えたままのこちらを選んだ。
     fileprivate func linkPreview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
         guard let label, let point = (configuration.identifier as? NSValue)?.cgPointValue else { return nil }
@@ -582,7 +582,7 @@ final class LinkHitArea: UIControl {
         return menu.built(groups: groups ?? settings.hashtagMenuLayout.groups)
     }
 
-    /// コピーと開くは、メニューを出した画面に頼む。共有のシートは、押したリンクから出す。
+    /// コピーと開くは、メニューを出した画面に頼む。共有のシートは、選択したリンクから出す。
     private func urlHandlers(at point: CGPoint, linkBrowser: LinkBrowser) -> URLMenuHandlers {
         URLMenuHandlers(
             linkBrowser: linkBrowser,

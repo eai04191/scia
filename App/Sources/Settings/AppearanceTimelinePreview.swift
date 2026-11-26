@@ -13,7 +13,7 @@ final class AppearanceTimelinePreviewController: UIViewController {
     private var fitRevision: Int?
     /// 高さを渡した幅。nilなら、次に並べたときに渡す。
     private var fittedWidth: CGFloat?
-    /// 見本に渡したプリセットのアクセントカラーと設定を、見本に当て続ける。窓と違うプリセット（プリセットを比較、プリセットを管理から開いた見た目）の見本も、そのプリセットの色で描くため。
+    /// 見本に渡したプリセットのアクセントカラーと設定を、見本に当て続ける。ウィンドウと違うプリセット（プリセットを比較、プリセットを管理から開いた見た目）の見本も、そのプリセットの色で描くため。
     private var previewSettings: WindowSettings?
 
     init(timeline: TimelineViewController) {
@@ -106,7 +106,7 @@ struct FittedAppearancePreview: View {
     let heightLimit: CGFloat
     var fitRevision = 0
     @State private var height: CGFloat?
-    /// 画面に出た回数。重ねた画面から戻ったときは、そこで変えた値で見本の高さが変わっているので、合わせ直す。
+    /// 画面に出た回数。モーダルビューから戻ったときは、そこで変えた値で見本の高さが変わっているので、合わせ直す。
     @State private var appearances = 0
 
     var body: some View {
@@ -136,7 +136,7 @@ extension TimelineViewController {
     static func appearancePreview(texts: Texts, filterContext: FilterResult.Context, myAccountID: String, tuning: TuningStore, settings: AppSettings) -> TimelineViewController {
         let timeline = TimelineViewController(texts: texts, settings: settings, refresh: {}, tuning: tuning)
         timeline.isAppearancePreview = true
-        // 見本の絵文字のリアクションと「＋」を、ログインしているサーバーによらず出す。押しても何もしない。
+        // 見本の絵文字のリアクションと「＋」を、ログインしているサーバーによらず出す。選択しても何もしない。
         timeline.capabilities.supportsEmojiReactions = true
         timeline.onAddEmojiReaction = { _ in }
         timeline.onOpenLink = { destination, _ in

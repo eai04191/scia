@@ -8,7 +8,7 @@ extension TimelineViewController {
         translations?.translation(for: TranslationSource(status.displayed))
     }
 
-    /// 囲みの本文の自動翻訳の状態。訳文も出さず、待ってもいなければnil。
+    /// カードの本文の自動翻訳の状態。訳文も出さず、待ってもいなければnil。
     func embedTranslation(of source: TranslationSource) -> PostContentBuilder.EmbedTranslation? {
         guard let translations else { return nil }
         if let text = translations.translation(for: source) {
@@ -17,13 +17,13 @@ extension TimelineViewController {
         return translations.isTranslating(source) ? PostContentBuilder.EmbedTranslation(text: nil) : nil
     }
 
-    /// `status`の行で訳すもの。投稿の本文、囲みで出している引用元かXの投稿の本文の順。`status`はブーストなら元の投稿。
+    /// `status`の行で訳すもの。投稿の本文、カードで出している引用元かXの投稿の本文の順。`status`はブーストなら元の投稿。
     func translationSources(of status: Status) -> [TranslationSource] {
         // 出さない設定の本文と引用は訳さない。
         (appearance(for: status).showsBody ? [TranslationSource(status)] : []) + [embedTranslationSource(of: status)].compactMap(\.self)
     }
 
-    /// `status`の行に囲みで出している、引用元かXの投稿。読み終えていないXの投稿はnil。`status`はブーストなら元の投稿。
+    /// `status`の行にカードで出している、引用元かXの投稿。読み終えていないXの投稿はnil。`status`はブーストなら元の投稿。
     func embedTranslationSource(of status: Status) -> TranslationSource? {
         let shown = quoteSourceChanges.applying(to: status)
         let filterWarnings = filterWarnings
@@ -35,7 +35,7 @@ extension TimelineViewController {
         return TranslationSource(post)
     }
 
-    /// 訳文が届いたか、原文と訳文を切り替えた投稿を描き直す。文字が替わって高さが変わるのは「続きを読む」や絵文字が届いたときと同じなので、下の投稿を動かしてつなぐ。
+    /// 訳文が届いたか、原文と訳文を切り替えた投稿を再描画する。文字が替わって高さが変わるのは「続きを読む」や絵文字が届いたときと同じなので、下の投稿を動かしてつなぐ。
     func applyTranslations(_ ids: Set<TranslationSource.ID>) {
         guard isViewLoaded else { return }
         let items = displayedItemIDs.filter { status(for: $0).map { translationSources(of: $0.displayed).contains { ids.contains($0.id) } } ?? false }
@@ -43,11 +43,11 @@ extension TimelineViewController {
     }
 
     func redrawTranslations(_ items: Set<ItemID>) {
-        // 訳文は、なくなる行を自分で薄くして消すので、縮む前の像は重ねない。
+        // 訳文は、なくなる行を自分で薄くして消すので、縮む前のスナップショットは重ねない。
         reconfigureShiftingRowsBelow(items, duration: tuning.value(of: TuningCatalog.translationTransitionDuration), concealsShrink: false)
     }
 
-    /// 訳す言語が変わった。訳文を出すかどうかが変わるので、見えている投稿を描き直し、画面の前後を訳し直す。
+    /// 訳す言語が変わった。訳文を出すかどうかが変わるので、見えている投稿を再描画し、画面の前後を訳し直す。
     func applyTranslationLanguages() {
         guard isViewLoaded else { return }
         reconfigureWhenShown(Set(displayedItemIDs.filter { status(for: $0).map { translationSources(of: $0.displayed).contains { $0.language != nil } } ?? false })) { reconfigure($0) }

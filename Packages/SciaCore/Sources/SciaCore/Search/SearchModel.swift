@@ -31,7 +31,7 @@ public final class SearchModel {
     public let scope: Scope
     /// 結果を伝える画面。
     public weak var display: (any TimelineDisplay)?
-    /// URLやハンドルが1つに決まったときに呼ぶ。最初の読み込みでだけ呼び、引っぱって読み直したときは呼ばない。
+    /// URLやハンドルが1つに決まったときに呼ぶ。最初の読み込みでだけ呼び、pull to refreshしたときは呼ばない。
     public var onFound: ((Found) -> Void)?
     private let credential: Credential
     private let client: MastodonClient
@@ -115,15 +115,15 @@ public final class SearchModel {
     public func refresh() async {
         guard !isStopped else { return }
         logger.info("refresh")
-        // 読み込んでいる途中なら、終わってから読み直す。Pagerは重ねて読まないため、途中で世代だけを進めると、走っている読み込みの結果も捨てて、読み込み中のまま止まる。
+        // 読み込んでいる途中なら、終わってから再読み込みする。Pagerは重ねて読まないため、途中で世代だけを進めると、走っている読み込みの結果も捨てて、読み込み中のまま止まる。
         await tasks.waitForRunning()
         for task in load(isRefresh: true, purpose: .action) {
             await task.value
         }
     }
 
-    /// 読めなかった種類を読み直す。失敗の表示の再試行と、失敗の行を押したときに呼ぶ。
-    /// - Parameter category: 読み直す種類。nilなら、最初の読み込みに失敗した種類と、続きの読み込みに失敗した種類をすべて読み直す。
+    /// 読めなかった種類を再読み込みする。失敗の表示の再試行と、失敗の行を選択したときに呼ぶ。
+    /// - Parameter category: 再読み込みする種類。nilなら、最初の読み込みに失敗した種類と、続きの読み込みに失敗した種類をすべて再読み込みする。
     public func retry(_ category: SearchCategory? = nil) {
         guard !isStopped else { return }
         // URLは1回の問い合わせで読み込ませるため、失敗したら同じ問い合わせをやり直す。種類ごとの検索では、投稿のURLを読み込まないため。
@@ -201,7 +201,7 @@ public final class SearchModel {
             do {
                 guard try await pager.loadInitial(), generation == model.generation, !model.isStopped else { return }
                 model.states[category] = .loaded
-                // 先頭から読み直したので、前の続きの読み込みの失敗はもう関係しない。
+                // 先頭から再読み込みしたので、前の続きの読み込みの失敗はもう関係しない。
                 model.nextFailures[category] = nil
                 model.render(arrived: true)
                 model.logger.info("loadInitial done category=\(category.rawValue, privacy: .public) count=\(pager.count, privacy: .public)")
@@ -211,7 +211,7 @@ public final class SearchModel {
                 }
             } catch {
                 guard generation == model.generation else { return }
-                // 読み直しに失敗しても、前の結果があれば残す。
+                // 再読み込みに失敗しても、前の結果があれば残す。
                 model.handle(error, during: "loadInitial \(category.rawValue)") { presentation in
                     if !isRefresh || model.states[category] != .loaded {
                         model.states[category] = .failed(presentation)
@@ -279,7 +279,7 @@ public final class SearchModel {
         render(animatesRemoval: true)
     }
 
-    /// ミュートかブロックした相手の投稿を除く。使う人の操作の結果なので、閉じる動きで消す。読み直せば、サーバーが除いた結果に戻る。
+    /// ミュートかブロックした相手の投稿を除く。使う人の操作の結果なので、閉じる動きで消す。再読み込みすれば、サーバーが除いた結果に戻る。
     public func excludeAccount(_ id: String) {
         guard !isStopped, pagers[.statuses]?.removeStatuses(where: { entry in
             guard case .status(let status) = entry else { return false }

@@ -181,7 +181,7 @@ struct ComposeModelRedraftTests {
         #expect(Confirmation.discardingRedraft(draft: model) == nil)
     }
 
-    /// ほかの窓でログアウトしたアカウントで書き直していたら、削除は送っていないので、断られたときと同じく元の投稿は残っているものとして扱う。
+    /// ほかのウィンドウでログアウトしたアカウントで書き直していたら、削除は送っていないので、断られたときと同じく元の投稿は残っているものとして扱う。
     @Test func deletionAsRemovedAccountKeepsOriginal() async {
         let events = Events()
         let model = makeModel(events, redraft: redraftService(events, delete: { throw RemovedAccount(handle: "@me@example.com") }) { Self.attachment($0) }) { _ in
@@ -196,7 +196,7 @@ struct ComposeModelRedraftTests {
         #expect(Confirmation.discardingRedraft(draft: model) == nil)
     }
 
-    /// 応答を受け取れず、削除が届いたか分からなければ、やめる前に確かめ、送り直すときは削除から送り直す。404なら届いていたものとして続ける。
+    /// 応答を受け取れず、削除が届いたか分からなければ、やめる前に確かめ、再送するときは削除から再送する。404なら届いていたものとして続ける。
     @Test func uncertainDeletionIsRetried() async {
         let events = Events()
         let attempts = Counter()
@@ -285,7 +285,7 @@ struct ComposeModelRedraftTests {
     }
 
     /// 削除したあとに投稿が断られたら、下書きを残し、元の投稿はもうないことをラベルに出す。
-    /// 送り直すときは削除し直さず、一度外れた添付も待ち直さない。投稿が届いて応答だけを失っていれば、添付はもう新しい投稿に付いているため。
+    /// 再送するときは削除し直さず、一度外れた添付も待ち直さない。投稿が届いて応答だけを失っていれば、添付はもう新しい投稿に付いているため。
     @Test func failedPostAfterDeletionResumesWithoutDeletingAgain() async throws {
         let events = Events()
         var fails = true
@@ -307,12 +307,12 @@ struct ComposeModelRedraftTests {
         model.postError = nil
         await model.submit()
         #expect(events.all == ["delete 10", "release 100", "post", "post"])
-        // 同じ下書きなので、届いていた投稿をサーバーに返させるよう、同じキーで送り直す。
+        // 同じ下書きなので、届いていた投稿をサーバーに返させるよう、同じキーで再送する。
         #expect(Set(sentKeys).count == 1)
         #expect(model.redraft == nil)
     }
 
-    /// 元の添付が外れないまま時間切れになったら、送らずに知らせ、その添付を失敗として出す。送り直すと、待ち直す。
+    /// 元の添付が外れないまま時間切れになったら、送らずに知らせ、その添付を失敗として出す。再送すると、待ち直す。
     @Test func unreleasedMediaFailsAndIsAwaitedAgain() async throws {
         let events = Events()
         let releases = Counter()

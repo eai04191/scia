@@ -40,7 +40,7 @@ public final class RecentSearches {
 /// 検索欄に打っている途中に出す候補。決まりはdocs/search.mdの「打っている途中」にある。
 @MainActor
 public final class SearchSuggestions {
-    /// 打った語に応じて、候補の上に出す行。押すと確定と同じことをする。
+    /// 打った語に応じて、候補の上に出す行。選択すると確定と同じことをする。
     public enum Action: Hashable, Sendable {
         /// 語で探す。
         case search(String)
@@ -139,7 +139,7 @@ public final class SearchSuggestions {
                 set(content)
             } catch {
                 guard !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
-                // 打っている途中の問い合わせなので、送り直さない。次に打った文字で問い合わせ直す。
+                // 打っている途中の問い合わせなので、再送しない。次に打った文字で問い合わせ直す。
                 self?.logger.error("suggest failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }

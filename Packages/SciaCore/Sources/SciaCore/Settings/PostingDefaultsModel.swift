@@ -8,7 +8,7 @@ import os
 public final class PostingDefaultsModel {
     /// 読み込みと保存の送り先。
     public struct API: Sendable {
-        /// 今の既定を読み直す。
+        /// 今の既定を再読み込みする。
         public var load: @MainActor @Sendable () async throws -> ServerPreferences
         /// 既定を1つ変え、変えたあとの既定を返す。
         public var save: @MainActor @Sendable (PostingDefaultChange) async throws -> ServerPreferences?
@@ -54,7 +54,7 @@ public final class PostingDefaultsModel {
     @ObservationIgnored private let logger = SciaLog.logger(category: "postingDefaults")
     public var runningTaskCount: Int { tasks.runningCount }
 
-    /// - Parameter initial: すでに読めている既定。読み直すまでの表示に使う。
+    /// - Parameter initial: すでに読めている既定。再読み込みするまでの表示に使う。
     public init(api: API, initial: ServerPreferences? = nil, tasks: TaskScope) {
         self.api = api
         confirmed = initial
@@ -71,7 +71,7 @@ public final class PostingDefaultsModel {
         preferences.flatMap { $0.defaultQuotePolicy?.effective(for: $0.defaultVisibility) }
     }
 
-    /// 読み直す。読んでいる途中なら、その読み込みに任せる。
+    /// 再読み込みする。読んでいる途中なら、その読み込みに任せる。
     @discardableResult
     public func reload(purpose: RequestPurpose) -> Task<Void, Never>? {
         if let loading { return loading }

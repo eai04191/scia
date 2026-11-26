@@ -283,12 +283,12 @@ private struct ExtendedURLAnimation: View {
 }
 
 /// URLの後ろに続いた文字を知らせるシート。中身の高さに合わせた1段で出す。
-/// ボタンを押したら、閉じたことを知らせてから選んだものを渡し、閉じる。下へスワイプして閉じたら、閉じたことだけを知らせる。
+/// ボタンを選択したら、閉じたことを知らせてから選んだものを渡し、閉じる。下へスワイプして閉じたら、閉じたことだけを知らせる。
 final class ExtendedURLSheet: UIHostingController<ExtendedURLView> {
     private let onClose: () -> Void
     private var hasClosed = false
 
-    /// - Parameter onDismissed: ボタンを押して閉じたとき、閉じ終えてから呼ぶ。
+    /// - Parameter onDismissed: ボタンを選択して閉じたとき、閉じ終えてから呼ぶ。
     init(prompt: ExtendedURLPrompt, timing: ExtendedURLTiming, onChoose: @escaping (ExtendedURLChoice) -> Void, onClose: @escaping () -> Void, onDismissed: @escaping () -> Void) {
         self.onClose = onClose
         // 閉じる処理は自分を参照するため、作り終えてから入れ直す。
@@ -315,7 +315,7 @@ final class ExtendedURLSheet: UIHostingController<ExtendedURLView> {
         preferredContentSize = sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
     }
 
-    /// 中身の高さが変わったら（シートの幅で並べ直したときや、文字の大きさを変えたときなど）、シートの高さを動きで合わせ直す。
+    /// 中身の高さが変わったら（シートの幅で並べ直したときや、Dynamic Typeを変えたときなど）、シートの高さを動きで合わせ直す。
     override var preferredContentSize: CGSize {
         didSet {
             guard preferredContentSize != oldValue, let sheet = sheetPresentationController else { return }

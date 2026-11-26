@@ -5,11 +5,11 @@ import UIKit
 
 /// 投稿欄の補完の候補のリスト。投稿欄の上に重ね、広げているときは打っている行のすぐ下に重ねる。
 ///
-/// 押しても入力欄のフォーカスは動かさない。候補を押したら`onSelect`、失敗の行を押したら`onRetry`を呼ぶ。
+/// 選択しても入力欄のフォーカスは動かさない。候補を選択したら`onSelect`、失敗の行を選択したら`onRetry`を呼ぶ。
 /// ハードウェアキーボードで選んでいる候補は、行の背景で示す。
 ///
 /// いちばん優先する候補を、打っている文字にいちばん近い端に置く。UIKitのメニューの`priority`の並び順と同じ考え方。
-/// 入力の上に出すときは下から積み、指と目の動きを短くし、あとから候補が足されても押そうとしている候補を動かさない。
+/// 入力の上に出すときは下から積み、指と目の動きを短くし、あとから候補が足されても選択しようとしている候補を動かさない。
 ///
 /// 中身はSwiftUIで描く。選んでいる行の背景を、候補のリストの角と同心に丸めるため（`ConcentricRectangle`）。
 /// UIKitの`containerConcentric`は、候補のリストをスクロールしても丸めが付け替わらなかったが、SwiftUIでは追従した。
@@ -44,7 +44,7 @@ final class CompletionList: UIView {
         set { model.growsUpward = newValue }
     }
 
-    /// 1行の高さ。文字の大きさの設定に合わせて伸ばす。
+    /// 1行の高さ。Dynamic Typeの設定に合わせて伸ばす。
     static var rowHeight: CGFloat {
         UIFontMetrics(forTextStyle: .body).scaledValue(for: 48)
     }
@@ -89,7 +89,7 @@ final class CompletionList: UIView {
     }
 
     /// ガラスの枠の外の透明な部分では触れたものを受けず、下の入力欄やタイムラインへ通す。候補のリストの枠は、出してよい場所いっぱいに広げているため。
-    /// 入れ替えの途中は、まだ並べている前の行も押せるよう、前と後の大きいほうの高さで受ける。
+    /// 入れ替えの途中は、まだ並べている前の行も選択できるよう、前と後の大きいほうの高さで受ける。
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         let height = min(max(contentHeight, Self.contentHeight(of: model.displayedRows)), bounds.height)
         let glass = model.growsUpward
@@ -105,7 +105,7 @@ final class CompletionList: UIView {
     }
 
     /// - Parameter animation: 出ている候補のリストで候補を入れ替えるときの動き。nilなら、すぐ入れ替える。
-    ///   前にも後にも同じ場所にある候補はその場に残し、消える候補を薄くしきってから、ガラスの枠を伸び縮みさせて、増えた候補を浮かび上がらせる。
+    ///   前にも後にも同じ場所にある候補はその場に残し、消える候補を薄くしきってから、ガラスの枠を伸び縮みさせて、増えた候補をフェードインさせる。
     func update(_ content: CompletionModel.Content, kind: CompletionKind, selectedIndex: Int, animation: Animation? = nil) {
         let rows: [Row] = switch content {
         case .candidates(let candidates): candidates.map(Row.candidate)
@@ -124,8 +124,8 @@ final class CompletionList: UIView {
             model.show(rows, animated: false)
         }
         model.selectedIndex = selectedIndex
-        // 選んでいる候補の印は、確定する候補（出したい行の`selectedIndex`番目）と同じ行にだけ付ける。
-        // 入れ替えの途中に並べている前の行には付けず、Return・Tabで入る候補と、印の付いた候補が食い違わないようにする。
+        // 選んでいる候補のハイライトは、確定する候補（出したい行の`selectedIndex`番目）と同じ行にだけ付ける。
+        // 入れ替えの途中に並べている前の行には付けず、Return・Tabで入る候補と、ハイライトした候補が食い違わないようにする。
         model.selectedID = rows.indices.contains(selectedIndex) ? CompletionRowID(row: rows[selectedIndex], index: selectedIndex) : nil
     }
 }
@@ -157,9 +157,9 @@ private final class CompletionListModel {
     /// 薄くし始めた回数。前の薄くし方の続きを捨てるのに使う。
     @ObservationIgnored private var fadeGeneration = 0
 
-    /// 行を入れ替える。動かすときは、2段に分ける。消える行を薄くしきってから、並べ直してガラスの枠を伸び縮みさせ、増えた行を浮かび上がらせる。
+    /// 行を入れ替える。動かすときは、2段に分ける。消える行を薄くしきってから、並べ直してガラスの枠を伸び縮みさせ、増えた行をフェードインさせる。
     /// 同時に入れ替えると、消える行と増える行が同じ場所で重なり、文字が二重に読めたため。
-    /// 薄くしている途中にまた入れ替わったら、いま並べている行から比べ直し、見えている濃さから続ける。消す行が同じなら、その薄くし方を続け、
+    /// 薄くしている途中にまた入れ替わったら、いま並べている行から比べ直し、見えている不透明度から続ける。消す行が同じなら、その薄くし方を続け、
     /// 薄くしきったところで最新の行を並べる。同じ値を入れ直しても新しい動きにならず、続きがすぐ呼ばれて、薄くしきる前に行が消えるため。
     func show(_ rows: [CompletionList.Row], animated: Bool) {
         pendingRows = rows
@@ -197,7 +197,7 @@ private final class CompletionListModel {
     }
 
     var selectedIndex = 0
-    /// 選んでいる候補の行。確定する候補と同じ行にだけ印を付ける。
+    /// 選んでいる候補の行。確定する候補と同じ行にだけハイライトを付ける。
     var selectedID: CompletionRowID?
     var growsUpward = false
     /// 候補を入れ替えた回数。スクロールを端に戻すのに使う。
@@ -223,8 +223,8 @@ private struct CompletionListView: View {
 
     /// 下から積むときは、見た目だけを逆に並べる。
     ///
-    /// 行には、番号ではなく、この時点で写し取った行の中身を渡す。番号だけを渡して描くときに`model.rows`を読むと、
-    /// 候補が減った直後にSwiftUIが古い番号の行を描き直し、範囲外を読んで落ちた（実機で、自分のタグから検索の結果に入れ替わるとき）。
+    /// 行には、番号ではなく、この時点でコピーした行の中身を渡す。番号だけを渡して描くときに`model.rows`を読むと、
+    /// 候補が減った直後にSwiftUIが古い番号の行を再描画し、範囲外を読んで落ちた（実機で、自分のタグから検索の結果に入れ替わるとき）。
     private func items(_ rows: [CompletionList.Row]) -> [Item] {
         let all = rows.enumerated().map { index, row in
             Item(id: CompletionRowID(row: row, index: index), index: index, row: row)
@@ -473,7 +473,7 @@ private struct CompletionRowView: View {
             .accessibilityLabel(CompletionTexts.emojiAccessibilityLabel(alias: alias, shortcode: emoji.shortcode))
         case .standardEmoji(let emoji):
             // 本文と同じ設定の絵（OSの絵文字かtwemoji）で、カスタム絵文字の画像と同じくらいの大きさに描く。
-            // 文字ではなく画像と並べる絵なので、端末の文字の大きさではなく枠の大きさで決める。
+            // 文字ではなく画像と並べる絵なので、端末のDynamic Typeの設定ではなく枠の大きさで決める。
             CandidateRowLayout {
                 // scialint:disable:next fixed_font_size
                 Text(emoji.emoji).font(Font(EmojiFont.font(.systemFont(ofSize: 24), style: model.settings.appearance.emojiStyle)))
@@ -488,7 +488,7 @@ private struct CompletionRowView: View {
     }
 }
 
-/// 選んでいる行と押している行に背景を付ける。候補のリストの端に接する角はリストの角と同心に、離れた角は12ptに丸める。
+/// 選んでいる行と押されている状態の行に背景を付ける。候補のリストの端に接する角はリストの角と同心に、離れた角は12ptに丸める。
 private struct RowButtonStyle: ButtonStyle {
     let isSelected: Bool
 

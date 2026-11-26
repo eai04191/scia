@@ -3,7 +3,7 @@ import SciaCore
 import UIKit
 
 /// RichTextRendererで描いた文字列を、SwiftUIの中に出す。SwiftUIのTextはカスタム絵文字の画像を描けないため、UILabelを使う。
-/// 絵文字の画像が後から届いたら描き直す。
+/// 絵文字の画像が後から届いたら再描画する。
 struct RichTextLabel: UIViewRepresentable {
     let numberOfLines: Int
     let emojiImages: EmojiImageStore<UIImage>

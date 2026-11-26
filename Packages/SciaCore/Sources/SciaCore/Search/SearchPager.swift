@@ -5,13 +5,13 @@ public enum SearchRow: Hashable, Sendable {
     case hashtag(Hashtag)
     /// その種類だけの結果を開く。
     case showAll(SearchCategory)
-    /// その種類を読めなかった。押すと読み直す。
+    /// その種類を読めなかった。選択すると再読み込みする。
     case failed(SearchCategory, ErrorPresentation)
-    /// 打っている途中に、語の形に応じて候補の上に出す行。押すと確定と同じことをする。
+    /// 打っている途中に、語の形に応じて候補の上に出す行。選択すると確定と同じことをする。
     case action(SearchSuggestions.Action)
     /// 最近の検索の見出し。「消去」を添える。
     case recentsHeading
-    /// 最近の検索の1つ。押すとその語で確定する。
+    /// 最近の検索の1つ。選択するとその語で確定する。
     case recent(String)
 
     public var id: String {
@@ -33,7 +33,7 @@ public enum SearchRow: Hashable, Sendable {
         return ["heading", "showAll", "failed", "recentsHeading"].contains(kind) ? id : kind
     }
 
-    /// 見出しの行か。見出しは押せず、区切り線の引き方も違う。
+    /// 見出しの行か。見出しは選択できず、区切り線の引き方も違う。
     public var isHeading: Bool {
         switch self {
         case .heading, .recentsHeading: true

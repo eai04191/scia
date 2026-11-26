@@ -14,7 +14,7 @@ final class FocusCroppedImageView: UIView {
     /// 全体を暗くする。
     private let dimView = UIView()
 
-    /// 中の画像の濃さ。下げたぶん、紙の白を見せる。タイムラインで中身を描かずに紙だけを見せる写真へ、ビューアの複製を着かせるときに使う。
+    /// 中の画像の不透明度。下げたぶん、紙の白を見せる。タイムラインで中身を描かずに紙だけを見せる写真へ、ビューアの複製を着かせるときに使う。
     var contentOpacity: CGFloat = 1 {
         didSet {
             applyOpacities()
@@ -24,11 +24,11 @@ final class FocusCroppedImageView: UIView {
 
     /// 重ねて描く明るさの幅。nilなら重ねず、まわりの明るさだけで描く。
     private(set) var blendedDynamicRange: UIImage.DynamicRange?
-    /// 重ねた明るさの画像の濃さ。1なら重ねた明るさだけで描く。
+    /// 重ねた明るさの画像の不透明度。1なら重ねた明るさだけで描く。
     private(set) var dynamicRangeBlend: CGFloat = 0
 
-    /// 中の画像を、まわりの明るさの代わりに`range`で描いた画像を`amount`の濃さで重ねて描く。`range`がnilなら重ねない。
-    /// 明るさの幅は3段で、途中の値を指定できないため、2つの明るさの画像の濃さを入れ替えて移す。
+    /// 中の画像を、まわりの明るさの代わりに`range`で描いた画像を`amount`の不透明度で重ねて描く。`range`がnilなら重ねない。
+    /// 明るさの幅は3段で、途中の値を指定できないため、2つの明るさの画像の不透明度を入れ替えて移す。
     func blendDynamicRange(_ range: UIImage.DynamicRange?, amount: CGFloat) {
         blendedDynamicRange = range
         dynamicRangeBlend = range == nil ? 0 : min(max(amount, 0), 1)
@@ -38,7 +38,7 @@ final class FocusCroppedImageView: UIView {
         applyOpacities()
     }
 
-    /// `source`の明るさで描いた画像を`amount`の濃さで重ねる。`source`が自分と同じ明るさなら重ねない。
+    /// `source`の明るさで描いた画像を`amount`の不透明度で重ねる。`source`が自分と同じ明るさなら重ねない。
     func blendDynamicRange(toward source: UIView, amount: CGFloat) {
         let range = source.traitCollection.mediaDynamicRange
         blendDynamicRange(range == traitCollection.mediaDynamicRange ? nil : range, amount: amount)
@@ -50,14 +50,14 @@ final class FocusCroppedImageView: UIView {
     }
 
     /// 下の画像は、重ねた画像が不透明に近づく終わりの区間で薄くしてなくす。不透明な画像は、重ねた画像の下に下の画像が不透明なまま残らないと透けて見えるので、区間の外では薄くしない。
-    /// 下の画像を最後まで残すと、透明な部分のある画像が2枚重なった濃さのまま着き、複製を外したところで薄くなる。
+    /// 下の画像を最後まで残すと、透明な部分のある画像が2枚重なった不透明度のまま着き、複製を外したところで薄くなる。
     private func applyOpacities() {
         blendView.alpha = contentOpacity * dynamicRangeBlend
         let portion = max(dynamicRangeUnderFadePortion, 0.01)
         imageView.alpha = contentOpacity * min(max((1 - dynamicRangeBlend) / portion, 0), 1)
     }
 
-    /// アニメーションで動かしている途中の、見えている重ねた画像の濃さ。
+    /// アニメーションで動かしている途中の、見えている重ねた画像の不透明度。
     var presentedDynamicRangeBlend: CGFloat {
         let content = 1 - CGFloat(paperView.layer.presentation()?.opacity ?? Float(paperView.alpha))
         guard content > 0 else { return dynamicRangeBlend }
@@ -88,7 +88,7 @@ final class FocusCroppedImageView: UIView {
     private(set) var lastCrossfadeDuration: TimeInterval = 0
 
     /// 画像を差し替える。`crossfadeDuration`が0より大きければ、前の画像をその時間で薄くして入れ替える。
-    /// - Parameter startAlpha: 前の画像の濃さの始まり。ほかで薄くしている途中の見え方を引き継ぐときに渡す。
+    /// - Parameter startAlpha: 前の画像の不透明度の始まり。ほかで薄くしている途中の見え方を引き継ぐときに渡す。
     func setImage(_ newImage: UIImage?, crossfadeDuration: TimeInterval, from startAlpha: CGFloat = 1) {
         lastCrossfadeDuration = crossfadeDuration
         if newImage !== imageView.image {

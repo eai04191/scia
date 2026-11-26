@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// リストのメンバーの画面の＋で開くシート。フォローしている人を探し、押すとリストに足す。もう入っている人を押すと外す。
+/// リストのメンバーの画面の＋で開くシート。フォローしている人を探し、選択するとリストに足す。もう入っている人を選択すると外す。
 /// 決まりはdocs/lists.mdの「メンバー」にある。
 struct ListMemberSearchView: View {
     let search: @MainActor (String) async throws -> [Account]
@@ -17,7 +17,7 @@ struct ListMemberSearchView: View {
     @State private var results: [Account] = []
     @State private var searchFailure: ErrorPresentation?
     @State private var memberIDs: Set<String> = []
-    /// 送っている途中の人。押し直しで二重に送らない。
+    /// 送っている途中の人。選択し直しで二重に送らない。
     @State private var pendingIDs: Set<String> = []
 
     var body: some View {

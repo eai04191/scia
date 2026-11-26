@@ -52,7 +52,7 @@ public enum ProfileEditTexts {
     /// 注目のハッシュタグと紹介しているユーザーの区切りを、読んでいる間と読めなかったときの行。
     public enum SectionLoad {
         public static let loading = "読み込み中"
-        /// 読めなかった行の名前。押すと読み直す。
+        /// 読めなかった行の名前。選択すると再読み込みする。
         public static let reload = "再読み込み"
 
         /// 読めなかった行の、名前の下に出す説明。`reason`は失敗の理由の文。

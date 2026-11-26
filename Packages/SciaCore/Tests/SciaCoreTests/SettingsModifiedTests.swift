@@ -205,7 +205,7 @@ struct SettingsModifiedTests {
         #expect(rows.map(\.keys) == [AppSettings.keys(of: .inAppBrowserHeight)])
     }
 
-    /// 見出しが同じになる節（リンクの対象の操作と、操作の画面の「リンク」の節）も、別の節として見分けられる。
+    /// 見出しが同じになるセクション（リンクの対象の操作と、操作の画面の「リンク」のセクション）も、別のセクションとして見分けられる。
     @Test func comparisonSectionsHaveDistinctIDs() throws {
         let (base, compared) = try comparedPresets("sectionIDs")
         compared.linkActions = ObjectActions(tap: .menu, longPress: .menu)

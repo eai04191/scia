@@ -261,7 +261,7 @@ struct CompletionTokenTests {
         #expect(token(":blob|", kinds: [.emoji]) != nil)
     }
 
-    /// 変換中の文字があるときは出さない。確定してから読み直す。
+    /// 変換中の文字があるときは出さない。確定してから取得し直す。
     @Test func ignoresWhileMarkedTextExists() {
         #expect(token("#ねこ|", markedRange: 1 ..< 3) == nil)
         #expect(token("#ねこ|", markedRange: nil) != nil)

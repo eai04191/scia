@@ -43,7 +43,7 @@ public actor RateLimitGate {
     }
 
     /// 429や503の応答から再開の時刻を読み、そこまで控える。時刻が分からないか、もう過ぎていれば止めず、falseを返す。
-    /// 過ぎた時刻で止めると、すぐに再開を知らせ、読み込み直しが同じ応答を受けて繰り返すため。
+    /// 過ぎた時刻で止めると、すぐに再開を知らせ、再読み込みが同じ応答を受けて繰り返すため。
     @discardableResult
     func pause(respondingTo response: HTTPURLResponse) -> Bool {
         let now = now()
@@ -66,8 +66,8 @@ public actor RateLimitGate {
     }
 
     /// 応答のヘッダーから再開の時刻を読む。`Retry-After`を優先する。`X-RateLimit-Reset`は429のときだけ読む。
-    /// Mastodonは、制限の対象のAPIの応答すべてに、いまの制限の窓が終わる時刻としてこのヘッダーを付ける（`Api::RateLimitHeaders`）。
-    /// 再開の時刻の意味になるのは429だけで、ほかのステータスで読むと、制限と関係のない失敗で窓が終わるまで待つことになる。
+    /// Mastodonは、制限の対象のAPIの応答すべてに、いまの制限のウィンドウが終わる時刻としてこのヘッダーを付ける（`Api::RateLimitHeaders`）。
+    /// 再開の時刻の意味になるのは429だけで、ほかのステータスで読むと、制限と関係のない失敗で制限のウィンドウが終わるまで待つことになる。
     /// https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after
     /// https://docs.joinmastodon.org/api/rate-limits/
     static func resumeDate(of response: HTTPURLResponse, now: Date) -> Date? {
@@ -117,7 +117,7 @@ public actor RateLimitGate {
 public struct AutomaticRequestsPaused: Error, Equatable {
     /// 再開の時刻。
     public let until: Date
-    /// 控え始めたときの、再開までの長さ。時計で待つ処理（つなぎ直しなど）が、日付を読まずに待てるようにする。
+    /// 控え始めたときの、再開までの長さ。時計で待つ処理（再接続など）が、日付を読まずに待てるようにする。
     public let retryAfter: Duration?
 
     public init(until: Date, retryAfter: Duration? = nil) {

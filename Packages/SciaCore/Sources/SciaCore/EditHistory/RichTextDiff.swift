@@ -66,7 +66,7 @@ public struct RichTextDiff: Equatable, Sendable {
         }
     }
 
-    /// 変更に挟まれた空白だけの一致を、変更のまとまりに含める。
+    /// 変更に挟まれた空白だけの一致を、変更のグループに含める。
     /// 英語のように空白で区切る文を書き換えると、単語のあいだの空白だけが一致して「[-a-]{+x+} [-b-]{+y+}」と細切れになるため。
     /// 空白より長い一致はまとめない。「の」のような短い一致までまとめると、文の大半が1つの置き換えになり、どこを直したか分からなくなる。
     static func absorbingSpaces(_ merged: [(Token, DiffChange)]) -> [(Token, DiffChange)] {
@@ -110,7 +110,7 @@ public struct RichTextDiff: Equatable, Sendable {
     }
 
     /// 比べた結果を、段落に組み直す。段落は、新しい版にある段落の始まりだけで切る。
-    /// 消えた段落の始まりは、同じ変更のまとまりの中で新しい始まりが足されていなければ、消えた改行として残す。
+    /// 消えた段落の始まりは、同じ変更のグループの中で新しい始まりが足されていなければ、消えた改行として残す。
     /// 消えた段落の文字が、前の段落の末尾に続けて並ばないようにするため。
     private static func blocks(from merged: [(Token, DiffChange)]) -> [Block] {
         var blocks: [Block] = []
@@ -144,7 +144,7 @@ public struct RichTextDiff: Equatable, Sendable {
         return blocks
     }
 
-    /// `index`を含む変更のまとまりに、足された段落の始まりがあるか。
+    /// `index`を含む変更のグループに、足された段落の始まりがあるか。
     private static func startsBlock(in merged: [(Token, DiffChange)], around index: Int) -> Bool {
         var start = index
         while start > 0, merged[start - 1].1 != .unchanged { start -= 1 }

@@ -69,7 +69,7 @@ public final class SignedInAccountsModel {
         }
     }
 
-    /// すべてのアカウントを読み直す。読み直している間は、前に読めたものを出したままにする。
+    /// すべてのアカウントを再読み込みする。再読み込みしている間は、前に読めたものを出したままにする。
     public func reload() {
         for credential in registry.accounts {
             load(credential)
@@ -80,7 +80,7 @@ public final class SignedInAccountsModel {
         registry.move(fromOffsets: source, toOffset: destination)
     }
 
-    /// そのアカウントにログインし直し、済んだら読み直す。
+    /// そのアカウントにログインし直し、済んだら再読み込みする。
     public func logIn(_ id: Credential.ID) {
         guard let credential = registry.accounts.first(where: { $0.id == id }) else { return }
         tasks.run(.action) { [weak self] in

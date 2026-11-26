@@ -4,10 +4,10 @@ public import CoreGraphics
 /// 未読の数とサーバーに保存する既読位置がこれで決まるので、iOSとmacOSで同じ決まりを使う。
 public enum ReadVisibility {
     /// 報告するか。見ていない間（ほかのタブにいる、添付ファイルのビューアやアプリ内のSafariで覆っている）は報告しない。
-    /// 窓が前面にない間は、使う人がスクロールしたときだけ報告する。
+    /// ウィンドウが前面にない間は、使う人がスクロールしたときだけ報告する。
     /// - Parameters:
-    ///   - isShown: タイムラインが窓に出ていて、ほかの画面で覆われていない。
-    ///   - isWindowActive: 窓が前面にある。
+    ///   - isShown: タイムラインがウィンドウに出ていて、ほかの画面で覆われていない。
+    ///   - isWindowActive: ウィンドウが前面にある。
     ///   - byUser: 使う人のスクロールで表示が変わった。
     public static func shouldReport(isShown: Bool, isWindowActive: Bool, byUser: Bool) -> Bool {
         isShown && (isWindowActive || byUser)

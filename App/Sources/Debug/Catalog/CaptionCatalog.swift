@@ -32,7 +32,7 @@ enum CaptionCatalog {
                 caption.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
                 caption.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
                 caption.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
-                // ビューアでは文字の下端を安全領域に合わせる。カタログでは下に少しだけ余白を取る。
+                // ビューアでは文字の下端をセーフエリアに合わせる。カタログでは下に少しだけ余白を取る。
                 caption.contentBottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: -12),
             ]
         }

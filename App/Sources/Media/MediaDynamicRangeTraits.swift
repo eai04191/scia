@@ -60,8 +60,8 @@ extension AVDisplayDynamicRange {
     }
 }
 
-/// 設定で選んだメディアの明るさの幅。窓とビューアに載せ、`DynamicRangeFollowingImageView`が読む。
-/// システムの`imageDynamicRange`だけでは、`UICollectionView`の中に届かない。コレクションビューは窓の値を受け継がず、システムの既定の値（実機では控えめなHDR）を使うため（シミュレーターで確かめた）。
+/// 設定で選んだメディアの明るさの幅。ウィンドウとビューアに載せ、`DynamicRangeFollowingImageView`が読む。
+/// システムの`imageDynamicRange`だけでは、`UICollectionView`の中に届かない。コレクションビューはウィンドウの値を受け継がず、システムの既定の値（実機では控えめなHDR）を使うため（シミュレーターで確かめた）。
 struct MediaDynamicRangeTrait: UITraitDefinition {
     static let defaultValue = UIImage.DynamicRange.unspecified
 }
@@ -87,7 +87,7 @@ final class DynamicRangeFollowingImageView: UIImageView {
         }
     }
 
-    // 外で組んだタイルをタイムラインの行に入れたときは、traitの変化が知らされない（AppTestsで確かめた）ため、窓に入ったときにも指定する。
+    // 外で組んだタイルをタイムラインの行に入れたときは、traitの変化が知らされない（AppTestsで確かめた）ため、ウィンドウに入ったときにも指定する。
     override func didMoveToWindow() {
         super.didMoveToWindow()
         applyDynamicRange()

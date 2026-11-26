@@ -7,7 +7,7 @@ extension TimelineViewController {
     func contentConfiguration(for notification: MastodonNotification, itemID: ItemID? = nil, base: UIListContentConfiguration) -> any UIContentConfiguration {
         let configuration = fullContentConfiguration(for: notification, itemID: itemID, base: base)
         guard isAppearancePreview else { return configuration }
-        // プレビューの見本では、投稿と同じくリンクを押す操作だけを残す。決まりはdocs/appearance.mdの「プレビュー」にある。
+        // プレビューの見本では、投稿と同じくリンクを選択する操作だけを残す。決まりはdocs/appearance.mdの「プレビュー」にある。
         switch configuration {
         case let post as PostContentConfiguration: return Self.keepingOnlyLinks(post)
         case let header as NotificationContentConfiguration: return Self.keepingOnlyLinks(header)
@@ -28,7 +28,7 @@ extension TimelineViewController {
         }
     }
 
-    /// プレビューの見本の通知で、再掲する投稿の本文のリンクを押す操作だけを残す。
+    /// プレビューの見本の通知で、再掲する投稿の本文のリンクを選択する操作だけを残す。
     /// ほかの操作（サムネイル、注意書きの開閉、誰が何をしたかの行やアイコン、「ほか3人」など）は、見本を変えたり別の画面を開いたりするので外す。
     private static func keepingOnlyLinks(_ configuration: NotificationContentConfiguration) -> NotificationContentConfiguration {
         var kept = configuration
@@ -79,7 +79,7 @@ extension TimelineViewController {
     }
 
     /// お気に入りやブーストなど、自分の投稿の再掲になる通知。誰が何をしたかの行を目立たせ、本文は控えめな色で、段落と改行を詰めて短く切り、
-    /// 添付ファイルは小さなサムネイルを1列だけ並べる。引用は囲みを出さず、引用のある投稿であることを示す1行にする。
+    /// 添付ファイルは小さなサムネイルを1列だけ並べる。引用はカードを出さず、引用のある投稿であることを示す1行にする。
     /// 再掲の縮めた形は通知のためのものなので、大きさと余白は「通知の見た目」で決める。注意書きのボックスは、投稿と同じ部品を使う。
     private func quotedConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> NotificationContentConfiguration {
         typealias N = NotificationAppearanceCatalog
@@ -100,7 +100,7 @@ extension TimelineViewController {
                 mediaSpacing: settings.value(of: N.quotedMediaSpacing),
                 statusID: shown.id,
                 hashtagAccount: shown.account,
-                // 再掲では引用の囲みを出さず、引用のある投稿であることだけを、一番下の1行で示す。
+                // 再掲では引用のカードを出さず、引用のある投稿であることだけを、一番下の1行で示す。
                 filterNote: shown.quote == nil ? nil : postContentBuilder.quoteNote(font: typography.font(.notificationQuotedNote)),
                 filterNoteSpacing: settings.value(of: N.quotedNoteSpacing)
             ),
@@ -252,7 +252,7 @@ extension TimelineViewController {
     /// 通知を送った人の名前の前に置くアイコン。行の上下の中央に置き、そうすると字面の下端より下に出る大きさなら、下端を字面の下端に揃えて上へ伸ばす。
     /// 下に続く本文は字面の下端から測って置くので、それより下へ出ると、余白が設定より狭くなったり重なったりするため。
     /// 届くまでは同じ大きさの灰色で場所を取っておく。
-    /// サーバーがアイコンのURLを返さなかったときも、灰色のままにする。大きさを0にしたときは、アイコンもすき間も置かない。
+    /// サーバーがアイコンのURLを返さなかったときも、灰色のままにする。大きさを0にしたときは、アイコンもgapも置かない。
     private func avatarAttachment(of account: Account, font: UIFont) -> NSAttributedString {
         let side = headerAvatarSide
         guard side > 0 else { return NSAttributedString() }
@@ -265,7 +265,7 @@ extension TimelineViewController {
         let string = NSMutableAttributedString(attachment: attachment)
         // 行の上の余白は、最初の文字の書体と絵文字の上端から測る（`GlyphMetrics.textTopInset(of:)`）。文はアイコンから始まることがあるので、書体を付けておく。
         string.addAttribute(.font, value: font, range: NSRange(location: 0, length: string.length))
-        // 画像の添付の文字には字送りが効かないので、後ろに空白を置き、空白の幅を差し引いた字送りで、すき間を設定の値にする。
+        // 画像の添付の文字には字送りが効かないので、後ろに空白を置き、空白の幅を差し引いた字送りで、gapを設定の値にする。
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
         let spacing = settings.value(of: NotificationAppearanceCatalog.headerAvatarNameSpacing)
         string.append(NSAttributedString(string: " ", attributes: [.font: font, .kern: spacing - spaceWidth]))
@@ -337,9 +337,9 @@ extension NotificationAppearance {
     }
 }
 
-/// 名前の前のアイコンの添付。角を丸めて描き直した画像のほかに、ストアから受け取った元のアイコンを持つ。
+/// 名前の前のアイコンの添付。角を丸めて再描画した画像のほかに、ストアから受け取った元のアイコンを持つ。
 /// ストアは、ほかで持たれている画像を使用中として捨てずに返すので、行が出ている間に元のアイコンを持っていないと、
-/// メモリ警告で手放したあと、行を組み直すたびに灰色に戻して読み直すため（docs/image-loading.mdの「メモリに持つ画像」）。
+/// メモリ警告で手放したあと、行を組み直すたびに灰色に戻して再読み込みするため（docs/image-loading.mdの「メモリに持つ画像」）。
 private final class AvatarTextAttachment: NSTextAttachment {
     var source: UIImage?
 }

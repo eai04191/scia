@@ -7,7 +7,7 @@ struct LoginView: View {
     let makeAuthenticator: @MainActor () -> WebAuthenticator?
     /// アカウントを追加するためにシートで出したときに、閉じるボタンで呼ぶ。nilなら閉じるボタンを出さない。
     var onCancel: (@MainActor () -> Void)?
-    /// デバッグビルドで、ログインせずにダミーのデータで入るボタンを押したとき。nilならボタンを出さない。
+    /// デバッグビルドで、ログインせずにダミーのデータで入るボタンを選択したとき。nilならボタンを出さない。
     var onDummySession: (@MainActor () -> Void)?
 
     /// 最初の起動で出すログイン画面か。アカウントの追加のシートでは、アプリの名前を出さない。
@@ -163,7 +163,7 @@ private struct AppHeader: View {
                 Image(uiImage: image)
                     .resizable()
                     .frame(width: iconSize, height: iconSize)
-                    // 白地のアイコンは背景に溶けて輪郭が見えないため、設定のアイコンを選ぶ行と同じく縁を引く。角の丸みは60ptで13.5ptの割合
+                    // 白地のアイコンは背景に溶けて輪郭が見えないため、設定のアイコンを選ぶ行と同じく縁を引く。radiusは60ptで13.5ptの割合
                     .overlay {
                         RoundedRectangle(cornerRadius: iconSize * 13.5 / 60, style: .continuous)
                             .strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)

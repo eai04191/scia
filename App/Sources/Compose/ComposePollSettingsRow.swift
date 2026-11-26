@@ -55,7 +55,7 @@ final class ComposePollSettingsRow: UIView {
     private lazy var measuring = UIHostingController(rootView: AnyView(EmptyView()))
     /// 灰色のボタンの標準の地の色を、見た目のモードに合わせて読むためのボタン。画面には置かない。
     private let colorSource = UIButton(configuration: .gray())
-    /// 測った、段階ごとの行の幅と、行の高さ。締め切りの文字か文字の大きさが変わったら測り直す。
+    /// 測った、段階ごとの行の幅と、行の高さ。締め切りの文字かDynamic Typeが変わったら測り直す。
     private var fitting: (widths: [(length: SettingsLabelLength, width: CGFloat)], height: CGFloat)?
     /// 最後に段階を決めた幅。
     private var labelLengthWidth: CGFloat?
@@ -68,7 +68,7 @@ final class ComposePollSettingsRow: UIView {
         model.onRemovePoll = { [weak self] in self?.onRemovePoll() }
         hosting.view.backgroundColor = .clear
         hosting.view.translatesAutoresizingMaskIntoConstraints = false
-        // 高さはここで測って決め、キーボードや画面の端の安全領域で中身を動かさない。
+        // 高さはここで測って決め、キーボードや画面の端のセーフエリアで中身を動かさない。
         hosting.sizingOptions = []
         hosting.safeAreaRegions = []
         addSubview(hosting.view)
@@ -147,7 +147,7 @@ final class ComposePollSettingsRow: UIView {
         setNeedsLayout()
     }
 
-    /// 段階ごとの、切らずに並べた行の幅と、行の高さ。切り替えのボタンは、2つの値の長いほうで測る。押して文言が替わっただけで、段階が切り替わらないようにするため。
+    /// 段階ごとの、切らずに並べた行の幅と、行の高さ。切り替えのボタンは、2つの値の長いほうで測る。選択して文言が替わっただけで、段階が切り替わらないようにするため。
     private func measuredFitting() -> (widths: [(length: SettingsLabelLength, width: CGFloat)], height: CGFloat) {
         if let fitting {
             return fitting
@@ -155,7 +155,7 @@ final class ComposePollSettingsRow: UIView {
         let size = DynamicTypeSize(traitCollection.preferredContentSizeCategory) ?? .large
         var height: CGFloat = 0
         let widths = SettingsLabelLength.allCases.map { length in
-            // 測るホストは画面に置かないので、表示先の文字の大きさを渡す。
+            // 測るホストは画面に置かないので、表示先のDynamic Typeを渡す。
             measuring.rootView = AnyView(
                 ComposePollSettingsContent(settings: settings, length: length, isTruncated: false, colors: model.colors, reservesBothValues: true, actions: nil)
                     .environment(\.dynamicTypeSize, size)
@@ -222,7 +222,7 @@ private struct ComposePollSettingsContent: View {
     let colors: ComposePollSettingsColors
     /// 結果のボタンも、2つの値の長いほうの幅を取る。幅を測るときに使う。
     let reservesBothValues: Bool
-    /// 押したときの処理。nilなら、幅を測るだけで押せない。
+    /// 選択したときの処理。nilなら、幅を測るだけで選択できない。
     let actions: ComposePollSettingsModel?
 
     var body: some View {
@@ -247,7 +247,7 @@ private struct ComposePollSettingsContent: View {
             .accessibilityLabel(ComposeTexts.Poll.expiry)
             .accessibilityValue(expiry)
 
-            // 押すとラベルの長さが変わり、右隣の結果のボタンがずれるため、選び方のボタンは2つの値の長いほうに幅を合わせる。
+            // 選択するとラベルの長さが変わり、右隣の結果のボタンがずれるため、選び方のボタンは2つの値の長いほうに幅を合わせる。
             // 結果のボタンは合わせない。右は空きで、幅が変わっても動くものがなく、揃えると「隠す」の両側に余白が目立ったため。
             toggle(value: settings.multiple, labels: multiple, reservesBothValues: true, icon: .pollChoice(multiple: settings.multiple)) {
                 actions?.onSetMultiple(!settings.multiple)

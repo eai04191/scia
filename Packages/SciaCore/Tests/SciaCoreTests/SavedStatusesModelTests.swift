@@ -56,7 +56,7 @@ struct SavedStatusesModelTests {
 
         model.setShown(true)
         try await waitUntil { model.runningTaskCount == 0 }
-        // 押したときにブックマークを外し、サーバーが受け付けたら知らせる。StatusInteractionsと同じ順に送る。
+        // 選択したときにブックマークを外し、サーバーが受け付けたら知らせる。StatusInteractionsと同じ順に送る。
         model.updateStatus("2") { $0.settingBookmarked(false) }
         model.statusDidSettle(.bookmark, try TimelineModelFixtures.status(2).settingBookmarked(false))
         #expect(display.statusIDs == ["2", "1"], "見ている間に外した行を消しました")
@@ -69,7 +69,7 @@ struct SavedStatusesModelTests {
         #expect(display.statusIDs.isEmpty)
     }
 
-    /// 最初の読み込みに失敗したら、モデルが失敗を覚えていて、引っぱった読み直しでやり直す。
+    /// 最初の読み込みに失敗したら、モデルが失敗を覚えていて、pull to refreshでやり直す。
     @Test func refreshRetriesFailedInitialLoad() async throws {
         let (model, display) = makeModel(transport: Self.transport([try Self.saved([1])], failsFirst: true))
         defer { model.stop() }
@@ -86,7 +86,7 @@ struct SavedStatusesModelTests {
         #expect(display.statusIDs == ["1"])
     }
 
-    /// 1件もないときの「再読み込み」は、最初から読み直す。ほかの端末で付けた分を、タブを開き直さずに読めるようにする。
+    /// 1件もないときの「再読み込み」は、最初から再読み込みする。ほかの端末で付けた分を、タブを開き直さずに読めるようにする。
     @Test func retryReloadsWhenEmpty() async throws {
         let (model, display) = makeModel(transport: Self.transport([[], try Self.saved([1])]))
         defer { model.stop() }
@@ -101,8 +101,8 @@ struct SavedStatusesModelTests {
         #expect(display.statusIDs == ["1"])
     }
 
-    /// 見せ始めたときの読み込みの最中に「再読み込み」を押しても、読み込み中の表示のまま残さない。
-    /// 重ねて読まないので、最初から読み直す処理は何も読まずに終わり、表示を戻すものがなくなる。
+    /// 見せ始めたときの読み込みの最中に「再読み込み」を選択しても、読み込み中の表示のまま残さない。
+    /// 重ねて読まないので、最初から再読み込みする処理は何も読まずに終わり、表示を戻すものがなくなる。
     @Test func retryDuringRefreshDoesNotLeaveLoading() async throws {
         let refreshing = Gate()
         let calls = Mutex(0)
@@ -153,7 +153,7 @@ struct SavedStatusesModelTests {
         #expect(display.entriesCalls.last?.animatesRemoval == true)
     }
 
-    /// 読み直している間に引用を取り消したら、取り消す前の中身で遅れて届いたページから、その行を戻さない。
+    /// 再読み込みしている間に引用を取り消したら、取り消す前の中身で遅れて届いたページから、その行を戻さない。
     @Test func refreshInFlightDoesNotRestoreRevokedQuote() async throws {
         let quoted = try TimelineModelFixtures.status(1)
         let quoting = try TimelineModelFixtures.status(2).replacingQuote(Quote(state: "accepted", quotedStatus: quoted))

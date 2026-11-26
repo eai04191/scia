@@ -56,9 +56,9 @@ public enum MediaViewerTexts {
     /// 共有や保存のために落としている途中のものの、チップと確認。
     public enum Transfer {
         public static let downloading = "ダウンロード中"
-        /// 落としている途中のチップを押すと、操作の状況を開くときの読み上げのヒント。
+        /// 落としている途中のチップを選択すると、操作の状況を開くときの読み上げのヒント。
         public static let showAllHint = "操作の状況を開きます。"
-        /// 落としている途中のチップを押すと、止めるかの確認を出すときの読み上げのヒント。
+        /// 落としている途中のチップを選択すると、止めるかの確認を出すときの読み上げのヒント。
         public static let stopHint = "ダウンロードを中止するか選べます。"
         public static let stopConfirmationTitle = "ダウンロードを中止しますか？"
         public static let stop = "中止"

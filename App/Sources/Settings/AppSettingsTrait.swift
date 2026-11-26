@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 窓に開いたアカウントが使うプリセットの設定。セッションが窓に載せ、窓の中の部品が読む（docs/preset.md）。
+/// ウィンドウに開いたアカウントが使うプリセットの設定。セッションがウィンドウに載せ、ウィンドウの中の部品が読む（docs/preset.md）。
 /// 何段も親から作られる部品（投稿の本文の中のメディアのタイルなど）へ、引数で通さずに届けるため。
 struct AppSettingsTrait: UITraitDefinition {
     struct Reference: Equatable, Sendable {
@@ -12,7 +12,7 @@ struct AppSettingsTrait: UITraitDefinition {
         }
     }
 
-    /// 窓に載せていないときは、アプリの設定を読む。
+    /// ウィンドウに載せていないときは、アプリの設定を読む。
     static let defaultValue: Reference? = nil
 }
 
@@ -30,16 +30,16 @@ extension UIMutableTraits {
     }
 }
 
-/// 窓に設定を載せ、その設定のアクセントカラーとHDRの明るさを窓に当て続ける。
+/// ウィンドウに設定を載せ、その設定のアクセントカラーとHDRの明るさをウィンドウに当て続ける。
 /// アカウントを切り替えたら、新しい設定に載せ替える。前の設定の見張りは、載せ替えた時点で止める。前の設定が変わったときに、前のアカウントの色で塗り直さないため。
-/// 窓と違うプリセットを描く部品（プリセットを比較の見本など）では、その部品のビューに載せる。
+/// ウィンドウと違うプリセットを描く部品（プリセットを比較の見本など）では、その部品のビューに載せる。
 @MainActor
 final class WindowSettings {
     private weak var window: UIView?
     private let followsTint: Bool
     private var generation = 0
 
-    /// - Parameter followsTint: アクセントカラーを窓のティントカラーにするか。ステータスバーの通知の窓は、ティントカラーを変えない。
+    /// - Parameter followsTint: アクセントカラーをウィンドウのティントカラーにするか。ステータスバーの通知のウィンドウは、ティントカラーを変えない。
     init(window: UIWindow, followsTint: Bool = true) {
         self.window = window
         self.followsTint = followsTint

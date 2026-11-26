@@ -156,7 +156,7 @@ enum AgentScreenDump {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// 選んでいるタブ、ナビゲーションの一番上、重ねた画面の順に、画面の型の名前を並べる。
+    /// 選んでいるタブ、ナビゲーションの一番上、モーダルビューの順に、画面の型の名前を並べる。
     private static func controllerChain(from root: UIViewController?) -> [String] {
         var chain: [String] = []
         var current = root
@@ -244,7 +244,7 @@ enum AgentScreenDump {
     private static func describe(_ element: NSObject, place: Placement) -> String? {
         // VoiceOverが動いていないと、ビューのaccessibilityFrameは空になる。ビューなら画面上の位置から求める。
         var frame = (element as? UIView).map { $0.convert($0.bounds, to: nil) } ?? windowFrame(of: element)
-        // 枠を後から決める要素は、描き直した直後に枠が空のままのことがある。そのときは入れ物のビューの枠を使う。
+        // 枠を後から決める要素は、再描画した直後に枠が空のままのことがある。そのときは入れ物のビューの枠を使う。
         if frame.isNull || frame.isEmpty, let container = (element as? UIAccessibilityElement)?.accessibilityContainer as? UIView {
             frame = container.convert(container.bounds, to: nil)
         }

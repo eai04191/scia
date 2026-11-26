@@ -74,7 +74,7 @@ struct PostingDefaultsModelTests {
         try await waitUntil { model.runningTaskCount == 0 }
     }
 
-    /// 読めなければ理由を出し、読み直して読めたら消す。
+    /// 読めなければ理由を出し、再読み込みして読めたら消す。
     @Test func loadFailureIsShownUntilLoaded() async throws {
         let fails = Mutex(true)
         let model = PostingDefaultsModel(api: .init(load: {

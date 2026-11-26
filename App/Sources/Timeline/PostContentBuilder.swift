@@ -168,7 +168,7 @@ struct PostContentBuilder {
 
     /// アクションバーの中身。ボタンの並びと件数は設定から、した状態は投稿から決める。
     /// - Parameter countFont: 件数の文字。時刻と同じ文字で描くので、投稿を組んだときの時刻の文字を渡す。書体を組み直すと重いため。
-    /// - Parameter isAvailable: 投稿のメニューの項目を、いま押して行えるか。
+    /// - Parameter isAvailable: 投稿のメニューの項目を、いま選択して行えるか。
     func actionBar(for shown: Status, countFont: UIFont, isAvailable: (StatusMenuItem) -> Bool) -> PostActionBarContent {
         let values = values
         return PostActionBarContent(
@@ -244,7 +244,7 @@ struct PostContentBuilder {
     }
 
     /// 名前の上の行の、ブーストした人の名前の部分をつなぐ。2つ目の部分があれば、その範囲も返す。
-    /// すき間は空白ではなく、前の部分の最後の文字の後ろに足す字送りで取る。空白の幅は文字の大きさで変わり、すき間だけを決められないため。
+    /// gapは空白ではなく、前の部分の最後の文字の後ろに足す字送りで取る。空白の幅は文字の大きさで変わり、gapだけを決められないため。
     private static func joined(spacing: CGFloat, _ parts: [NSAttributedString]) -> (text: NSAttributedString, secondaryRange: NSRange?) {
         let text = NSMutableAttributedString()
         var secondaryRange: NSRange?
@@ -325,13 +325,13 @@ struct PostContentBuilder {
         }
     }
 
-    /// fxtwitterから読んだXの投稿の囲み。作者の行は名前だけを太くする。
+    /// fxtwitterから読んだXの投稿のカード。作者の行は名前だけを太くする。
     /// 本文はXの投稿の言語で描く。言語が分からなければ、使う人の言語で描く。
     /// - Parameter translation: 本文の自動翻訳の状態。訳さない投稿ではnil。
     func xPost(_ post: XPost, translation: EmbedTranslation? = nil, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let typography = values.typography
         let language = settings.glyphLanguageIdentifier(for: post.language)
-        // Xの投稿にカスタム絵文字はないが、翻訳のマークを引用の囲みと同じ大きさにするため、同じ倍率を渡す。
+        // Xの投稿にカスタム絵文字はないが、翻訳のマークを引用のカードと同じ大きさにするため、同じ倍率を渡す。
         let body = translated(RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, settings: settings, emojiScale: values.value(of: AppearanceCatalog.customEmojiScale), showsCustomEmojis: appearance.showsCustomEmojis, emojiImages: emojiImages, language: language), by: translation)
         let font = typography.font(.xPostBody)
         let notes: [EmbeddedPostView.Content.Note] = switch post.quote {
@@ -358,7 +358,7 @@ struct PostContentBuilder {
         )
     }
 
-    /// 引用元の投稿の囲み。作者の行は名前だけを太くし、本文は引用元の投稿の言語で描く。
+    /// 引用元の投稿のカード。作者の行は名前だけを太くし、本文は引用元の投稿の言語で描く。
     /// - Parameters:
     ///   - filterWarning: 引用元のフィルターの警告。開いているかはタイムラインが覚えているため、置く側が決めて渡す。
     ///   - spoiler: 引用元の注意書き。開いているかはタイムラインが覚えているため、置く側が決めて渡す。
@@ -367,7 +367,7 @@ struct PostContentBuilder {
     func quote(_ quoted: Status, translation: EmbedTranslation? = nil, filterWarning: PostBodyContent.Spoiler? = nil, spoiler: PostBodyContent.Spoiler?, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let font = values.typography.font(.xPostBody)
         var notes: [EmbeddedPostView.Content.Note] = []
-        // 囲みが投稿1件分に近い重さにならないよう、投票は選択肢を並べず、あることだけを示す。
+        // カードが投稿1件分に近い重さにならないよう、投票は選択肢を並べず、あることだけを示す。
         if quoted.poll != nil, appearance.showsPoll {
             notes.append(EmbeddedPostView.Content.Note(text: noteText(PostTexts.quotedPollNote, symbolName: "chart.bar.xaxis", color: .secondaryLabel, font: font), isPressable: false))
         }
@@ -396,10 +396,10 @@ struct PostContentBuilder {
         )
     }
 
-    /// 引用元を出せないときの囲み。作者の行を出さず、理由の1行だけを控えめな色で出す。
+    /// 引用元を出せないときのカード。作者の行を出さず、理由の1行だけを控えめな色で出す。
     /// - Parameters:
     ///   - id: 引用した投稿のID。
-    ///   - revealTitle: 押して開けるときに、理由の下に添える押せることを示す文言。開けなければnil。
+    ///   - revealTitle: 選択して開けるときに、理由の下に添える、選択できることを示す文言。開けなければnil。
     func quotePlaceholder(id: Status.ID, message: String, revealTitle: String?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let font = values.typography.font(.xPostBody)
         let text = NSMutableAttributedString(string: message, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
@@ -411,20 +411,20 @@ struct PostContentBuilder {
         return content
     }
 
-    /// お気に入りやブーストの通知で再掲する投稿に、囲みの代わりに添える、引用のある投稿であることを示す1行。
+    /// お気に入りやブーストの通知で再掲する投稿に、カードの代わりに添える、引用のある投稿であることを示す1行。
     func quoteNote(font: UIFont) -> NSAttributedString {
         noteText(PostTexts.quoteNote, symbolName: "quote.bubble", color: .secondaryLabel, font: font)
     }
 
     /// カスタム絵文字を出さない設定か、本文の絵文字のどれかを「表示しない」にしていて、絵文字を除いた本文に空白と改行しか残らなければ、本文のない投稿と同じく空にする。
-    /// 残すと、絵文字だけの本文のあった場所に、空の行と本文とのすき間が残る。
+    /// 残すと、絵文字だけの本文のあった場所に、空の行と本文とのgapが残る。
     private func withoutBlankLeftByHiddenEmojis(_ text: NSAttributedString, of status: Status) -> NSAttributedString {
         let hidesEmojis = !appearance.showsCustomEmojis || status.emojis.contains { settings.customEmojiDisplay(of: $0) == .hidden }
         guard hidesEmojis, text.string.unicodeScalars.allSatisfy({ CharacterSet.whitespacesAndNewlines.contains($0) }) else { return text }
         return NSAttributedString()
     }
 
-    /// 引用とXの投稿の囲みに、作者のアイコンを出す。出さなければ、画像を読まず、大きさと名前とのすき間を0にする。
+    /// 引用とXの投稿のカードに、作者のアイコンを出す。出さなければ、画像を読まず、大きさと名前とのgapを0にする。
     private var showsEmbedAvatar: Bool {
         appearance.showsEmbedAvatar
     }
@@ -462,7 +462,7 @@ struct PostContentBuilder {
         return content
     }
 
-    /// 囲みの本文の自動翻訳の状態。
+    /// カードの本文の自動翻訳の状態。
     struct EmbedTranslation {
         /// 本文を原文の代わりに描く訳文。訳文を待っている間はnil。
         var text: RichText?
@@ -491,7 +491,7 @@ struct PostContentBuilder {
         }
     }
 
-    /// 囲みの作者の行。名前だけを太くし、ハンドルを控えめに添える。
+    /// カードの作者の行。名前だけを太くし、ハンドルを控えめに添える。
     private func embedName(_ name: RichText, handle: String, base: UIListContentConfiguration) -> NSAttributedString {
         let nameFont = values.typography.font(.xPostName)
         let language = settings.glyphLanguageIdentifier()
@@ -502,7 +502,7 @@ struct PostContentBuilder {
         return text
     }
 
-    /// 囲みの補足の1行。先頭に記号を置く。文言はアプリのものなので、アプリの文字で描く。
+    /// カードの補足の1行。先頭に記号を置く。文言はアプリのものなので、アプリの文字で描く。
     private func noteText(_ string: String, symbolName: String, color: UIColor, font: UIFont) -> NSAttributedString {
         let text = NSMutableAttributedString()
         if let symbol = UIImage(systemName: symbolName, withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
