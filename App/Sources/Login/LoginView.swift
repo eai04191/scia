@@ -96,6 +96,10 @@ struct LoginView: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
+                    // 待っている間は文字を透明にするので、そのままでは名前が読まれなくなる
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(LoginTexts.logIn)
+                    .accessibilityValue(model.isLoggingIn ? LoginTexts.loggingInValue : "")
                 } primaryAction: {
                     login()
                 }

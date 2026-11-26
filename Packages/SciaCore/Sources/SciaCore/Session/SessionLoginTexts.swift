@@ -8,6 +8,8 @@ public enum LoginTexts {
     public static let privateLogin = "プライベート"
     public static let privateLoginSubtitle = "Safariのログイン状態を使わない"
     public static let logIn = "ログイン"
+    /// サーバーの応答や認可を待つ間の、ログインボタンのVoiceOverの値。
+    public static let loggingInValue = "ログイン中"
     /// アカウントを足すときの画面の題。
     public static let addAccountTitle = "アカウントを追加"
     public static let cancel = "キャンセル"
