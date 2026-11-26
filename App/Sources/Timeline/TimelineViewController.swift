@@ -640,7 +640,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         reconfigure(Set(dataSource.snapshot().itemIdentifiers))
         // 区切り線はリストのレイアウトが引くので、描き直しでは変わらない。引き直させる。
-        collectionView.collectionViewLayout.invalidateLayout()
+        invalidateLayoutKeepingPosition()
         onApplySettingsChange?()
     }
 
@@ -3336,21 +3336,31 @@ extension TimelineViewController {
         frame.maxY > visibleTop + 0.5 / max(collectionView.traitCollection.displayScale, 1)
     }
 
-    /// ヘッダーの中身が変わって高さが変わったときに呼ぶ。ヘッダーを読み終えて下の投稿を読んでいれば、その投稿の位置を変えない。
+    /// ヘッダーの中身が変わって高さが変わったときに呼ぶ。
+    func headerDidChangeSize() {
+        guard headerView != nil else { return }
+        invalidateLayoutKeepingPosition()
+    }
+
+    /// レイアウトを作り直す。作り直すと、測った行の高さが見積もりに戻り、読んでいる行が動くので、
+    /// ヘッダーを読み終えて下の投稿を読んでいるか、ヘッダーがなければ、表示領域の上端にかかっている投稿の位置を変えない。
     /// ヘッダーが見えていれば、ヘッダーが伸び縮みした分だけ下の投稿が動くのに任せる。
     /// 画面を読み込む前は、最初の表示で測るため何もしない。
-    func headerDidChangeSize() {
-        guard headerView != nil, isViewLoaded, dataSource.snapshot().numberOfSections > 0 else { return }
+    private func invalidateLayoutKeepingPosition() {
+        guard isViewLoaded, dataSource.snapshot().numberOfSections > 0 else { return }
         isRestoringAnchor = true
         defer { isRestoringAnchor = false }
         collectionView.layoutIfNeeded()
         let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
-        let headerFrame = collectionView.layoutAttributesForSupplementaryElement(
+        let headerFrame = headerView == nil ? nil : collectionView.layoutAttributesForSupplementaryElement(
             ofKind: UICollectionView.elementKindSectionHeader,
             at: IndexPath(item: 0, section: 0)
         )?.frame
-        let anchor = (headerFrame.map { !isVisible($0, below: visibleTop) } ?? false) ? currentAnchor() : nil
-        if let anchor {
+        let readsBelowHeader = headerView == nil || (headerFrame.map { !isVisible($0, below: visibleTop) } ?? false)
+        let anchor = readsBelowHeader ? currentAnchor() : nil
+        if headerView == nil, anchor == nil {
+            collectionView.collectionViewLayout.invalidateLayout()
+        } else if let anchor {
             collectionView.collectionViewLayout.invalidateLayout()
             restore(anchor)
         } else {
