@@ -152,6 +152,9 @@ enum DebugURL: Equatable {
     /// リストのタブを実物で確かめるのに使う。サーバーのリストを書き換える。
     case createList(title: String)
     case deleteList(id: String)
+    /// `scia-debug://marker/<home|notifications>?id=<投稿か通知のID>`で、サーバーの既読位置をそのIDにする。起動し直すと、その位置から読み込む。
+    /// 既読位置より新しい投稿が多い起動（大きなギャップ）を実物で作るのに使う。サーバーの既読位置を書き換え、同じアカウントのほかの端末の起動位置も変わる。
+    case marker(MarkerTimeline, id: String)
     /// `scia-debug://tags/follow?name=<名前>`でハッシュタグをフォローし、`scia-debug://tags/unfollow?name=<名前>`で外す。メニューから押したときと同じく、知らせを出し、「フォロー中のハッシュタグ」の画面に反映する。
     /// 「フォロー中のハッシュタグ」を実物で確かめるのに使う。サーバーのフォローを書き換える。
     case followTag(name: String)
@@ -238,6 +241,7 @@ enum DebugURL: Equatable {
         case "appearance": Self.query("json", in: url).map { .appearance(json: $0) }
         case "inject": Self.inject(url)
         case "lists": Self.lists(url)
+        case "marker": MarkerTimeline(rawValue: last).flatMap { timeline in Self.query("id", in: url).flatMap { $0.isEmpty ? nil : .marker(timeline, id: $0) } }
         case "settings": Self.settingsSet(url)
         case "tags": Self.tags(url)
         case "compose": Self.compose(url)

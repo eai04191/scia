@@ -195,6 +195,8 @@ extension SessionController {
             changeTabSourcesForDebug("create") { _ = try await $0.createList(title: title) }
         case .deleteList(let id):
             changeTabSourcesForDebug("delete") { try await $0.deleteList(id) }
+        case .marker(let timeline, let id):
+            saveMarkerForDebug(timeline, id: id)
         case .followTag(let name):
             followHashtag(name)
         case .unfollowTag(let name):
@@ -249,6 +251,18 @@ extension SessionController {
                 self?.loadTabSources()
             } catch {
                 self?.logger.error("debug \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+            }
+        }
+    }
+
+    private func saveMarkerForDebug(_ timeline: MarkerTimeline, id: String) {
+        let client = client
+        tasks.run(.action) { [weak self] in
+            do {
+                try await client.saveMarker(for: timeline, lastReadID: id)
+                self?.logger.info("debug marker \(timeline.rawValue, privacy: .public) saved id=\(id, privacy: .public)")
+            } catch {
+                self?.logger.error("debug marker \(timeline.rawValue, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }
