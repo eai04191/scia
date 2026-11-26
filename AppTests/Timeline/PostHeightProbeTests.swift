@@ -25,11 +25,11 @@ struct PostHeightProbeTests {
         return (CustomEmoji(shortcode: "e", url: url, staticUrl: url), store)
     }
 
-    private func measure(_ name: String, status: Status, emojiImages: EmojiImageStore<UIImage> = .offline) {
+    private func measure(_ name: String, status: Status, emojiImages: EmojiImageStore<UIImage> = .offline, widths: [CGFloat] = [375, 0]) {
         let settings = AppSettings.isolated()
         let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: emojiImages, avatarImages: .offline)
         let configuration = timeline.contentConfiguration(for: status, base: .cell())
-        for width: CGFloat in [375, 0] {
+        for width in widths {
             let view = PostContentView(configuration: configuration)
             for target: CGFloat in [44, 10_000, 3_000_000] {
                 let height = view.systemLayoutSizeFitting(CGSize(width: width, height: target), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
@@ -98,10 +98,11 @@ struct PostHeightProbeTests {
         return [("none", []), ("empty", ["", ""]), ("long", [long, long]), ("many", (0..<200).map(String.init))]
     }()
 
-    @Test(arguments: polls.indices) func polls(index: Int) {
+    /// 選択肢が200個のものは、1つの横幅で測るだけで1秒近くかかるので、横幅でも分ける。
+    @Test(arguments: polls.indices, [375.0, 0.0]) func polls(index: Int, width: CGFloat) {
         let (name, options) = Self.polls[index]
         let poll = Poll(id: "1", expiresAt: nil, expired: false, multiple: false, votesCount: 0, options: options.map { Poll.Option(title: $0, votesCount: 0) })
-        measure("poll.\(name)", status: status(content: "<p>本文</p>", poll: poll))
+        measure("poll.\(name)", status: status(content: "<p>本文</p>", poll: poll), widths: [width])
     }
 
     @Test func cards() throws {
