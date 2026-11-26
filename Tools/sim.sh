@@ -25,6 +25,7 @@
 #     このworktreeに端末を貸す。端末を省くと番号の端末（Scia 1〜）から貸し、ほかの貸し借りする端末（Scia iPad 1、Scia Duoなど）は名指ししたときだけ貸す。空きがなければ空くまで待ち（既定は540秒、0なら上限なく待つ）、電源が切れていれば起動して、借りた端末と状態を「Scia 2 ready」の形で出す。
 #     readyなら、前にこのworktreeが設定を戻してビルドを入れ、そのあと誰も借りていない。claimedなら、設定を戻してビルドを入れ直し、readyを記録する。
 #     すでに借りていれば同じ端末を延ばす。端末を省いたときは、名指しで借りた端末を持たせたまま、番号の端末を借りるか延ばす。別の端末を名指しすると、借りていた端末は返す。貸し出しは30分で切れるので、長く使うときはacquireし直す。待っても空かなければ終了コード75で終わる。
+#     make testがテストを走らせている端末は、テストを起動したのがこのworktreeでも、延ばさずに失敗する。shot、ctlなど端末を受け取るほかの操作も、テストの間は失敗する。
 #   Tools/sim.sh release [--numbered]
 #     このworktreeが借りている端末を返す。シミュレーターを触り終えたら、ターンを返す前に返す。
 #     --numberedを付けると、番号の端末だけを返す。make testの入口が、自分で借りた端末だけを返すのに使う。
@@ -311,6 +312,20 @@ if found:
 ' "$name" "$udid" "$$" "$exclude"
 }
 
+# 端末でmake testのテスト（test-on-sim）を走らせている処理を出す。借り手のworktreeを問わない。
+# make testの入口は、テストを走らせる間も、端末をそれを起動したworktreeに貸したままにする。同じworktreeのスレッドが、
+# 裏で走っているテストに気づかずに借り直してアプリを入れ替えると、xcodebuildは入れ替わったアプリでテストを起動し直し、
+# 入れ替えたアプリとテストが別々にSciaCoreを読み込んで、関係のないテストが型の取り違えで落ちるため。
+running_tests() {
+    local procs
+    # 端末を触るたびに呼ぶので、テストが走っていなければ、処理の持ち主を調べずに戻る。
+    # grep -qが先に終わるとpsが書けずに失敗し、pipefailで走っていないと取り違えるので、psの出力を受け取ってから探す。
+    procs=$(ps -axo command=) || return 1
+    grep -qE -- "test-o[n]-sim" <<< "$procs" || return 0
+    procs=$(busy_procs "$1" "") || return 1
+    grep -E -- "test-on-sim .*SIM=" <<< "$procs" || true
+}
+
 command_busy() {
     [ $# -eq 1 ] || fail "使い方: Tools/sim.sh busy '<端末>'"
     local found
@@ -399,7 +414,7 @@ build_state() {
 
 # 以下の__で始まる操作は、guardedから.guardを持った状態で呼ばれる。
 command___acquire_try() {
-    local me=$1 want=${2:-} root sim held='' candidates procs
+    local me=$1 want=${2:-} root sim held='' candidates procs tests
     root=$(lock_root)
     # すでに借りていれば、同じ端末を延ばす。別の端末を指定されたら、借りていたものを返す。
     # 端末を省いたときは、番号の端末だけを見る。名指しで借りた端末（Scia iPad 1など）はそのまま持たせ、延ばす端末にもしない。
@@ -413,6 +428,9 @@ command___acquire_try() {
         fi
     done <<< "$(if [ -n "$want" ]; then pool; else pool numbered; fi)"
     if [ -n "$held" ]; then
+        tests=$(running_tests "$held") || fail "${held}でテストが走っているかを調べられない"
+        [ -z "$tests" ] || fail "${held}ではmake testが走っている。終わるまで触らない（Tools/sim.sh busy '${held}'で確かめる）
+$tests"
         echo "$(date +%s) $me" > "$root/$held.lease"
         if [ "$(build_state "$held")" = "$me ready" ]; then echo "$held ready"; else echo "$held claimed"; fi
         return 0
@@ -427,6 +445,9 @@ command___acquire_try() {
         # 調べられなかったときに、出力が空なのを空きと取り違えないよう、失敗したら止める。
         procs=$(busy_procs "$sim" "$me") || fail "${sim}を使っている処理を調べられない"
         [ -z "$procs" ] || continue
+        # 30分より長いテストで貸し出しが切れても、走っている間は、テストを起動したworktreeにも貸さない。
+        tests=$(running_tests "$sim") || fail "${sim}でテストが走っているかを調べられない"
+        [ -z "$tests" ] || continue
         echo "$(date +%s) $me" > "$root/$sim.lease"
         if [ "$(build_state "$sim")" = "$me ready" ]; then
             echo "$sim ready"
@@ -462,9 +483,12 @@ command___ready() {
 
 # 端末を受け取るほかの操作の前に、このworktreeが借りているかを確かめる。借りずに触ると、ほかのスレッドの確かめを乱すため。
 require_lease() {
-    local sim=$1 holder
+    local sim=$1 holder tests
     holder=$(lease_holder "$sim")
     [ "$holder" = "$(borrower)" ] || fail "${sim}を借りていない（借りているもの: ${holder:-なし}）。先にTools/sim.sh acquireで借りる"
+    tests=$(running_tests "$sim") || fail "${sim}でテストが走っているかを調べられない"
+    [ -z "$tests" ] || fail "${sim}ではmake testが走っている。終わるまで触らない
+$tests"
 }
 
 device_udid() {
@@ -620,6 +644,7 @@ command_leased() {
             fi
         done <<< "$sims"
         [ -n "$sim" ] || fail "端末を借りていない。先にTools/sim.sh acquireで借りる"
+        require_lease "$sim"
     elif grep -qxF "$sim" <<< "$sims"; then
         require_lease "$sim"
     fi
