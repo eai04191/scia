@@ -128,8 +128,23 @@ struct RecentLogReaderDeduplicationTests {
     }
 }
 
+struct RecentLogReaderWaitTests {
+    /// 待つ長さを0にすると、1回読んでマーカーが見つからなければ失敗させる。
+    @Test func failsWhenMarkerNeverAppears() async {
+        var reads = 0
+
+        await #expect(throws: RecentLogReader.ReadError.markerNotFound) {
+            _ = try await RecentLogReader.read(untilMarker: "never", timeout: .zero, clock: TestClock()) {
+                reads += 1
+                return [LogLine(date: Date(timeIntervalSince1970: 1), category: "timeline", level: "notice", message: "a")]
+            }
+        }
+        #expect(reads == 1)
+    }
+}
+
 // macOSでは、OSLogStoreをプロセスで初めて読むときにMac全体のログを走査し、1回に10秒以上かかる。
-// 2件で`make test-core`の時間の半分を占めるため、iOSシミュレーター（`make test`）でだけ走らせる。
+// `make test-core`の時間の半分を占めるため、iOSシミュレーター（`make test`）でだけ走らせる。
 #if os(iOS)
 @Suite(.scratch)
 struct RecentLogReaderTests {
@@ -151,15 +166,6 @@ struct RecentLogReaderTests {
         #expect(lines.map(\.message) == ["prepend 3", marker])
         #expect(lines.first?.category == "timeline")
         #expect(lines.first?.level == "notice")
-    }
-
-    @Test func failsWhenMarkerNeverAppears() async {
-        let subsystem = "net.mizle.scia.tests.\(UUID().uuidString)"
-
-        await #expect(throws: RecentLogReader.ReadError.markerNotFound) {
-            // 待つ長さを0にして、1回読んで見つからなければ失敗させる。
-            _ = try await RecentLogReader.read(subsystem: subsystem, from: .distantPast, untilMarker: "never", timeout: .zero)
-        }
     }
 }
 #endif

@@ -31,9 +31,16 @@ public enum RecentLogReader {
         clock: any Clock<Duration> = SystemTime.clock,
         now: () -> Date = SystemTime.now
     ) async throws -> [LogLine] {
+        try await read(untilMarker: marker, timeout: timeout, clock: clock) {
+            try read(subsystem: subsystem, from: start, to: now())
+        }
+    }
+
+    /// `readLines`で読み直しながら、`marker`が読めるまで待つ。
+    static func read(untilMarker marker: String, timeout: Duration, clock: any Clock<Duration>, readLines: () throws -> [LogLine]) async throws -> [LogLine] {
         let elapsed = stopwatch(on: clock)
         while true {
-            let lines = try read(subsystem: subsystem, from: start, to: now())
+            let lines = try readLines()
             if let end = lines.firstIndex(where: { $0.message == marker }) {
                 return Array(lines[...end])
             }
