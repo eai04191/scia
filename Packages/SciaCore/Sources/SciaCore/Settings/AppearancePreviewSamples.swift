@@ -298,7 +298,7 @@ public struct AppearancePreviewSamples: Sendable {
             expired: false,
             multiple: false,
             votesCount: 12,
-            options: [Poll.Option(title: "円", votesCount: nil), Poll.Option(title: "角丸の四角", votesCount: nil)]
+            options: [Poll.Option(title: "円", votesCount: nil), Poll.Option(title: "四角", votesCount: nil)]
         )
         return [
             // 分類を並べた画面に出す、部品の少ない投稿。

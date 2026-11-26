@@ -179,7 +179,7 @@ Copyright © 2015-2024 Unicode, Inc.
 
 Copyright © 1991-2026 Unicode, Inc.
 
-投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。
+投稿欄の絵文字ピッカーに並べるUnicodeの絵文字のリストとグループ（emoji-test.txt）。
 
 - [配布元](https://www.unicode.org/emoji/)
 - [ライセンス（Unicode License v3）](https://www.unicode.org/license.txt)

@@ -499,7 +499,6 @@ extension AppearanceValue {
         switch id {
         case AppearanceCatalog.mediaTallestAspectRatio.id: "小さいほど縦長のまま表示"
         case AppearanceCatalog.mediaWidestAspectRatio.id: "大きいほど横長のまま表示"
-        case AppearanceCatalog.avatarCornerRatio.id: "0.5で円になる"
         case AppearanceCatalog.quoteIndent.id: "1で本文の1文字分"
         case AppearanceCatalog.linkCardImageWidthRatio.id: "画像はカードの高さの正方形より広くならない"
         // カスタム絵文字の割合の基準（普通の絵文字を文字の大きさのまま描いたときの大きさ）は見出しに書かず、1がどの大きさかで伝える。普通の絵文字は、1でいつもの大きさなのが倍率から分かるので添えない。

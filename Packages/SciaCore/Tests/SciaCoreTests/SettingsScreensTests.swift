@@ -114,7 +114,7 @@ struct SettingsScreensTests {
             Issue.record("アイコンの形が、選択肢から選ぶ項目になっていません")
             return
         }
-        #expect(options.titles == ["円", "角丸の四角"])
+        #expect(options.titles == ["円", "四角"])
         #expect(options.selectedIndex(settings) == 1)
 
         options.select(0, settings)

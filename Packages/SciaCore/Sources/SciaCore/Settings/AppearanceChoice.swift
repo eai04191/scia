@@ -312,7 +312,7 @@ extension AppearanceChoice {
         case .showsContextSymbol: .toggle(\.showsContextSymbol)
         case .showsBoosterAvatar: .toggle(\.showsBoosterAvatar)
         case .showsReplyLabel: .toggle(\.showsReplyLabel)
-        case .avatarShape: .options(\.avatarShape, [(.circle, "円"), (.roundedSquare, "角丸の四角")])
+        case .avatarShape: .options(\.avatarShape, [(.circle, "円"), (.roundedSquare, "四角")])
         case .showsAvatarBorder: .toggle(\.showsAvatarBorder)
         // 選ぶまではサーバーの設定に従うので、今の値は`AppSettings`から読む。
         case .animatesAvatars: .options(\.animatesAvatars, Self.animationChoices, subtitle: Self.serverAnimationSubtitle)

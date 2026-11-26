@@ -107,7 +107,7 @@ public enum SessionTexts {
         public static let startRedrafting = "書き直しを始められませんでした"
         public static let dismissNotification = "通知を削除できませんでした"
         public static let vote = "投票できませんでした"
-        public static let refreshPoll = "投票の結果を読み直せませんでした"
+        public static let refreshPoll = "投票の結果を更新できませんでした"
         public static let open = "開けませんでした"
         /// お知らせのリアクション。投稿のリアクションの失敗（`StatusInteractions.Action.failureTitle`）と同じ文言。
         public static let announcementReaction = "リアクションを変更できませんでした"

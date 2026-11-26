@@ -110,7 +110,7 @@
       "name": "Unicode Emoji",
       "license": "Unicode License v3",
       "copyright": "Copyright © 1991-2026 Unicode, Inc.",
-      "usage": "投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。",
+      "usage": "投稿欄の絵文字ピッカーに並べるUnicodeの絵文字のリストとグループ（emoji-test.txt）。",
       "source": "https://www.unicode.org/emoji/",
       "licenseURL": "https://www.unicode.org/license.txt",
       "app": true

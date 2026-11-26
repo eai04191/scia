@@ -1061,7 +1061,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
                 redraft?.deletion = .uncertain
             }
             guard !(error is CancellationError) else { return false }
-            postError = ErrorPresentation(error).leading("元の投稿を削除できたか分からないため、投稿しませんでした。送り直すと削除から送り直します。")
+            postError = ErrorPresentation(error).leading("元の投稿を削除できたか分からないため、投稿しませんでした。もう一度投稿すると、元の投稿の削除からやり直します。")
             return false
         }
         redraft?.deletion = .done

@@ -61,7 +61,7 @@ enum AppInfo {
             name: "Unicode Emoji",
             license: "Unicode License v3",
             copyright: "Copyright © 1991-2026 Unicode, Inc.",
-            usage: "投稿欄の絵文字のシートに並べるUnicodeの絵文字のリストとまとまり（emoji-test.txt）。",
+            usage: "投稿欄の絵文字ピッカーに並べるUnicodeの絵文字のリストとグループ（emoji-test.txt）。",
             source: URL(string: "https://www.unicode.org/emoji/"),
             licenseURL: URL(string: "https://www.unicode.org/license.txt")
         ),

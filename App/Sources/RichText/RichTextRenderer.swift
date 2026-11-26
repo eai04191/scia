@@ -14,7 +14,7 @@ struct RichTextRenderer: Sendable {
     var paragraphSpacing: CGFloat
     /// 行と行のあいだに足す余白。
     var lineSpacing: CGFloat
-    /// 引用とリストの1段あたりのインデント（pt）。初期化で渡さなければ、設定の「引用とリストの字下げ」の割合を`font`の大きさに掛けた長さ。
+    /// 引用とリストの1段あたりのインデント（pt）。初期化で渡さなければ、設定の「引用とリストのインデント」の割合を`font`の大きさに掛けた長さ。
     var indentPerLevel: CGFloat
     /// 引用の段落の頭に引く縦線の太さ。0なら引かない。
     var quoteBarWidth: CGFloat

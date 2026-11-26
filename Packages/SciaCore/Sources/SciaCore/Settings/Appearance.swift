@@ -112,11 +112,11 @@ public enum AppearanceCatalog {
     public static let rowPaddingLeading = AppearanceValue(id: "timeline.rowPaddingLeading", title: "左の余白", range: 0...100, step: 1, defaultValue: 16, role: .free)
     public static let rowPaddingTrailing = AppearanceValue(id: "timeline.rowPaddingTrailing", title: "右の余白", range: 0...100, step: 1, defaultValue: 16, role: .free)
     /// 名前の行で、太字の部分と、後ろに添える部分のgap。
-    public static let namePartsSpacing = AppearanceValue(id: "timeline.namePartsSpacing", title: "太字と添える部分のすき間", range: 0...100, step: 1, spacing: .s1)
+    public static let namePartsSpacing = AppearanceValue(id: "timeline.namePartsSpacing", title: "太字と添える部分の間隔", range: 0...100, step: 1, spacing: .s1)
     /// 名前とハンドルを2段に分けるとき、1段目の字面の下端から2段目の字面の上端まで。
     public static let nameStackSpacing = AppearanceValue(id: "timeline.nameStackSpacing", title: "1段目と2段目のあいだ", range: 0...100, step: 1, spacing: .s1)
     /// 名前と時刻のあいだの、最も狭いgap。時刻は右端に寄せるので、名前が短ければもっと空く。
-    public static let nameTimeSpacing = AppearanceValue(id: "timeline.nameTimeSpacing", title: "名前と時刻の最小のすき間", range: 0...100, step: 1, spacing: .s2)
+    public static let nameTimeSpacing = AppearanceValue(id: "timeline.nameTimeSpacing", title: "名前と時刻の間隔の最小値", range: 0...100, step: 1, spacing: .s2)
     /// 本文の行と行のあいだに足す余白。
     public static let bodyLineSpacing = AppearanceValue(id: "timeline.bodyLineSpacing", title: "行間", range: 0...100, step: 1, defaultValue: 0, role: .free)
     /// 注意書きのボックスの、注意書きの文字と開くボタンのあいだ。
@@ -130,11 +130,11 @@ public enum AppearanceCatalog {
     /// 名前やブーストした人の行が入りきらないときに、行末をぼかす幅。
     public static let nameFadeWidth = AppearanceValue(id: "timeline.nameFadeWidth", title: "入りきらない名前の行末をぼかす幅", range: 0...100, step: 1, defaultValue: 20, role: .free)
     /// 時刻の前の公開範囲の記号と、時刻のgap。
-    public static let visibilitySymbolSpacing = AppearanceValue(id: "timeline.visibilitySymbolSpacing", title: "公開範囲の記号と時刻のすき間", range: 0...100, step: 1, spacing: .s1)
+    public static let visibilitySymbolSpacing = AppearanceValue(id: "timeline.visibilitySymbolSpacing", title: "公開範囲の記号と時刻の間隔", range: 0...100, step: 1, spacing: .s1)
     /// 時刻の前の編集済みの「*」と、時刻のgap。
-    public static let editedMarkSpacing = AppearanceValue(id: "timeline.editedMarkSpacing", title: "“*”と時刻のすき間", range: 0...100, step: 1, defaultValue: 0, role: .free)
+    public static let editedMarkSpacing = AppearanceValue(id: "timeline.editedMarkSpacing", title: "“*”と時刻の間隔", range: 0...100, step: 1, defaultValue: 0, role: .free)
     /// 本文の引用とリストの、1段あたりのインデントの、本文の文字の大きさに対する割合。1で1文字分。引用の縦線も、この中に引く。
-    public static let quoteIndent = AppearanceValue(id: "timeline.quoteIndentRatio", title: "引用とリストの字下げ", range: 0...10, step: 0.1, defaultValue: 1, unit: .ratio)
+    public static let quoteIndent = AppearanceValue(id: "timeline.quoteIndentRatio", title: "引用とリストのインデント", range: 0...10, step: 0.1, defaultValue: 1, unit: .ratio)
     /// 本文の引用の段落の頭に、深さの数だけ引く縦線の太さ。0なら引かない。
     public static let quoteBarWidth = AppearanceValue(id: "timeline.quoteBarWidth", title: "引用の縦線の太さ", range: 0...100, step: 1, defaultValue: 3, role: .free)
     /// 本文と注意書きのカスタム絵文字の高さの、絵文字の標準の大きさ（絵文字を文字の大きさのまま描いたときの絵の高さ）に対する割合。
@@ -156,9 +156,9 @@ public enum AppearanceCatalog {
     /// 本文を切ったときに出す行数。切り始める行数より多ければ、切り始める行数まで出す。
     public static let bodyTruncatedLines = AppearanceValue(id: "timeline.bodyTruncatedLines", title: "切ったときの行数", range: 1...200, step: 1, defaultValue: 15, unit: .lines)
     /// アイコンを角丸の四角にしたときの、radiusの一辺に対する割合。0.5で円になる。
-    public static let avatarCornerRatio = AppearanceValue(id: "timeline.avatarCornerRatio", title: "角丸の四角の丸み（一辺に対する割合）", range: 0...0.5, step: 0.05, defaultValue: 0.2, unit: .ratio)
+    public static let avatarCornerRatio = AppearanceValue(id: "timeline.avatarCornerRatio", title: "角の丸さ", range: 0...0.5, step: 0.05, defaultValue: 0.2, unit: .ratio)
     /// 注意書きのボックスのradius。
-    public static let spoilerCornerRadius = AppearanceValue(id: "timeline.spoilerCornerRadius", title: "ボックスの角の丸み", range: 0...100, step: 1, defaultValue: 8, role: .free)
+    public static let spoilerCornerRadius = AppearanceValue(id: "timeline.spoilerCornerRadius", title: "ボックスの角の半径", range: 0...100, step: 1, defaultValue: 8, role: .free)
     /// 本文などと、自分のフィルターに一致したことを示す注記のあいだ。
     public static let filterNoteSpacing = AppearanceValue(id: "timeline.filterNoteSpacing", title: "注記とのあいだ", range: 0...100, step: 1, spacing: .s3)
     /// 添付ファイルが1つの投稿で、横長の画像をどこまで横長のまま出すか（幅÷高さ）。これより横長なものは左右を切り落とす。
@@ -172,7 +172,7 @@ public enum AppearanceCatalog {
     /// 投票の選択肢の、枠と記号や割合のあいだの左右の余白。
     public static let pollOptionHorizontalPadding = AppearanceValue(id: "timeline.pollOptionHorizontalPadding", title: "選択肢の左右の余白", range: 0...100, step: 1, spacing: .s2)
     /// 投票の選択肢の枠のradius。
-    public static let pollOptionCornerRadius = AppearanceValue(id: "timeline.pollOptionCornerRadius", title: "選択肢の角の丸み", range: 0...100, step: 1, defaultValue: 8, role: .free)
+    public static let pollOptionCornerRadius = AppearanceValue(id: "timeline.pollOptionCornerRadius", title: "選択肢の角の半径", range: 0...100, step: 1, defaultValue: 8, role: .free)
     /// 投票の最後の選択肢と、票数と締め切りの行のあいだ。
     public static let pollFooterSpacing = AppearanceValue(id: "timeline.pollFooterSpacing", title: "選択肢と票数のあいだ", range: 0...100, step: 1, spacing: .s2)
 
@@ -185,16 +185,16 @@ public enum AppearanceCatalog {
     /// 返信と返信先の行のアイコン同士をつなぐ線の太さ。
     public static let replyLineWidth = AppearanceValue(id: "timeline.replyLineWidth", title: "返信をつなぐ線の太さ", range: 0...20, step: 0.5, defaultValue: 2, role: .free)
     /// 返信をつなぐ線と、アイコンのあいだのgap。
-    public static let replyLineGap = AppearanceValue(id: "timeline.replyLineGap", title: "返信をつなぐ線とのすき間", range: 0...100, step: 1, spacing: .s1)
+    public static let replyLineGap = AppearanceValue(id: "timeline.replyLineGap", title: "返信をつなぐ線との間隔", range: 0...100, step: 1, spacing: .s1)
     /// 投稿と通知の行で、左のアイコンの列と、右の文字の列のあいだ。
     public static let avatarSpacing = AppearanceValue(id: "timeline.avatarSpacing", title: "文字の列とのあいだ", range: 0...100, step: 1, spacing: .s2)
     /// 名前の上の行の記号と、文字の列のあいだ。ブーストした人のアイコンがあれば、そのアイコンとのあいだになる。
     /// 記号はアイコンの列の右端に揃えず、文字の列からこの幅だけ離して置く。記号どうしの縦の揃いは保たれる。
-    public static let contextSymbolSpacing = AppearanceValue(id: "timeline.contextSymbolSpacing", title: "記号とのすき間", range: 0...100, step: 1, spacing: .s1)
+    public static let contextSymbolSpacing = AppearanceValue(id: "timeline.contextSymbolSpacing", title: "記号との間隔", range: 0...100, step: 1, spacing: .s1)
     /// 名前の上の行で、ブーストした人の名前の部分と、後ろに添える部分のgap。
-    public static let contextPartsSpacing = AppearanceValue(id: "timeline.contextPartsSpacing", title: "ブーストした人の名前と添える部分のすき間", range: 0...100, step: 1, spacing: .s1)
+    public static let contextPartsSpacing = AppearanceValue(id: "timeline.contextPartsSpacing", title: "ブーストした人の名前と添える部分の間隔", range: 0...100, step: 1, spacing: .s1)
     /// 名前の上の行の、ブーストした人のアイコンと文字のgap。
-    public static let contextAvatarTextSpacing = AppearanceValue(id: "timeline.contextAvatarTextSpacing", title: "アイコンと文字のすき間", range: 0...100, step: 1, spacing: .s1)
+    public static let contextAvatarTextSpacing = AppearanceValue(id: "timeline.contextAvatarTextSpacing", title: "アイコンと文字の間隔", range: 0...100, step: 1, spacing: .s1)
     /// ブーストや固定、通知の種類を示す名前の上の行と、名前の行のあいだ。
     public static let contextSpacing = AppearanceValue(id: "timeline.contextSpacing", title: "名前の行とのあいだ", range: 0...100, step: 1, spacing: .s2)
     /// 投稿の名前の行と本文のあいだ。
@@ -208,7 +208,7 @@ public enum AppearanceCatalog {
     /// 投稿の本文と、添付ファイルのサムネイルのあいだ。
     public static let bodyMediaSpacing = AppearanceValue(id: "timeline.bodyMediaSpacing", title: "本文とのあいだ", range: 0...100, step: 1, spacing: .s3)
     /// 添付ファイルのサムネイルを並べるときの、サムネイル同士のgap。
-    public static let mediaTileSpacing = AppearanceValue(id: "timeline.mediaTileSpacing", title: "サムネイル同士のすき間", range: 0...100, step: 1, spacing: .s1)
+    public static let mediaTileSpacing = AppearanceValue(id: "timeline.mediaTileSpacing", title: "サムネイル同士の間隔", range: 0...100, step: 1, spacing: .s1)
     /// 投稿の本文や添付ファイルと、リンクカードのあいだ。
     public static let bodyLinkCardSpacing = AppearanceValue(id: "timeline.bodyLinkCardSpacing", title: "本文とのあいだ", range: 0...100, step: 1, spacing: .s3)
     /// リンクカードの文字の、枠とサムネイルからの余白。
@@ -218,7 +218,7 @@ public enum AppearanceCatalog {
     /// 引用とXの投稿のカードの内側の余白。
     public static let xPostPadding = AppearanceValue(id: "timeline.xPostPadding", title: "内側の余白", range: 0...100, step: 1, spacing: .s2)
     /// 引用とXの投稿のカードの、作者のアイコンと名前のgap。
-    public static let xPostAvatarNameSpacing = AppearanceValue(id: "timeline.xPostAvatarNameSpacing", title: "アイコンと名前のすき間", range: 0...100, step: 1, spacing: .s1)
+    public static let xPostAvatarNameSpacing = AppearanceValue(id: "timeline.xPostAvatarNameSpacing", title: "アイコンと名前の間隔", range: 0...100, step: 1, spacing: .s1)
     /// 引用とXの投稿のカードの、作者の行と本文のあいだ。
     public static let xPostHeaderSpacing = AppearanceValue(id: "timeline.xPostHeaderSpacing", title: "作者の行と本文のあいだ", range: 0...100, step: 1, spacing: .s2)
     /// 引用とXの投稿のカードの、本文とメディアのあいだ。
@@ -254,16 +254,16 @@ public enum AppearanceCatalog {
 
     /// 下の端から照らす光の高さ。光は行の中にだけ伸ばす。ライトでHDRを使わずに描くときは、`ReactionGlow.Style`でこの高さを縮める。
     public static let reactionGlowHeight = AppearanceValue(id: "reactionGlow.height", title: "光の高さ", range: 0...200, step: 2, defaultValue: 64, role: .free)
-    public static let reactionGlowDarkOpacity = AppearanceValue(id: "reactionGlow.darkOpacity", title: "光の濃さ（ダークモード）", range: 0...1, step: 0.05, defaultValue: 0.4, unit: .ratio)
+    public static let reactionGlowDarkOpacity = AppearanceValue(id: "reactionGlow.darkOpacity", title: "光の不透明度（ダークモード）", range: 0...1, step: 0.05, defaultValue: 0.4, unit: .ratio)
     /// ライトでHDRで描くときの不透明度。HDRを使わずに描くときは、`ReactionGlow.Style`でこの不透明度を下げる。
-    public static let reactionGlowLightOpacity = AppearanceValue(id: "reactionGlow.lightOpacity", title: "光の濃さ（ライトモード）", range: 0...1, step: 0.05, defaultValue: 0.95, unit: .ratio)
+    public static let reactionGlowLightOpacity = AppearanceValue(id: "reactionGlow.lightOpacity", title: "光の不透明度（ライトモード）", range: 0...1, step: 0.05, defaultValue: 0.95, unit: .ratio)
     /// 左半分のブーストと右半分のお気に入りの光を、真ん中で混ぜる幅。0でくっきり分ける。
     public static let reactionGlowBlendWidth = AppearanceValue(id: "reactionGlow.blendWidth", title: "真ん中で2色を混ぜる幅", range: 0...400, step: 4, defaultValue: 48, role: .free)
     /// 光に添えるアイコンの大きさ。散らすときは、これを基準に大きさを変える。
     /// 0ptの記号は書体の標準の大きさで描かれ、小さくしたつもりが大きくなるため、文字と同じく1ptを下限にする。
     public static let reactionGlowIconSize = AppearanceValue(id: "reactionGlow.iconSize", title: "アイコンの大きさ", range: 1...200, step: 1, defaultValue: 8, role: .free)
     /// 光に添えるアイコンの不透明度。光より目立たせないため、既定では薄くする。
-    public static let reactionGlowIconOpacity = AppearanceValue(id: "reactionGlow.iconOpacity", title: "アイコンの濃さ", range: 0...1, step: 0.05, defaultValue: 0.6, unit: .ratio)
+    public static let reactionGlowIconOpacity = AppearanceValue(id: "reactionGlow.iconOpacity", title: "アイコンの不透明度", range: 0...1, step: 0.05, defaultValue: 0.6, unit: .ratio)
 
     public static let groups: [AppearanceGroup] = [
         AppearanceGroup(id: "row", title: "余白", values: [rowPaddingTop, rowPaddingBottom, rowPaddingLeading, rowPaddingTrailing]),

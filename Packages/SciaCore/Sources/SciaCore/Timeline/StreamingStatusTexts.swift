@@ -33,11 +33,11 @@ public enum StreamingStatusTexts {
     }
 
     /// サーバーがホームを作り直しているときの、止まっている理由。
-    public static let regeneratingNote = "サーバーがホームを作り直し中のため、時間をおいて読み直します。"
+    public static let regeneratingNote = "サーバーがホームを作り直し中のため、時間をおいて再読み込みします。"
 
     /// 補完に失敗したときの、止まっている理由。
     /// - Parameter reason: 失敗の理由の文。
     public static func failedNote(reason: String) -> String {
-        "\(reason)次につながったときに読み直します。"
+        "\(reason)次につながったときに再読み込みします。"
     }
 }

@@ -142,7 +142,7 @@ struct DiscomfortReportView: View {
             Text("直前の操作")
         } footer: {
             if !draft.operations.isEmpty {
-                Text("押すと、その操作にコメントを付けられます")
+                Text("タップすると、その操作にコメントを付けられます")
             }
         }
     }
