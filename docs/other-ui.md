@@ -100,7 +100,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 何を出すかはSciaCoreが決め、UIは描くだけにする。確認は`Confirmation`、メニューは`MenuNode`（`StatusMenuTree`など）
 - 受け持たない項目を外した並びは、`MenuLayout(defaultElements:)`で作る
 - 失敗の文言は`ErrorPresentation`（`@_spi(FailureDisplay) import SciaCore`で読む）
-- 押しても応答が届くまで画面が変わらない操作は、`SlowActivity.track(_:)`で囲み、`isSlow`の間は待っていることを知らせる。削除は`StatusDeletion.slowActivity`に渡す。待っていることを出すまでの長さ（`SlowActivity`と`LatestLookup(slowAfter:)`に渡す）は、`TuningCatalog.profileLookupChipDelay`から読む
+- 選択しても応答が届くまで画面が変わらない操作は、`SlowActivity.track(_:)`で囲み、`isSlow`の間は待っていることを知らせる。削除は`StatusDeletion.slowActivity`に渡す。待っていることを出すまでの長さ（`SlowActivity`と`LatestLookup(slowAfter:)`に渡す）は、`TuningCatalog.profileLookupChipDelay`から読む
 - 付け外しの操作（お気に入り、ブースト、ブックマーク、会話のミュート、固定、リアクション）の失敗の見出しと、済んだことのチップの文言は、`StatusInteractions.Action`の`failureTitle(addsOnly:)`と`doneTitle(wasOn:)`。どの操作で済んだことを知らせるかは[object-actions.md](object-actions.md)の「結果のチップ」にある。ほかのアカウントで行ったときは、`OtherAccountTexts.title(_:handle:)`でどのアカウントで行ったかを頭に付ける。相手との関係の変更は`UserRelationChange`の`doneTitle(_:)`と`failureTitle`、ミュートの期間の選択肢は`UserRelationChange.muteDurations`
 - メニューをキャッシュした値でその場で組むためのキャッシュは`LatestValueCache`（自分のフィルターは`ServerFilterCache`）。読み込み中の行を出してから中身を差し替えずに済む
 - 「リストに追加」の通信の口は`session.listMembershipAPI(accountID:acct:)`
