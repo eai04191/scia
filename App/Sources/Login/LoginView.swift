@@ -90,7 +90,9 @@ struct LoginView: View {
                         Text(LoginTexts.logIn)
                             .opacity(model.isLoggingIn ? 0 : 1)
                         if model.isLoggingIn {
+                            // ボタンの.controlSize(.large)が届くと、スピナーが大きい版になり、ボタンが縦に伸びるため戻す
                             ProgressView()
+                                .controlSize(.regular)
                         }
                     }
                     .frame(maxWidth: .infinity)
