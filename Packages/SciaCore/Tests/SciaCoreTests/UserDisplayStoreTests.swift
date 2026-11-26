@@ -201,4 +201,27 @@ struct UserDisplayStoreTests {
         #expect(settings.userDisplays.display(of: account(), in: settings).name == "Updated")
     }
 
+    @Test func receivingAnAccountNeverShownKeepsRendering() {
+        let settings = settings()
+        let changes = Mutex(0)
+        withObservationTracking { settings.userDisplays.observeChanges() } onChange: { changes.withLock { $0 += 1 } }
+        settings.userDisplays.receive(account(), in: settings)
+        #expect(changes.withLock { $0 } == 0)
+        #expect(settings.userDisplays.display(of: account(name: "Stale"), in: settings).name == "Alice")
+    }
+
+    @Test func localUserShownBeforeTheDomainIsKnownStillRedrawsAfterEviction() {
+        let settings = settings().forAccount("@me@web.example.com")
+        weak let evicted = settings.userDisplays.display(of: account("alice"), in: settings)
+        for index in 0...ReceivedAccounts.limit {
+            settings.userDisplays.receive(account("user\(index)@example.com", id: String(index + 2)), in: settings)
+        }
+        #expect(evicted == nil)
+        settings.setUserDisplayDomain("example.com")
+        let changes = Mutex(0)
+        withObservationTracking { settings.userDisplays.observeChanges() } onChange: { changes.withLock { $0 += 1 } }
+        settings.userDisplays.receive(account("alice", name: "Updated"), in: settings)
+        #expect(changes.withLock { $0 } == 1)
+    }
+
 }

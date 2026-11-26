@@ -18,6 +18,7 @@ public final class UserDisplayStore {
     @ObservationIgnored private var sources: [ObjectIdentifier: AccountSource] = [:]
     @ObservationIgnored private var retained = CostLimitedCache<String, UserDisplay>(totalCostLimit: ReceivedAccounts.limit)
     @ObservationIgnored private var sourceVersion = 0
+    @ObservationIgnored private var shownKeys: Set<String> = []
     private var revision = 0
 
     init(store: SettingsStore) { self.store = store }
@@ -58,8 +59,9 @@ public final class UserDisplayStore {
         return entry(handle: handle, source: .init(handle: handle), settings: settings)
     }
 
-    private func entry(handle: String, source: UserDisplay.Source, settings: AppSettings) -> UserDisplay {
+    private func entry(handle: String, source: UserDisplay.Source, settings: AppSettings, shows: Bool = true) -> UserDisplay {
         let key = settings.userDisplayKey(acct: handle) ?? "\(settings.userDisplayScope ?? "")/\(handle)"
+        if shows { shownKeys.insert(key) }
         let localName = String(handle.prefix(while: { $0 != "@" }))
         let localKey = "\(settings.userDisplayScope ?? "")/\(localName)"
         let alias = settings.userDisplayKey(acct: localName) == key ? displays[localKey]?.value : nil
@@ -81,9 +83,17 @@ public final class UserDisplayStore {
         let latest = sources.values.first { $0.settings === settings }?.accounts?.latest(of: account) ?? account
         let key = settings.userDisplayKey(acct: latest.acct) ?? "\(settings.userDisplayScope ?? "")/\(latest.acct)"
         let existed = displays[key]?.value != nil
-        let display = entry(handle: latest.acct, source: .init(latest, localServer: settings.emojiLocalServer), settings: settings)
+        let display = entry(handle: latest.acct, source: .init(latest, localServer: settings.emojiLocalServer), settings: settings, shows: false)
         let changed = display.receive(latest, localServer: settings.emojiLocalServer, version: sourceVersion)
-        if changed || !existed { revision += 1 }
+        // 画面に出したあと追い出された人は、前に描いた値と比べられないので描き直す。
+        if changed || (!existed && wasShown(handle: latest.acct, key: key, settings: settings)) { revision += 1 }
+    }
+
+    /// ドメインが分かる前に出した人は、ローカルのキーで覚えている。
+    private func wasShown(handle: String, key: String, settings: AppSettings) -> Bool {
+        if shownKeys.contains(key) { return true }
+        let localName = String(handle.prefix(while: { $0 != "@" }))
+        return settings.userDisplayKey(acct: localName) == key && shownKeys.contains("\(settings.userDisplayScope ?? "")/\(localName)")
     }
 
     func reconcileDomains() {
