@@ -301,6 +301,7 @@ struct AppearanceValueRow: View {
             }
             Stepper(item.title, value: value, in: item.range, step: item.step)
                 .labelsHidden()
+                .modifier(StepperPercentValue(text: item.unit == .percent ? "\(numberText)%" : nil))
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggleFocus)
@@ -336,7 +337,7 @@ struct AppearanceValueRow: View {
             return Self.format(typography.standardPointSize(role))
         }
         let value = settings.value(of: item)
-        return item.unit == .ratio ? String(format: "%.2f", value) : Self.format(value)
+        return item.unit == .ratio ? String(format: "%.2f", value) : Self.format(item.displayNumber(for: value))
     }
 
     private var unitText: String? {
@@ -346,7 +347,7 @@ struct AppearanceValueRow: View {
     /// 打った数を値にする。文字の大きさは実際の大きさで打つので、本文との差に直す。範囲の外は範囲に収め、数でなければ元のままにする。
     private func commit() {
         guard let number = Double(draft.replacingOccurrences(of: ",", with: ".")) else { return }
-        let newValue = role.map { Double(typography.offset(for: $0, standardPointSize: CGFloat(number))) } ?? number
+        let newValue = role.map { Double(typography.offset(for: $0, standardPointSize: CGFloat(number))) } ?? item.storedValue(fromDisplayNumber: number)
         // 打ち直さずに閉じたときは、何もしない。名前のタップで示すのをやめたのを、閉じたことで示し直さないため。
         guard newValue != settings.value(of: item) else { return }
         settings.setValue(newValue, for: item)
@@ -475,6 +476,19 @@ final class AppearanceSamples {
             var configuration = timeline.contentConfiguration(for: status, base: .cell())
             configuration.replyConnection = connections[entry.id] ?? ReplyConnection()
             return configuration
+        }
+    }
+}
+
+/// %で表示する項目の＋−の読み上げを、値の欄と同じ数にする。Stepperは、そのままでは保存している割合を読む。
+private struct StepperPercentValue: ViewModifier {
+    let text: String?
+
+    func body(content: Content) -> some View {
+        if let text {
+            content.accessibilityValue(text)
+        } else {
+            content
         }
     }
 }

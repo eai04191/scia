@@ -107,6 +107,7 @@ extension PresetComparison {
         switch item.unit {
         case .point: return SettingsTexts.Presets.points(number)
         case .ratio: return number
+        case .percent: return SettingsTexts.Presets.percent(numberText(item.displayNumber(for: value), step: item.displayNumber(for: item.step)))
         case .bodyTextOffset, .textOffset, .count: return item.note(for: value) ?? number
         case .lines: return item.note(for: value) ?? SettingsTexts.Presets.lines(number)
         }

@@ -167,6 +167,11 @@ public enum SettingsTexts {
             "\(number)行"
         }
 
+        /// %で表示する割合の値。
+        public static func percent(_ number: String) -> String {
+            "\(number)%"
+        }
+
         /// 比べた項目のセクションの見出しの読み上げ。設定の画面の階層をつなぐ。画面では、名前をシェブロンでつないで描く。
         public static func pathAccessibilityLabel(_ titles: [String]) -> String {
             titles.joined(separator: "、")
@@ -486,6 +491,7 @@ extension AppearanceValue.Unit {
     public var title: String? {
         switch self {
         case .ratio: nil
+        case .percent: "%"
         case .lines: "行"
         case .count: "個"
         case .point, .bodyTextOffset, .textOffset: "pt"
@@ -513,7 +519,7 @@ extension AppearanceValue {
         case .point: nil
         case .lines: value == 0 ? (self == AppearanceCatalog.bodyTruncationThreshold ? "切らない" : "表示しない") : nil
         case .count: self == AppearanceCatalog.emojiOnlyLimit && value == 0 ? "大きくしない" : nil
-        case .ratio: ratioNote
+        case .ratio, .percent: ratioNote
         case .bodyTextOffset: value == 0 ? "標準" : "標準\(Self.signedNumberText(value))"
         case .textOffset: value == 0 ? "本文と同じ" : "本文\(Self.signedNumberText(value))"
         }

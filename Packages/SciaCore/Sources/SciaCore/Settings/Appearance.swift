@@ -9,6 +9,8 @@ public struct AppearanceValue: Sendable, Identifiable, Hashable {
         case textOffset
         /// 単位のない割合。
         case ratio
+        /// 割合。範囲の上限を100%として%で表示し、保存する値は割合のまま持つ。
+        case percent
         /// 行数。0なら出さない。
         case lines
         /// 個数。
@@ -45,6 +47,16 @@ public struct AppearanceValue: Sendable, Identifiable, Hashable {
         self.defaultValue = defaultValue
         self.unit = unit
         self.role = role
+    }
+
+    /// 値の欄に出す数。%の項目は、範囲の上限を100にした数にする。0.4×100が40.00000000000001になるような端数は、表示の桁を増やさないよう丸める。
+    public func displayNumber(for value: Double) -> Double {
+        unit == .percent ? (value / range.upperBound * 100 * 1e6).rounded() / 1e6 : value
+    }
+
+    /// 値の欄に打った数を、保存する値に直す。
+    public func storedValue(fromDisplayNumber number: Double) -> Double {
+        unit == .percent ? (number / 100 * range.upperBound * 1e9).rounded() / 1e9 : number
     }
 
     /// gapの段の項目。既定値は段の長さにする。
@@ -156,7 +168,7 @@ public enum AppearanceCatalog {
     /// 本文を切ったときに出す行数。切り始める行数より多ければ、切り始める行数まで出す。
     public static let bodyTruncatedLines = AppearanceValue(id: "timeline.bodyTruncatedLines", title: "切ったときの行数", range: 1...200, step: 1, defaultValue: 15, unit: .lines)
     /// アイコンを角丸の四角にしたときの、radiusの一辺に対する割合。0.5で円になる。
-    public static let avatarCornerRatio = AppearanceValue(id: "timeline.avatarCornerRatio", title: "角の丸さ", range: 0...0.5, step: 0.05, defaultValue: 0.2, unit: .ratio)
+    public static let avatarCornerRatio = AppearanceValue(id: "timeline.avatarCornerRatio", title: "角の丸さ", range: 0...0.5, step: 0.05, defaultValue: 0.2, unit: .percent)
     /// 注意書きのボックスのradius。
     public static let spoilerCornerRadius = AppearanceValue(id: "timeline.spoilerCornerRadius", title: "ボックスの角の半径", range: 0...100, step: 1, defaultValue: 8, role: .free)
     /// 本文などと、自分のフィルターに一致したことを示す注記のあいだ。
@@ -254,16 +266,16 @@ public enum AppearanceCatalog {
 
     /// 下の端から照らす光の高さ。光は行の中にだけ伸ばす。ライトでHDRを使わずに描くときは、`ReactionGlow.Style`でこの高さを縮める。
     public static let reactionGlowHeight = AppearanceValue(id: "reactionGlow.height", title: "光の高さ", range: 0...200, step: 2, defaultValue: 64, role: .free)
-    public static let reactionGlowDarkOpacity = AppearanceValue(id: "reactionGlow.darkOpacity", title: "光の不透明度（ダークモード）", range: 0...1, step: 0.05, defaultValue: 0.4, unit: .ratio)
+    public static let reactionGlowDarkOpacity = AppearanceValue(id: "reactionGlow.darkOpacity", title: "光の不透明度（ダークモード）", range: 0...1, step: 0.05, defaultValue: 0.4, unit: .percent)
     /// ライトでHDRで描くときの不透明度。HDRを使わずに描くときは、`ReactionGlow.Style`でこの不透明度を下げる。
-    public static let reactionGlowLightOpacity = AppearanceValue(id: "reactionGlow.lightOpacity", title: "光の不透明度（ライトモード）", range: 0...1, step: 0.05, defaultValue: 0.95, unit: .ratio)
+    public static let reactionGlowLightOpacity = AppearanceValue(id: "reactionGlow.lightOpacity", title: "光の不透明度（ライトモード）", range: 0...1, step: 0.05, defaultValue: 0.95, unit: .percent)
     /// 左半分のブーストと右半分のお気に入りの光を、真ん中で混ぜる幅。0でくっきり分ける。
     public static let reactionGlowBlendWidth = AppearanceValue(id: "reactionGlow.blendWidth", title: "真ん中で2色を混ぜる幅", range: 0...400, step: 4, defaultValue: 48, role: .free)
     /// 光に添えるアイコンの大きさ。散らすときは、これを基準に大きさを変える。
     /// 0ptの記号は書体の標準の大きさで描かれ、小さくしたつもりが大きくなるため、文字と同じく1ptを下限にする。
     public static let reactionGlowIconSize = AppearanceValue(id: "reactionGlow.iconSize", title: "アイコンの大きさ", range: 1...200, step: 1, defaultValue: 8, role: .free)
     /// 光に添えるアイコンの不透明度。光より目立たせないため、既定では薄くする。
-    public static let reactionGlowIconOpacity = AppearanceValue(id: "reactionGlow.iconOpacity", title: "アイコンの不透明度", range: 0...1, step: 0.05, defaultValue: 0.6, unit: .ratio)
+    public static let reactionGlowIconOpacity = AppearanceValue(id: "reactionGlow.iconOpacity", title: "アイコンの不透明度", range: 0...1, step: 0.05, defaultValue: 0.6, unit: .percent)
 
     public static let groups: [AppearanceGroup] = [
         AppearanceGroup(id: "row", title: "余白", values: [rowPaddingTop, rowPaddingBottom, rowPaddingLeading, rowPaddingTrailing]),

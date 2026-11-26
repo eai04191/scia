@@ -137,7 +137,7 @@ struct AppearanceSheets {
         let delta = switch item.unit {
         case .point: 10.0
         case .bodyTextOffset, .textOffset: 6.0
-        case .ratio: (item.range.upperBound - item.range.lowerBound) * 0.25
+        case .ratio, .percent: (item.range.upperBound - item.range.lowerBound) * 0.25
         case .lines: 2.0
         // 上限の項目は、既定より少なくして見本の絵文字を大きくしないほうが、違いが分かる。
         case .count: -item.defaultValue
