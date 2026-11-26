@@ -151,7 +151,7 @@ enum ProfileHeaderCatalog {
             CatalogState(title: "フォローを変えている途中") { header(fullAccount, .following, isChangingFollow: true) },
             CatalogState(title: "関係を読み込む前") { header(fullAccount, .unknown) },
             CatalogState(title: "関係を読み込むのが長引いている（ボタンの中のインジケータ）") { header(fullAccount, .unknown, showsRelationshipActivity: true) },
-            CatalogState(title: "関係を読み込めなかった（再試行を押すと読み込み直す途中になる）") { header(fullAccount, .loadFailed) },
+            CatalogState(title: "関係を読み込めなかった（再試行をタップすると再読み込みする途中になる）") { header(fullAccount, .loadFailed) },
             CatalogState(title: "読み込めなかった関係を読み込み直している途中") { header(fullAccount, .loadFailed, isReloadingRelationship: true) },
             CatalogState(title: "自分（ボタンなし）、ヘッダー画像・自己紹介・補足情報・アイコンなし") {
                 header(Fixtures.account(acct: "me", avatar: nil), .myself)
@@ -165,7 +165,7 @@ enum ProfileHeaderCatalog {
                     .notFollowing(locked: true)
                 )
             },
-            CatalogState(title: "1文字のハンドル（押せる幅は44pt）") {
+            CatalogState(title: "1文字のハンドル（ヒット領域の幅は44pt）") {
                 header(Fixtures.account(displayName: "短いハンドル", acct: "_"), .notFollowing(locked: false))
             },
             CatalogState(title: "メディアのタブ、角丸のアイコン") { header(fullAccount, .following, tab: .media, avatarShape: .roundedSquare) },

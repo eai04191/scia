@@ -285,7 +285,7 @@ struct EmojiImageStoreTests {
         #expect(store.choice(animates: true).url(of: emoji) == emoji.url, "この起動の間は、読めている元の画像の最初のコマで描き続ける")
         let fetched = fetches.count.withLock { $0 }
         #expect(store.animation(for: url) == nil)
-        #expect(store.animationDiagnosis(of: url).contains("animationState: nil"), "アニメーションは読み直さない")
+        #expect(store.animationDiagnosis(of: url).contains("animationState: nil"), "アニメーションは再読み込みしない")
         #expect(fetches.count.withLock { $0 } == fetched)
 
         // 起動し直したあと。
@@ -368,11 +368,11 @@ struct EmojiImageStoreTests {
         let small = try #require(store.image(for: url))
         #expect(small.height == 96)
 
-        #expect(store.image(for: url, pixelHeight: 200)?.height == 96, "読み直している間は、前の画像で描く")
+        #expect(store.image(for: url, pixelHeight: 200)?.height == 96, "再読み込みしている間は、前の画像で描く")
         try await waitUntil { store.loading.isEmpty }
         #expect(store.image(for: url, pixelHeight: 200)?.height == 200)
         #expect(store.image(for: url)?.height == 200, "小さく描く場所も、同じ1枚を縮めて描く")
-        #expect(store.loading.isEmpty, "持っている画像より低く描くときは読み直さない")
+        #expect(store.loading.isEmpty, "持っている画像より低く描くときは再読み込みしない")
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
@@ -484,7 +484,7 @@ struct EmojiImageStoreTests {
         #expect(store.animation(for: url)?.image.frameHeight == 96)
 
         let previous = try #require(store.animation(for: url))
-        #expect(store.animation(for: url, pixelHeight: 1_000) === previous, "読み直している間は、前のコマで動かす")
+        #expect(store.animation(for: url, pixelHeight: 1_000) === previous, "再読み込みしている間は、前のコマで動かす")
         try await waitUntil(state: { await animationState(of: store, url) }) { store.upgradingAnimations.isEmpty }
         let enlarged = try #require(store.animation(for: url, pixelHeight: 1_000)).image
         // 512pxのまま20コマ並べると約20MBで超えるので、収まる高さまで下げる。
@@ -537,7 +537,7 @@ struct EmojiImageStoreTests {
         try await waitUntil { store.loading.isEmpty }
         #expect(store.image(for: url)?.height == 106)
         _ = store.image(for: url, pixelHeight: 116)
-        #expect(store.loading.isEmpty, "106pxの1.1倍（116.6px）までは読み直さない")
+        #expect(store.loading.isEmpty, "106pxの1.1倍（116.6px）までは再読み込みしない")
         _ = store.image(for: url, pixelHeight: 117)
         try await waitUntil { store.loading.isEmpty }
         #expect(store.image(for: url)?.height == 117)

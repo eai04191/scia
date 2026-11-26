@@ -128,7 +128,7 @@ struct ReconnectingStreamTests {
         let task = Task { try await stream.run { await log.append($0) } }
         try await waitUntil { await log.count >= 1 && clock.sleeperCount(remaining: .milliseconds(300)) >= 1 }
         #expect(await log.count == 1)
-        #expect(clock.sleeperCount(dueWithin: .milliseconds(299)) == 0, "再開の時刻より前につなぎ直そうとしています")
+        #expect(clock.sleeperCount(dueWithin: .milliseconds(299)) == 0, "再開の時刻より前に再接続しようとしています")
         clock.advance(by: .milliseconds(300))
         try await log.waitUntil(count: 3)
         task.cancel()

@@ -28,12 +28,12 @@ enum TimelineOverlayCatalog {
                 timeline.setUnreadCount(12)
                 column.stack.showTransient(.linkCopied, duration: 3600)
             },
-            state("お気に入りの失敗（押すと理由）") { _, column in showFailure("お気に入りを変更できませんでした", on: column) },
+            state("お気に入りの失敗（タップすると理由）") { _, column in showFailure("お気に入りを変更できませんでした", on: column) },
             state("ブーストの失敗を新着のボタンに重ねる") { timeline, column in
                 timeline.setUnreadCount(12)
                 showFailure("ブーストを変更できませんでした", on: column)
             },
-            state("ビューアを閉じたあとのダウンロード中（1件、押すと止めるかの確認）") { timeline, column in
+            state("ビューアを閉じたあとのダウンロード中（1件、タップすると止めるかの確認）") { timeline, column in
                 timeline.setUnreadCount(12)
                 column.stack.setPersistent(.download(of: catalogURL, fraction: 0.42) {})
             },

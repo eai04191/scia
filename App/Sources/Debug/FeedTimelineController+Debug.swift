@@ -308,7 +308,7 @@ extension FeedTimelineController {
             id: base.id,
             createdAt: base.createdAt,
             account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（Xの投稿）", avatar: avatar),
-            content: #"<p>Xの投稿の囲みが届くときの確認用 <a href="\#(link.absoluteString)">x.com/dummy/status/\#(base.id)</a></p>"#,
+            content: #"<p>Xの投稿のカードが届くときの確認用 <a href="\#(link.absoluteString)">x.com/dummy/status/\#(base.id)</a></p>"#,
             spoilerText: "",
             url: nil
         )

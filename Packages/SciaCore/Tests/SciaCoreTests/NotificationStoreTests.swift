@@ -712,7 +712,7 @@ struct NotificationStoreTests {
         #expect(group.groupKey == "favourite-1-489000")
         #expect(group.notificationsCount == 4)
         #expect(group.sampleAccounts.map(\.id) == ["7", "5", "6"])
-        #expect(group.pageMinID == "20", "続きを読む位置は、まとまりの古い側のまま")
+        #expect(group.pageMinID == "20", "続きを読む位置は、グループの古い側のまま")
     }
 
     /// お気に入りを外して付け直したときなど、すでに並べている人の通知は数えず、行も動かさない。
@@ -798,7 +798,7 @@ struct NotificationStoreTests {
 
         #expect(ids(store) == ["30", "29", "23"])
         #expect(store.notifications[1].notificationsCount == 5)
-        #expect(queue.queries.map(\.maxID) == [nil, "27", "23"], "まとまりの中の最も古い通知より古い側から読みます")
+        #expect(queue.queries.map(\.maxID) == [nil, "27", "23"], "グループの中の最も古い通知より古い側から読みます")
     }
 
     /// 削除したグループは、その前に読み始めたページで戻さない。削除した後に届いた通知は、新しいグループとして足す。

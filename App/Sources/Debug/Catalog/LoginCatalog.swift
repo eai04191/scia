@@ -26,7 +26,7 @@ enum LoginCatalog {
     static func states() -> [CatalogState] {
         [
             state("打つ前") { _ in },
-            state("応答を待っている（\(Int(ResponseWait.limit.components.seconds))秒たつと「キャンセル」が出る。押すと打つ前に戻る）") { model in
+            state("応答を待っている（\(Int(ResponseWait.limit.components.seconds))秒たつと「キャンセル」が出る。タップすると打つ前に戻る）") { model in
                 model.instanceInput = "mastodon.social"
                 model.startLogin { _ in throw CancellationError() }
             },

@@ -825,7 +825,7 @@ struct ProfileStoreTests {
 @MainActor
 private func localRelationships() -> RelationshipCache {
     RelationshipCache { _ in
-        Issue.record("ProfileStoreがRelationshipCacheから関係を読み直した")
+        Issue.record("ProfileStoreがRelationshipCacheから関係を再読み込みした")
         return []
     }
 }

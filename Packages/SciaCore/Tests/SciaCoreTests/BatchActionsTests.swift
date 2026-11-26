@@ -170,7 +170,7 @@ struct BatchActionsTests {
         #expect(log.sent.count == 3)
         clock.advance(by: .seconds(2))
         guard case .finished = await outcome.value else {
-            Issue.record("送り直して済んでいない")
+            Issue.record("再送信して済んでいない")
             return
         }
         #expect(log.sent == ["unreblog 1", "reblog 1 reblogged=false", "reblog 1 reblogged=false", "reblog 1 reblogged=false"])

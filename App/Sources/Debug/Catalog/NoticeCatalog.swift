@@ -15,9 +15,9 @@ enum NoticeCatalog {
         [
             CatalogState(title: "写真に保存しました（数秒で消える）") { stack(transient: .savedToPhotos) },
             CatalogState(title: "ダウンロード中（大きさが分かる前）") { stack(persistent: .download(of: url, fraction: 0) {}) },
-            CatalogState(title: "ダウンロード中（押すと止めるかの確認）") { stack(persistent: .download(of: url, fraction: 0.42) {}) },
-            CatalogState(title: "ダウンロードを終えて保存している間（押せない）") { stack(persistent: .download(of: url, fraction: 1, onStop: nil)) },
-            CatalogState(title: "ダウンロード中（ほかの添付ファイルも落としている。押すと操作の状況のリスト）") {
+            CatalogState(title: "ダウンロード中（タップすると止めるかの確認）") { stack(persistent: .download(of: url, fraction: 0.42) {}) },
+            CatalogState(title: "ダウンロードを終えて保存している間（無効）") { stack(persistent: .download(of: url, fraction: 1, onStop: nil)) },
+            CatalogState(title: "ダウンロード中（ほかの添付ファイルも落としている。タップすると操作の状況のリスト）") {
                 var notice = Notice.download(of: url, fraction: 0.42) {}
                 notice.additionalCount = 2
                 notice.action = disclosure
@@ -25,7 +25,7 @@ enum NoticeCatalog {
             },
             CatalogState(title: "ダウンロード中（見ている添付ファイルにはなく、件数だけ）") { stack(persistent: .downloads(count: 1, action: disclosure)) },
             CatalogState(title: "ダウンロード中（件数が多い）") { stack(persistent: .downloads(count: 12, action: disclosure)) },
-            CatalogState(title: "見ている添付ファイルを落とせなかった（数秒で消える、押すと理由）") {
+            CatalogState(title: "見ている添付ファイルを落とせなかった（数秒で消える、タップすると理由）") {
                 stack(transient: .transferFailure(title: Notice.currentTransferFailureTitle(.download(URLError(.notConnectedToInternet)))) {})
             },
             CatalogState(title: "見ている添付ファイルを写真に足せなかった") {
@@ -39,19 +39,19 @@ enum NoticeCatalog {
             CatalogState(title: "タップに選んだ項目が使えない、名前が長い（数秒で消える）") {
                 stack(transient: .objectActionUnavailable(itemTitle: StatusMenuItem.mentionedUsers.title, reason: nil))
             },
-            CatalogState(title: "タップに選んだ項目が押せない理由（数秒で消える）") {
+            CatalogState(title: "タップに選んだ操作を実行できない理由（数秒で消える）") {
                 stack(transient: .objectActionUnavailable(itemTitle: StatusMenuItem.edit.title, reason: "締め切りまで5分を切った投票は編集できません"))
             },
             CatalogState(title: "プロフィールを取得中") { stack(persistent: .profileLookup) },
-            CatalogState(title: "押した操作の応答が長引いている（スレッド、編集、引用など）") { stack(persistent: .slowFetch) },
+            CatalogState(title: "始めた操作の応答が長引いている（スレッド、編集、引用など）") { stack(persistent: .slowFetch) },
             CatalogState(title: "投稿の削除の応答が長引いている") { stack(persistent: .slowDeletion) },
             // まとめて行う操作。件数で長さが変わり、失敗は実物では起こしにくい。
             CatalogState(title: "まとめてブースト中（件数が多い）") { stack(persistent: .batchReblog(completed: 12, total: 120) {}) },
-            CatalogState(title: "まとめてブーストが途中で失敗した（数秒で消える、押すと理由）") {
+            CatalogState(title: "まとめてブーストが途中で失敗した（数秒で消える、タップすると理由）") {
                 stack(transient: .interactionFailure(title: Notice.batchReblogFailureTitle(index: 11)) {})
             },
             CatalogState(title: "まとめて共有するメディアをダウンロード中") { stack(persistent: .batchDownload(completed: 3, total: 14) {}) },
-            CatalogState(title: "まとめて共有するメディアを落とせなかった（数秒で消える、押すと理由）") {
+            CatalogState(title: "まとめて共有するメディアを落とせなかった（数秒で消える、タップすると理由）") {
                 stack(transient: .interactionFailure(title: Notice.batchShareFailureTitle) {})
             },
             CatalogState(title: "書き出し中（23%）") { stack(persistent: Notice.draftStatus(.exporting, progress: 0.23) {}) },
@@ -75,12 +75,12 @@ enum NoticeCatalog {
             },
             CatalogState(title: "共有されたメディアの一部を受け取れなかった（数秒で消える）") { stack(transient: .sharedMediaUnreadable(count: 1)) },
             CatalogState(title: "共有されたメディアを受け取れなかった、件数が2桁（数秒で消える）") { stack(transient: .sharedMediaUnreadable(count: 12)) },
-            CatalogState(title: "リンクのタイトルを読み込めなかった（数秒で消える、押すと理由）") { stack(transient: .linkTitleFailed(.unreadable(URLError(.timedOut))) {}) },
+            CatalogState(title: "リンクのタイトルを読み込めなかった（数秒で消える、タップすると理由）") { stack(transient: .linkTitleFailed(.unreadable(URLError(.timedOut))) {}) },
             CatalogState(title: "リンク先にタイトルがなかった（数秒で消える）") { stack(transient: .linkTitleFailed(.noTitle) {}) },
             CatalogState(title: "サーバーで処理中") { stack(persistent: draft(.processing)) },
             CatalogState(title: "代替テキストを送信中") { stack(persistent: draft(.sendingDescription)) },
-            CatalogState(title: "アップロードできませんでした（押すと理由）") { stack(persistent: draft(.failed)) },
-            CatalogState(title: "代替テキストを送信できませんでした（押すと理由）") { stack(persistent: draft(.descriptionFailed)) },
+            CatalogState(title: "アップロードできませんでした（タップすると理由）") { stack(persistent: draft(.failed)) },
+            CatalogState(title: "代替テキストを送信できませんでした（タップすると理由）") { stack(persistent: draft(.descriptionFailed)) },
         ]
     }
 
@@ -88,13 +88,13 @@ enum NoticeCatalog {
     @MainActor
     static func layoutStates() -> [CatalogState] {
         [
-            CatalogState(title: "出たままの知らせが2件（処理の途中、押すと操作の状況のリスト）") {
+            CatalogState(title: "出たままのチップが2件（処理の途中、タップすると操作の状況のリスト）") {
                 var notices = PersistentNotices()
                 notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
                 notices.set(Notice(id: "other", kind: .progress, title: "アップロード中"), in: .screen)
                 return stack(persistent: notices.chipNotice {})
             },
-            CatalogState(title: "出たままの知らせが2件（失敗を優先する）") {
+            CatalogState(title: "出たままのチップが2件（失敗を優先する）") {
                 var notices = PersistentNotices()
                 notices.set(draft(.failed), in: .screen)
                 notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
@@ -109,7 +109,7 @@ enum NoticeCatalog {
             CatalogState(title: "1行に収まらない文言を2行に折り返す（数秒で消える）") {
                 stack(transient: Notice(id: "wrap", kind: .info, title: "この投稿では「メンションされたユーザー」を使えません"))
             },
-            CatalogState(title: "1行に収まらない英語の文言を2行に折り返す（数秒で消える、押すと理由）") {
+            CatalogState(title: "1行に収まらない英語の文言を2行に折り返す（数秒で消える、タップすると理由）") {
                 stack(transient: .interactionFailure(title: "\u{201C}Mentioned users\u{201D} isn\u{2019}t available for this post") {})
             },
             CatalogState(title: "2行にも収まらない文言は2行目の末尾で切り、件数と「›」を残す") {
@@ -122,7 +122,7 @@ enum NoticeCatalog {
             CatalogState(title: "2行の出たままと、1行の数秒で消えるものを並べる") {
                 stack(persistent: draft(.failed).map { notice in
                     var notice = notice
-                    notice.title = "代替テキストを送信できませんでした。押すと理由を確かめられます"
+                    notice.title = "代替テキストを送信できませんでした。タップすると理由を確かめられます"
                     return notice
                 }, transient: .savedToPhotos)
             },
@@ -141,7 +141,7 @@ enum NoticeCatalog {
             CatalogState(title: "画面をタップしてボタン類を隠したとき（失敗は場所を空けて薄くする）") {
                 stack(persistent: draft(.failed), transient: .savedToPhotos, chromeHidden: true)
             },
-            CatalogState(title: "画面だけのチップ（アップロード中）とアプリ全体のダウンロード中が重なる（押すと操作の状況のリスト）") {
+            CatalogState(title: "画面だけのチップ（アップロード中）とアプリ全体のダウンロード中が重なる（タップすると操作の状況のリスト）") {
                 var notices = PersistentNotices()
                 notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
                 notices.set(draft(.uploading), in: .screen)

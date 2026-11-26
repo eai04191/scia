@@ -131,7 +131,7 @@ struct CustomEmojiCacheTests {
         #expect(completion.emojisForPalette()?.map(\.aspectRatio) == [4])
         completion.loadEmojisIfNeeded()
         try await waitUntil { loads.withLock { $0 } == 1 }
-        #expect(completion.emojis?.map(\.shortcode) == ["wide"], "読み直す間も、残したリストを出す")
+        #expect(completion.emojis?.map(\.shortcode) == ["wide"], "再読み込みする間も、残したリストを出す")
         gate.open()
         try await waitUntil { (completion.emojis?.count ?? 0) >= 2 }
         #expect(completion.emojis?.count == 2)
@@ -139,7 +139,7 @@ struct CustomEmojiCacheTests {
 
         let next = CompletionModel(sources: sources, settings: CompletionModel.Settings(debounce: .milliseconds(30), limit: 5))
         next.loadEmojisIfNeeded()
-        #expect(next.emojis?.count == 2, "この起動で読めたリストは、読み直さずに渡す")
+        #expect(next.emojis?.count == 2, "この起動で読めたリストは、再読み込みせずに渡す")
         #expect(loads.withLock { $0 } == 1)
     }
 

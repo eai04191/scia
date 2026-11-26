@@ -52,7 +52,7 @@ struct MediaMenuTreeTests {
         menu.saveToPhotos = false
         menu.fileURL = attachment(.image).url
 
-        #expect(MenuNodeTests.describe(menu.nodes(groups: MenuFixture.media.groups)) == "共有(押せない),写真に保存(押せない)|その他[メディアの情報[640×480,PNG],カスタマイズ]")
+        #expect(MenuNodeTests.describe(menu.nodes(groups: MenuFixture.media.groups)) == "共有(無効),写真に保存(無効)|その他[メディアの情報[640×480,PNG],カスタマイズ]")
     }
 
     /// 開く先のないビューア（Macの別のウィンドウや編集履歴から開いたとき）では、開く項目を出さず、リンクのコピーは残す。

@@ -82,9 +82,9 @@ struct OperationTimelineTests {
         ]
 
         #expect(OperationTimeline.steps(from: logs, capturedAt: capturedAt).map(\.line) == [
-            "50秒前 ホームの新着ボタンを押した（3回）",
-            "30秒前 ホームのタブをもう一度押した",
-            "20秒前 ホームの新着ボタンを押した",
+            "50秒前 ホームの新着ボタンをタップした（3回）",
+            "30秒前 ホームのタブをもう一度選んだ",
+            "20秒前 ホームの新着ボタンをタップした",
         ])
     }
 
@@ -121,7 +121,7 @@ struct OperationTimelineTests {
 
         let steps = OperationTimeline.steps(from: logs, capturedAt: capturedAt)
         #expect(steps.map(\.line) == [
-            "30秒前 ホームの読み込んでいない部分を押した",
+            "30秒前 ホームの読み込んでいない部分をタップした",
             "28秒前 アプリ: networkで失敗が記録された",
         ])
         #expect(steps.map(\.isAppEvent) == [false, true])

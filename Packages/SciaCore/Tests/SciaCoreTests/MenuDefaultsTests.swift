@@ -79,7 +79,7 @@ struct MenuDefaultsTests {
         #expect(items.count == Item.allCases.count, "\(Item.defaultsKey)の項目の数")
         #expect(Set(items) == Set(Item.allCases), "\(Item.defaultsKey)に足りない項目がある")
         #expect(elements.filter { $0 == .more }.count == 1, "\(Item.defaultsKey)の「その他」の数")
-        #expect(MenuLayout<Item>(tokens: tokens).tokens == tokens, "\(Item.defaultsKey)は読み直すと変わる")
+        #expect(MenuLayout<Item>(tokens: tokens).tokens == tokens, "\(Item.defaultsKey)は再読み込みすると変わる")
     }
 }
 

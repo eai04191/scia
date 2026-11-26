@@ -171,7 +171,7 @@ struct SearchModelTests {
         model.retry(.accounts)
         try await waitUntil { model.runningTaskCount == 0 }
         #expect(Self.rows(display) == ["[accounts]", "@a1", "[statuses]", "s1"])
-        #expect(transport.requests.map(Query.init).filter { $0.type == "statuses" }.count == 1, "失敗していない種類まで読み直しました")
+        #expect(transport.requests.map(Query.init).filter { $0.type == "statuses" }.count == 1, "失敗していない種類まで再読み込みしました")
     }
 
     /// URLは、種類を分けずに1回で読み込ませ、投稿が1つに決まれば知らせる。続きは読まない。

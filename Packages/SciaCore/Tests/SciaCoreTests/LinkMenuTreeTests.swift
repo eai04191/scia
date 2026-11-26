@@ -21,7 +21,7 @@ struct LinkMenuTreeTests {
         let url = try #require(URL(string: "mailto:alice@example.com"))
         let menu = try #require(LinkMenuTree(url: url, linkBrowser: .inApp).menu(groups: all))
 
-        #expect(MenuNodeTests.describe(menu.children) == "ブラウザで開く,デフォルトのブラウザで開く,アプリ内のSafariで開く(押せない),プロフィールとして開く(押せない),リンクをコピー,共有,カスタマイズ")
+        #expect(MenuNodeTests.describe(menu.children) == "ブラウザで開く,デフォルトのブラウザで開く,アプリ内のSafariで開く(無効),プロフィールとして開く(無効),リンクをコピー,共有,カスタマイズ")
     }
 
     /// 出す項目をすべて隠していれば、メニューを出さない。

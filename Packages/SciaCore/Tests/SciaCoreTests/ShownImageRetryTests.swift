@@ -202,7 +202,7 @@ struct ShownImageRetryTests {
         clock.advance(by: .seconds(5))
         try await clock.advance(by: .seconds(30), afterSleeping: .seconds(1))
         try await waitUntil { clock.sleeperCount(remaining: .seconds(1)) >= 1 }
-        #expect(fetcher.count(of: image) == 1, "隠れている間は読み直さない")
+        #expect(fetcher.count(of: image) == 1, "隠れている間は再読み込みしない")
 
         visible.value = true
         clock.advance(by: .seconds(1))

@@ -339,7 +339,7 @@ struct StreamingHubTests {
 
         let late = Recorder()
         let lateSubscription = hub.subscribe(.user, late.record)
-        #expect(late.labels == ["outage true"], "切れていると知らせた後に申し込んだ相手に、知らせが届きません")
+        #expect(late.labels == ["outage true"], "切れていると知らせた後に申し込んだ相手に、イベントが届きません")
         homeSubscription.cancel()
         notificationsSubscription.cancel()
         lateSubscription.cancel()

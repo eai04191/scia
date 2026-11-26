@@ -196,15 +196,15 @@ struct OtherAccountUserMenuTests {
         let tree = UserMenuTree(subject: UserMenuSubject(handle: "alice@remote.example"), actions: actions([bob]), linkBrowser: .inApp)
         let bobMenu = try #require(tree.menu(groups: groups, avatar: nil)?.flattenedChildren.first { $0.title == "@bobで" })
 
-        #expect(MenuNodeTests.describe(await loaded(bobMenu.children)) == "このアカウントからは見つからないユーザーです(押せない)")
+        #expect(MenuNodeTests.describe(await loaded(bobMenu.children)) == "このアカウントからは見つからないユーザーです(無効)")
     }
 
     /// 見つからなければ無効の行で知らせ、探せなければ理由を添えて無効の行で知らせる。
     @Test func showsWhenPersonIsNotFound() async throws {
         let notFound = try #require(otherAccountsNode(accounts: [try account(resolveAccount: { _ in nil })]))
-        #expect(MenuNodeTests.describe(await loaded(notFound.children)) == "このアカウントからは見つからないユーザーです(押せない)")
+        #expect(MenuNodeTests.describe(await loaded(notFound.children)) == "このアカウントからは見つからないユーザーです(無効)")
         let failed = try #require(otherAccountsNode(accounts: [try account(resolveAccount: { _ in throw URLError(.notConnectedToInternet) })]))
-        #expect(MenuNodeTests.describe(await loaded(failed.children)) == "ユーザーを探せませんでした(押せない)")
+        #expect(MenuNodeTests.describe(await loaded(failed.children)) == "ユーザーを探せませんでした(無効)")
     }
 
     /// メニューを開くたびに、前に見つけた相手との関係を、そのアカウントで再読み込みする。「別のアカウントで」を組まない並びでは読まない。
@@ -237,7 +237,7 @@ struct OtherAccountUserMenuTests {
             return
         }
         let loaded = await load()
-        #expect(MenuNodeTests.describe(loaded) == "別のアカウントで[@bob[メンション,リストに追加,フォローを外す,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日]],@carol[このアカウントからは見つからないユーザーです(押せない)],@dave[ユーザーを探せませんでした(押せない)]]")
+        #expect(MenuNodeTests.describe(loaded) == "別のアカウントで[@bob[メンション,リストに追加,フォローを外す,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日]],@carol[このアカウントからは見つからないユーザーです(無効)],@dave[ユーザーを探せませんでした(無効)]]")
     }
 
     /// 投稿のメニューに何人も出るときは、前に見つけた人たちとの関係を、ほかのアカウントごとにまとめて1回で再読み込みする。

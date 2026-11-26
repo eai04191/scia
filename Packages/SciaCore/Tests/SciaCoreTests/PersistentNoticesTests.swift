@@ -15,7 +15,7 @@ struct PersistentNoticesTests {
         #expect(chip.id == "download")
         #expect(chip.additionalCount == 0)
         guard case .disclosure(let hint, _) = chip.action else {
-            Issue.record("押すと続きが出るはず")
+            Issue.record("タップすると続きが出るはず")
             return
         }
         #expect(hint == "ダウンロードを中止するか選べます。")
@@ -31,7 +31,7 @@ struct PersistentNoticesTests {
         #expect(chip.id == "upload")
         #expect(chip.additionalCount == 1)
         guard case .disclosure(_, let handler) = chip.action else {
-            Issue.record("押すと操作の状況が開くはず")
+            Issue.record("タップすると操作の状況が開くはず")
             return
         }
         handler()
@@ -45,7 +45,7 @@ struct PersistentNoticesTests {
 
         let chip = try #require(notices.chipNotice(showAll: nil))
         guard case .disclosure(let hint, _) = chip.action else {
-            Issue.record("押すと続きが出るはず")
+            Issue.record("タップすると続きが出るはず")
             return
         }
         #expect(hint == "理由と、再試行か削除を選べます。")

@@ -54,7 +54,7 @@ struct BarMenuTests {
 
         #expect(describe(menu.children) == "ミュート[5分]|…|…")
         guard case .group(let group, _) = menu.children[1].content else {
-            Issue.record("まとまりではありません")
+            Issue.record("グループではありません")
             return
         }
         #expect(describe(try #require(await load(group, at: 0))) == "その他[ブロック]")

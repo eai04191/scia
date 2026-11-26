@@ -47,7 +47,7 @@ struct StatusMenuTreeTests {
     /// 既定の並びは、何のための操作かでグループを分ける。横並びの区切り線の下の返信・ブースト・お気に入りは横に並べる。
     /// 自分のアカウントが分からないタイムラインでは、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuGroupsItemsByPurpose() {
-        #expect(outline(tree(status(url: URL(string: "https://example.social/@alice/100")))) == "=返信,ブースト(押せない),お気に入り|ブックマーク|共有,リンクをコピー,テキストをコピー,ブラウザで開く|翻訳|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ]")
+        #expect(outline(tree(status(url: URL(string: "https://example.social/@alice/100")))) == "=返信,ブースト(無効),お気に入り|ブックマーク|共有,リンクをコピー,テキストをコピー,ブラウザで開く|翻訳|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ]")
     }
 
     /// 投稿を選べるタイムラインの行でだけ「選択」を出し、既定では「その他」の先頭に置く。投稿のない通知では出さない。
@@ -152,7 +152,7 @@ struct StatusMenuTreeTests {
             .item(.reblog, isVisible: true),
         ] + StatusMenuItem.allCases.filter { ![.reply, .favourite, .share, .copyLink, .reblog].contains($0) }.map { .item($0, isVisible: false) })
 
-        #expect(outline(tree(status()), layout: layout) == "返信|共有(押せない)|その他[リンクをコピー(押せない),ブースト(押せない)]")
+        #expect(outline(tree(status()), layout: layout) == "返信|共有(無効)|その他[リンクをコピー(無効),ブースト(無効)]")
     }
 
     /// メンションされたユーザーは既定で隠す。出すと、メンションされた人ごとに並ぶ。
@@ -161,7 +161,7 @@ struct StatusMenuTreeTests {
         let post = status(mentions: mentions)
 
         #expect(!outline(tree(post)).contains("@carol"))
-        #expect(outline(tree(post), layout: showing(.mentionedUsers)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],@carol[プロフィール,リンクをコピー(押せない),共有(押せない),ブラウザで開く(押せない),その他[カスタマイズ]],@dave[プロフィール,リンクをコピー(押せない),共有(押せない),ブラウザで開く(押せない),その他[カスタマイズ]]|その他[カスタマイズ]"))
+        #expect(outline(tree(post), layout: showing(.mentionedUsers)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],@carol[プロフィール,リンクをコピー(無効),共有(無効),ブラウザで開く(無効),その他[カスタマイズ]],@dave[プロフィール,リンクをコピー(無効),共有(無効),ブラウザで開く(無効),その他[カスタマイズ]]|その他[カスタマイズ]"))
     }
 
     /// カスタム絵文字は、置く側が組んだ絵文字ごとのサブメニューで「その他」に並ぶ。絵文字のない投稿では出さない。
@@ -204,7 +204,7 @@ struct StatusMenuTreeTests {
         let tagURL = try #require(URL(string: "https://example.social/tags/cat"))
         let post = status(tags: [SciaCore.Tag(name: "cat", url: tagURL), SciaCore.Tag(name: "Cat", url: tagURL), SciaCore.Tag(name: "dog", url: nil)])
 
-        #expect(outline(tree(post)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],#cat[すべての投稿,@aliceの投稿,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],#dog[すべての投稿,@aliceの投稿,リンクをコピー(押せない),共有(押せない),ブラウザで開く(押せない),その他[カスタマイズ]]|その他[カスタマイズ]"))
+        #expect(outline(tree(post)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],#cat[すべての投稿,@aliceの投稿,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],#dog[すべての投稿,@aliceの投稿,リンクをコピー(無効),共有(無効),ブラウザで開く(無効),その他[カスタマイズ]]|その他[カスタマイズ]"))
         #expect(!outline(tree(status())).contains("#"))
     }
 
@@ -346,7 +346,7 @@ struct StatusMenuTreeTests {
 
         // 自分のアカウントが分からないタイムラインでは、ブーストできるかを決められないので無効にする。
         guard case .unavailable(let reason) = MenuItemOutcome(singleItemMenu: tree(status()).menu(groups: .single(.reblog), includesFollowRequest: false).root) else {
-            Issue.record("ブーストできない投稿で押せてしまいます")
+            Issue.record("ブーストできない投稿でタップできてしまいます")
             return
         }
         #expect(reason == nil)

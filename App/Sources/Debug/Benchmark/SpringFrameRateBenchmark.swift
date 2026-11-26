@@ -31,7 +31,7 @@ private struct FrameRateMotion {
         FrameRateMotion(name: "SwiftUIのスプリング 位置", read: \.position.x) { view in
             UIView.animate(.smooth(duration: 1)) { view.center.x += 160 }
         },
-        FrameRateMotion(name: "SwiftUIのスプリング 濃さ", read: { CGFloat($0.opacity) }) { view in
+        FrameRateMotion(name: "SwiftUIのスプリング 不透明度", read: { CGFloat($0.opacity) }) { view in
             UIView.animate(.smooth(duration: 1)) { view.alpha = 0 }
         },
         FrameRateMotion(name: "SwiftUIのスプリング 大きさ", read: \.bounds.width) { view in
@@ -40,7 +40,7 @@ private struct FrameRateMotion {
         FrameRateMotion(name: "UIKitのスプリング 位置", read: \.position.x) { view in
             UIView.animateSpring(duration: 1, in: view) { view.center.x += 160 }
         },
-        FrameRateMotion(name: "UIKitのスプリング 濃さ", read: { CGFloat($0.opacity) }) { view in
+        FrameRateMotion(name: "UIKitのスプリング 不透明度", read: { CGFloat($0.opacity) }) { view in
             UIView.animateSpring(duration: 1, in: view) { view.alpha = 0 }
         },
         FrameRateMotion(name: "UIKitのスプリング 大きさ", read: \.bounds.width) { view in

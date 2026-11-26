@@ -24,7 +24,7 @@ struct HashtagMenuTreeTests {
 
         #expect(menu.title == "#cat")
         #expect(menu.icon == nil)
-        #expect(MenuNodeTests.describe(menu.children) == "すべての投稿,@aliceの投稿,ブラウザで開く(押せない),デフォルトのブラウザで開く(押せない),アプリ内のSafariで開く(押せない),リンクをコピー(押せない),共有(押せない),カスタマイズ")
+        #expect(MenuNodeTests.describe(menu.children) == "すべての投稿,@aliceの投稿,ブラウザで開く(無効),デフォルトのブラウザで開く(無効),アプリ内のSafariで開く(無効),リンクをコピー(無効),共有(無効),カスタマイズ")
         #expect(menu.children.first?.children[1].subtitle == "remote.example")
         // 投稿のメニューの中に置くときは、「ハッシュタグ」のアイコンを付ける。
         #expect(tree.submenu(groups: all)?.icon?.symbolName == "number")
@@ -54,7 +54,7 @@ struct HashtagMenuTreeTests {
             return
         }
 
-        #expect(MenuNodeTests.describe(await load()) == "ミュートを読み込めませんでした(押せない)")
+        #expect(MenuNodeTests.describe(await load()) == "ミュートを読み込めませんでした(無効)")
     }
 
     /// 「投稿欄に追加」は、投稿欄に入れる手段を渡したときだけ出す。「別のアカウントで」のハッシュタグのメニューでは渡さない。
@@ -100,7 +100,7 @@ struct HashtagMenuTreeTests {
         }
 
         #expect(try await loaded { _ in true } == "プロフィールから外す")
-        #expect(try await loaded { _ in throw URLError(.notConnectedToInternet) } == "注目のハッシュタグを読み込めませんでした(押せない)")
+        #expect(try await loaded { _ in throw URLError(.notConnectedToInternet) } == "注目のハッシュタグを読み込めませんでした(無効)")
     }
 
     private func followActions(known: Bool?, recorder: Recorder = Recorder(), load: @escaping @MainActor (String) async throws -> Bool = { _ in false }) -> HashtagMenuActions {
@@ -125,7 +125,7 @@ struct HashtagMenuTreeTests {
             Issue.record("読み込み中の行になっていません")
             return
         }
-        #expect(MenuNodeTests.describe(await failing()) == "フォローしているハッシュタグを読み込めませんでした(押せない)")
+        #expect(MenuNodeTests.describe(await failing()) == "フォローしているハッシュタグを読み込めませんでした(無効)")
     }
 
     /// 選択したときに送る操作は、フォローしているかで決まる。

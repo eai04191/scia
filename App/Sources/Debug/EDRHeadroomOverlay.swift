@@ -90,7 +90,7 @@ private final class EDRHeadroomOverlayView: UIView {
             || (isDark && tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure) > 1)
         let glow = ReactionGlowView.mayDrawInHDR && potential > 1 && requestsHDR && AppDependencies.settings.appearance.drawsReactionGlowInHDR ? "HDR" : "SDR"
         let settings = window.traitCollection.appSettings
-        let windowRange = "窓の設定 \(settings.store.library.name(of: settings.presetID) ?? "-")・一覧 \(settings.mediaDynamicRange.rawValue)・窓のtrait \(Self.name(of: window.traitCollection.imageDynamicRange))"
+        let windowRange = "ウィンドウの設定 \(settings.store.library.name(of: settings.presetID) ?? "-")・一覧 \(settings.mediaDynamicRange.rawValue)・ウィンドウのtrait \(Self.name(of: window.traitCollection.imageDynamicRange))"
         label.text = ([String(format: "EDRの余地 今 %.2f / 最大 %.2f\n光 %@", current, potential, glow), windowRange] + Self.hdrDrawers(in: window)).joined(separator: "\n")
     }
 

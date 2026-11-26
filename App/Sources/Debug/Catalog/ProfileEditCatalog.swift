@@ -52,7 +52,7 @@ enum ProfileEditCatalog {
                 endorsements: { try await Task.sleep(for: .seconds(3_600)); return [] }
             ) { _ in },
             state(
-                "注目のハッシュタグと紹介しているユーザーを読み込めなかった（押すと読み直す）",
+                "注目のハッシュタグと紹介しているユーザーを読み込めなかった（タップすると再読み込みする）",
                 featuredTags: { throw Failure() },
                 endorsements: { throw Failure() }
             ) { _ in },

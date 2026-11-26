@@ -86,7 +86,7 @@ enum StorageCatalog {
             mediaCacheState("ない（先読み）", category: .mediaPrefetch, entries: { [] }),
             mediaCacheState("並んでいる（縦長、横長、画像でないファイル）", entries: { files }),
             mediaCacheState("並んでいる（先読み）", category: .mediaPrefetch, entries: { files }),
-            mediaCacheState("押すとキャッシュから消えていた", entries: { files }, open: { _ in nil }),
+            mediaCacheState("タップするとキャッシュから消えていた", entries: { files }, open: { _ in nil }),
         ]
     }
 

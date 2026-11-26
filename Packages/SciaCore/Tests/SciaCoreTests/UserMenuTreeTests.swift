@@ -207,7 +207,7 @@ struct UserMenuTreeTests {
             loaded.append(MenuNodeTests.describe(await load()))
         }
 
-        #expect(loaded == ["関係を読み込めませんでした(押せない)", ""])
+        #expect(loaded == ["関係を読み込めませんでした(無効)", ""])
     }
 
     // MARK: - 投稿のメニューのサブメニュー
@@ -308,7 +308,7 @@ struct UserMenuTreeTests {
         }
 
         #expect(try await loaded { _, identity in UserRelation(accountID: identity.id, acct: identity.acct, relationship: Relationship(id: identity.id)) } == ["メモを追加"])
-        #expect(try await loaded { _, _ in throw URLError(.notConnectedToInternet) } == ["関係を読み込めませんでした(押せない)"])
+        #expect(try await loaded { _, _ in throw URLError(.notConnectedToInternet) } == ["関係を読み込めませんでした(無効)"])
     }
 
     /// リンクのメンションから選んだ相手が自分だったら、探して関係を読んだあとも、メモのほかの関係の項目は出さない。

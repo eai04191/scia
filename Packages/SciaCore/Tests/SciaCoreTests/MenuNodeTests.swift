@@ -12,7 +12,7 @@ struct MenuNodeTests {
             case .group(let children, let row): (row != nil ? "=" : "") + children.map { describe([$0]) }.joined(separator: ",")
             case .submenu(let children): "\(node.title)[\(children.map { describe([$0]) }.joined(separator: ","))]"
             case .deferred: "…"
-            case .action: node.title + (node.isEnabled ? "" : "(押せない)") + (node.isSelected ? "✓" : "") + (node.isDestructive ? "!" : "")
+            case .action: node.title + (node.isEnabled ? "" : "(無効)") + (node.isSelected ? "✓" : "") + (node.isDestructive ? "!" : "")
             }
         }.joined(separator: "|")
     }

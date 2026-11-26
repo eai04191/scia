@@ -62,7 +62,7 @@ enum PostActionBarCatalog {
             post("大きい件数（1万からは万の単位で縮める）", counts: (9_999, 234_567, 1_234_567)),
             post("ボタンが8個で4桁の件数（小さくしても入らない件数は出さない）", items: [.status(.reply), .status(.reblog), .status(.favourite), .status(.bookmark), .status(.quote), .status(.share), .status(.copyLink), .menu], counts: (9_999, 8_888, 7_777)),
             post("件数を出さない設定", showsCounts: false, counts: (3, 12, 45)),
-            post("押せない項目（薄く描く）", items: [.status(.reply), .status(.reblog), .status(.edit), .status(.delete), .menu], unavailable: [.reblog, .edit, .delete]),
+            post("無効な項目（薄く描く）", items: [.status(.reply), .status(.reblog), .status(.edit), .status(.delete), .menu], unavailable: [.reblog, .edit, .delete]),
             post("ボタンが多い", items: [.status(.reply), .status(.reblog), .status(.favourite), .status(.bookmark), .status(.quote), .status(.share), .status(.copyLink), .menu], counts: (1, 2, 3)),
             post("ボタンが1つ", items: [.menu]),
             post("絵文字のリアクションの列と重なる", counts: (1, 2, 3), reactions: [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 2, me: true)]),

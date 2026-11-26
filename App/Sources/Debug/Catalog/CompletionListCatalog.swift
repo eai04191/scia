@@ -55,7 +55,7 @@ enum CompletionListCatalog {
             CatalogState(title: "一致するアカウントがない") { list(.empty, kind: .mention) },
             CatalogState(title: "一致するハッシュタグがない") { list(.empty, kind: .hashtag) },
             CatalogState(title: "一致する絵文字がない") { list(.empty, kind: .emoji) },
-            CatalogState(title: "読み込めなかった（押すと読み込み直す）") {
+            CatalogState(title: "読み込めなかった（タップすると再読み込みする）") {
                 list(.failed(CompletionModel.failure(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .mention)
             },
             CatalogState(title: "検索は読み込めなかったが、自分のタグは出せる") {

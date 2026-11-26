@@ -52,7 +52,7 @@ enum EmojiReactionCatalog {
             },
             post("画像のURLが読めなかったカスタム絵文字（ショートコードを文字で出す）", [EmojiReaction(emoji: ReactionEmoji(name: "broken_emoji"), count: 1, me: false)]),
             post("数が大きい（桁区切り）", [EmojiReaction(emoji: ReactionEmoji(name: "🎉"), count: 12_345, me: true), EmojiReaction(emoji: ReactionEmoji(name: "👀"), count: 1_234_567, me: false)]),
-            post("押す前の数が届いた自分のリアクション（0でも1と出す）", [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 0, me: true)]),
+            post("タップする前の数が届いた自分のリアクション（0でも1と出す）", [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 0, me: true)]),
             post("注意書きで折りたたんでいても出す", [EmojiReaction(emoji: ReactionEmoji(name: "🙈"), count: 2, me: false)], spoilerText: "注意書き"),
             post("「＋」のない列（プレビューなど、付けられない場所）", [EmojiReaction(emoji: ReactionEmoji(name: "👍"), count: 1, me: false)], showsAddButton: false),
         ]

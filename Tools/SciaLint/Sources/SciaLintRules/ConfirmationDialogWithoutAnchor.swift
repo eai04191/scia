@@ -4,7 +4,7 @@ extension Rule {
     // confirmationDialogは、付けたビューからポップオーバーで出る。画面やFormに付けると、選択したボタンから離れた画面の中央に出る
     static let confirmationDialogWithoutAnchor = Rule(
         id: "confirmation_dialog_without_anchor",
-        message: "confirmationDialogは、押すButton、Picker、Menu、Toggleに付け、押したものから出す。画面やFormに付けない",
+        message: "confirmationDialogは、操作するButton、Picker、Menu、Toggleに付け、操作したものから出す。画面やFormに付けない",
         appliesTo: { $0.hasPrefix("App/") || $0.hasPrefix("ShareExtension/") },
         find: { tree in
             tree.all(FunctionCallExprSyntax.self)

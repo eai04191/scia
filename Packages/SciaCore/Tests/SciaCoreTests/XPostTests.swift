@@ -325,7 +325,7 @@ struct XPostTests {
         // 再読み込みするなら、あとから頼んだ投稿より先に読み始める。あとから頼んだ投稿を読み始めるまで待ってから、再読み込みしていないことを確かめる。
         store.request(id: "2")
         try await waitUntil { await counter.count("2") == 1 }
-        #expect(await counter.count("1") == 1, "間隔の前に読み直しました")
+        #expect(await counter.count("1") == 1, "間隔の前に再読み込みしました")
 
         clock.advance(by: .seconds(1))
         store.request(id: "1")

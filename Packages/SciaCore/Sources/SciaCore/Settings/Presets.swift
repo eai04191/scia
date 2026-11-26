@@ -50,7 +50,7 @@ public enum BuiltInPreset: String, CaseIterable, Codable, Sendable {
         var result = values
         for item in AppearanceCatalog.values + NotificationAppearanceCatalog.values {
             guard case .spacing(let level) = item.role else { continue }
-            precondition(result[item.presetKey] == nil, "\(item.id)はすき間の段で決めるので、個々に並べない")
+            precondition(result[item.presetKey] == nil, "\(item.id)はgapの段で決めるので、個々に並べない")
             // 既定値と同じ段は持たない。プリセットの比較に、変えていない値が出るため。
             guard let value = spacing[level], value != item.defaultValue else { continue }
             result[item.presetKey] = .number(value)

@@ -386,10 +386,10 @@ struct OtherAccountMenuTests {
         })
         let failing = try account("bob", operations { _ in throw Failure() })
 
-        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [notFound]))).children) == "このアカウントからは見られない投稿です(押せない)")
-        #expect(await loaded(try #require(node(tree(status(uri: nil), accounts: [notFound]))).children) == "このアカウントからは見られない投稿です(押せない)")
+        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [notFound]))).children) == "このアカウントからは見られない投稿です(無効)")
+        #expect(await loaded(try #require(node(tree(status(uri: nil), accounts: [notFound]))).children) == "このアカウントからは見られない投稿です(無効)")
         #expect(calls.withLock { $0 } == 1)
-        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [failing]))).children) == "投稿を探せませんでした(押せない)")
+        #expect(await loaded(try #require(node(tree(status(uri: uri), accounts: [failing]))).children) == "投稿を探せませんでした(無効)")
     }
 
     /// そのアカウントがログアウトされていて探せなければ、理由の行に続けて、そのアカウントでログインし直す項目を出す。
@@ -399,7 +399,7 @@ struct OtherAccountMenuTests {
 
         let children = await loadedNodes(try #require(node(tree(status(uri: uri), accounts: [bob]))).children)
 
-        #expect(MenuNodeTests.describe(children) == "投稿を探せませんでした(押せない)|ログインし直す")
+        #expect(MenuNodeTests.describe(children) == "投稿を探せませんでした(無効)|ログインし直す")
         guard case .logIn(let account) = children.last?.command else {
             Issue.record("ログインし直す項目になっていません")
             return

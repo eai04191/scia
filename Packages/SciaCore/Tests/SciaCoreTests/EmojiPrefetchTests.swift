@@ -136,7 +136,7 @@ struct EmojiPrefetchTests {
         let result = await prefetch.run(urls)
 
         #expect(result.keptOriginals == 0)
-        #expect(Set(world.fetched.withLock { $0 }) == [urls[0], urls[1]], "小さい静止画のある3つ目は、元の画像のためだけには取得しない")
+        #expect(Set(world.fetched.withLock { $0 }) == [urls[0], urls[1]], "サムネイルのある3つ目は、元の画像のためだけには取得しない")
     }
 
     /// プリフェッチしない画像（前に読めなかった画像）は、失敗に数えずに飛ばし、残りは取得する。

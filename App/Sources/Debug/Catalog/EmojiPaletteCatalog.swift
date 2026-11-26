@@ -43,7 +43,7 @@ enum EmojiPaletteCatalog {
             CatalogState(title: "最近使ったものがない") { palette(.sections(EmojiPalette.sections(emojis: emojis, standardGroups: standard, recentKeys: [], recentLimit: 24), customStatus: nil)) },
             CatalogState(title: "サーバーにカスタム絵文字がなく、Unicodeの絵文字だけ") { palette(.sections(EmojiPalette.sections(emojis: [], standardGroups: standard, recentKeys: [], recentLimit: 24), customStatus: nil)) },
             CatalogState(title: "カスタム絵文字のリストを読んでいる（Unicodeの絵文字は並ぶ）") { palette(.sections(withoutCustom, customStatus: .loading)) },
-            CatalogState(title: "カスタム絵文字のリストを読めなかった（押すと読み込み直す）") { palette(.sections(withoutCustom, customStatus: .failed(failure))) },
+            CatalogState(title: "カスタム絵文字のリストを読めなかった（タップすると再読み込みする）") { palette(.sections(withoutCustom, customStatus: .failed(failure))) },
             CatalogState(title: "並べる絵文字がない") { palette(.sections([], customStatus: nil)) },
             CatalogState(title: "検索の結果（カスタム絵文字）") { palette(.searchResults(Array(emojis.prefix(12)).map(PaletteEmoji.custom), customStatus: nil), query: "emoji") },
             CatalogState(title: "検索の結果（日本語で探したUnicodeの絵文字）") {

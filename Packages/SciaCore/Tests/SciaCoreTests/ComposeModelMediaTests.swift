@@ -1132,7 +1132,7 @@ struct ComposeModelMediaTests {
         model.retryAttachment(id)
         try await settle { model.attachments.first?.isReady == true }
 
-        #expect(server.uploads.count == 1, "サーバーに届いているファイルを送り直しました")
+        #expect(server.uploads.count == 1, "サーバーに届いているファイルを再送信しました")
         #expect(server.waits == ["v1", "v1"])
         #expect(model.attachments.first?.serverID == "v1")
         #expect(model.localMedia[id]?.failure == nil)

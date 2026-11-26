@@ -288,7 +288,7 @@ struct FeedTimelineModelTests {
         model.setEnabled(false)
         model.setEnabled(true)
         try await waitUntil { model.runningTaskCount == 0 }
-        #expect(requests.withLock { $0 } == before, "読めないタイムラインを読み直しました")
+        #expect(requests.withLock { $0 } == before, "読めないタイムラインを再読み込みしました")
         #expect(!model.isSubscribedToStreaming)
         #expect(display.contentState == .unavailable)
     }

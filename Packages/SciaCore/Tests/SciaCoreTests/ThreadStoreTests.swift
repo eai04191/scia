@@ -111,7 +111,7 @@ struct ThreadStoreTests {
         let store = loadedStore()
         store.beginLoading()
         #expect(store.receive(.statusUpdate(status(3, replyingTo: 2, content: "編集した"))))
-        #expect(store.receive(.statusUpdate(status(2, replyingTo: 1, content: "押した投稿を編集した"))))
+        #expect(store.receive(.statusUpdate(status(2, replyingTo: 1, content: "タップした投稿を編集した"))))
         // 読み始めた時点の、編集前の応答が後から届く。
         store.apply(
             StatusContext(ancestors: [status(1)], descendants: [status(3, replyingTo: 2), status(5, replyingTo: 3), status(4, replyingTo: 2)]),
@@ -119,7 +119,7 @@ struct ThreadStoreTests {
         )
         let contents = Dictionary(uniqueKeysWithValues: store.entries.compactMap(\.status).map { ($0.id, $0.content) })
         #expect(contents["3"] == "編集した")
-        #expect(contents["2"] == "押した投稿を編集した")
+        #expect(contents["2"] == "タップした投稿を編集した")
     }
 
     @Test func reloadTakesEditedFocus() {
