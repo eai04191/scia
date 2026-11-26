@@ -49,6 +49,7 @@ enum ScenarioMode {
         switch name {
         case "streaming": StreamingDemoScenario.make(launchedAt: date)
         case "readme": ReadmeScreenshotsScenario.make(launchedAt: date)
+        case "gap-reading": GapReadingScenario.make(launchedAt: date)
         default: nil
         }
     }
