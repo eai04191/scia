@@ -183,26 +183,30 @@ public final class LayerClock {
         #if canImport(UIKit)
         if layer.delegate is UIActivityIndicatorView || layer.delegate is UIRefreshControl { return [] }
         #endif
-        let owner = layer.delegate.map { String(describing: type(of: $0)) } ?? String(describing: type(of: layer))
         let own = (layer.animationKeys() ?? []).filter { key in
             guard let animation = layer.animation(forKey: key) else { return false }
             return isFinite(animation)
         }
-        return own.map { "\(owner).\($0)" } + (layer.sublayers ?? []).flatMap(finiteAnimations(in:))
+        return own.map { "\(ownerName(of: layer)).\($0)" } + (layer.sublayers ?? []).flatMap(finiteAnimations(in:))
     }
 
     /// `time`（止めた層の時間）より`endedMargin`以上前に終わったのに、まだ外れていない動きと、その始まりと終わりの時間。終わりの処理が呼ばれると外れる。終わっても残す動き（`isRemovedOnCompletion`がfalse）は含めない。
     private static func endedAnimations(in layer: CALayer, at time: TimeInterval, root: CALayer? = nil) -> [String] {
         let root = root ?? layer
         let local = layer.convertTime(time, from: root)
-        let owner = layer.delegate.map { String(describing: type(of: $0)) } ?? String(describing: type(of: layer))
         let own = (layer.animationKeys() ?? []).compactMap { key -> String? in
             guard let animation = layer.animation(forKey: key), animation.isRemovedOnCompletion, isFinite(animation) else { return nil }
             let end = animation.beginTime + activeDuration(of: animation)
             guard end <= local - endedMargin else { return nil }
-            return "\(owner).\(key)（\(type(of: animation))、始まり\(animation.beginTime)、終わり\(end)、層の時間\(local)）"
+            return "\(ownerName(of: layer)).\(key)（\(type(of: animation))、始まり\(animation.beginTime)、終わり\(end)、層の時間\(local)）"
         }
         return own + (layer.sublayers ?? []).flatMap { endedAnimations(in: $0, at: time, root: root) }
+    }
+
+    /// 動きを並べるときに添える、層の持ち主の型の名前。動きのある層でだけ作る。
+    /// 型の名前を初めて文字列にするときは、プロトコルへの適合をすべての型から探すので、コマごとにすべての層で作ると、投稿欄の最初のテストで0.2秒かかった。
+    private static func ownerName(of layer: CALayer) -> String {
+        layer.delegate.map { String(describing: type(of: $0)) } ?? String(describing: type(of: layer))
     }
 
     private static func isFinite(_ animation: CAAnimation) -> Bool {
