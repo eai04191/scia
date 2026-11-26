@@ -2,7 +2,7 @@ public import Foundation
 import os
 
 /// `api/v1/custom_emojis`の応答を読んだあと、自分のサーバーの絵文字の画像を、先読み（`prefetch`）として裏で取得する
-/// （docs/animated-custom-emoji.mdの「自分のサーバーの絵文字の先読み」）。
+/// （docs/animated-custom-emoji.mdの「自分のサーバーの絵文字のプリフェッチ」）。
 /// 初めて起動したあと、絵文字ピッカーを初めて流すときから、枠を空けないため。
 ///
 /// 取得するのは、元の画像がAにない絵文字のうち、次のもの。

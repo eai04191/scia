@@ -3,7 +3,7 @@ import SciaCore
 import UIKit
 
 /// 端末に残した`api/v1/custom_emojis`の応答が変わったら、端末に置く絵文字の画像を分け直し、自分のサーバーの絵文字の画像を先読みする
-/// （docs/animated-custom-emoji.mdの「自分のサーバーの絵文字の先読み」）。取得し終えたら、絵文字ピッカーの小さい静止画をまとめて作る処理を始める。
+/// （docs/animated-custom-emoji.mdの「自分のサーバーの絵文字のプリフェッチ」）。取得し終えたら、絵文字ピッカーの小さい静止画をまとめて作る処理を始める。
 @MainActor
 final class EmojiPrefetcher {
     private var task: Task<Void, Never>?

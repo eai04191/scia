@@ -1,6 +1,6 @@
 public import Foundation
 
-/// ビューアで開く画像の先読み（docs/image-loading.mdの「ビューアで開く画像の先読み」）。
+/// ビューアで開く画像の先読み（docs/image-loading.mdの「ビューアで開く画像のプリフェッチ」）。
 public enum MediaPrefetch {
     /// ビューアで画像を開いたときに読む元の画像のURL。自分のサーバーが持っていなければ、他のサーバーの元の画像を読む。
     public static func viewerImageURL(of attachment: MediaAttachment) -> URL? {

@@ -1,5 +1,5 @@
 /// 付け外しの操作の、失敗の見出しと、済んだことのチップの文言。
-/// 済んだことをいつ知らせるかは、docs/object-actions.mdの「結果の知らせ」にある。
+/// 済んだことをいつ知らせるかは、docs/object-actions.mdの「結果のチップ」にある。
 extension StatusInteractions.Action {
     /// 失敗の見出し。
     /// - Parameter addsOnly: 今の状態によらず付ける操作（メニューで公開範囲を選んだブースト）。外すことがないので、付けられなかったことを言う。

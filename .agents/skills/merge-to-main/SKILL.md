@@ -52,7 +52,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 6. 履歴を、変更目的ごとの論理単位に整理する。ユーザーには確認しない。整理が要らなければ飛ばす
    - targetにまだ入っていない機能への手直し(`fix:`など)は、その機能のcommitへまとめる。実装とリファクタリング、目的が別のcommitは、まとめない
    - まとめたcommitのmessageは、途中経過ではなく最終的な変更内容を、プロジェクトの言語とprefixで書き直す
-   - 対話的なrebase(`-i`)は使わない。元のHEADのSHAを控え、1つにまとめるだけなら`git reset --soft <targetのSHA>`して`git commit`する。複数に分けるなら、`git reset --hard <targetのSHA>`のあと、まとまりごとに`git cherry-pick --no-commit <commit>...`を古い順に実行してから`git commit`する
+   - 対話的なrebase(`-i`)は使わない。元のHEADのSHAを控え、1つにまとめるだけなら`git reset --soft <targetのSHA>`して`git commit`する。複数に分けるなら、`git reset --hard <targetのSHA>`のあと、グループごとに`git cherry-pick --no-commit <commit>...`を古い順に実行してから`git commit`する
    - commitには、上位指示または実行環境で指定された`Co-authored-by` trailerを`--trailer`で渡す
    - `git diff <元のHEAD> HEAD`が空であることを確かめる。差があれば`git reset --hard <元のHEAD>`で戻して報告する
 

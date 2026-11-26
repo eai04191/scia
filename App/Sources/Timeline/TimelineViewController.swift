@@ -2138,7 +2138,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         prefetchMediaIfSettled(among: ids)
     }
 
-    /// スクロールが止まっていれば、`ids`の行に出ている画像を先読みする（docs/image-loading.mdの「ビューアで開く画像の先読み」）。
+    /// スクロールが止まっていれば、`ids`の行に出ている画像を先読みする（docs/image-loading.mdの「ビューアで開く画像のプリフェッチ」）。
     /// 動いている間は止め、流し見で通り過ぎた投稿を読まない。止まったときに差し替え、画面から外れた画像の読み込みを止める。
     private func prefetchMediaIfSettled(among ids: [ItemID]) {
         guard let mediaPrefetcher else { return }

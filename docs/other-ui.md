@@ -11,16 +11,16 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 ## アプリで1つ作るもの
 
 - `TuningStore`: Releaseでも値を読むので、どのUIも作る。パネルを持たないなら`TuningStore(defaults: nil)`で既定値を使う
-- `AppSettings`: 設定。サムネイルの回線の条件や、リンクを開く先もここから読む。アプリで1つ作るのはアプリのプリセットを読む設定で、窓に開いたアカウントの設定は`forAccount(_:)`で作り、そのアカウントのセッション（`AccountSession`）に渡す。窓の中の部品は、そのアカウントの設定を読む（[preset.md](preset.md)）
+- `AppSettings`: 設定。サムネイルの回線の条件や、リンクを開く先もここから読む。アプリで1つ作るのはアプリのプリセットを読む設定で、ウィンドウに開いたアカウントの設定は`forAccount(_:)`で作り、そのアカウントのセッション（`AccountSession`）に渡す。ウィンドウの中の部品は、そのアカウントの設定を読む（[preset.md](preset.md)）
 - `HTTPClient`: APIの外の通信の口。決まりは[network.md](network.md)
 - `NetworkConditionsMonitor`: 回線の見張り。サムネイルの条件（`thumbnailPolicy(settings:tuning:)`）と、電波が戻った回数（`recoveryCount`）を出す
-- `ImageStores`: アイコン、添付ファイル、カスタム絵文字の画像のストア（`avatars`、`media`、`emojis`）と、サーバーごとのカスタム絵文字のリスト（`customEmojis`）。置き場所、読み方、読み直しの間隔まで組んである。UIは画像の型の作り方（`PlatformImageMaker`）だけを渡す。絵文字の画像のストアは、アカウントごとに作らない
-- カスタム絵文字の画像は、`ImageStores`が`emojiImageFiles`（`EmojiImageFiles`）に、端末に残した`api/v1/custom_emojis`の応答に載っている画像（A）とそれ以外（B）を分けて置く。応答が変わったら（`CustomEmojiCaches.onListsChanged`）、`EmojiImageFiles.updateListed(_:)`で分け直し、`EmojiPrefetch`で先読みする。絵文字ピッカーの小さい静止画は`emojiThumbnails`（`EmojiThumbnails`）。決まりは[animated-custom-emoji.md](animated-custom-emoji.md)
-- 絵文字の画像を、ほかの画面で描くより高く求めるとき（絵文字ピッカーのプレビューやマスなど）は、`EmojiImageStore`の`image(for:pixelHeight:retriesNow:requester:)`と`animation(for:pixelHeight:requester:)`に、`addListener`に渡した持ち主を渡す。読み直し終えたことはその持ち主にだけ知らせ、前の画像で描けているほかの画面を描き直させない。持ち主を渡さずに求めた画面があれば、すべてに知らせる
+- `ImageStores`: アイコン、添付ファイル、カスタム絵文字の画像のストア（`avatars`、`media`、`emojis`）と、サーバーごとのカスタム絵文字のリスト（`customEmojis`）。置き場所、読み方、再読み込みの間隔まで組んである。UIは画像の型の作り方（`PlatformImageMaker`）だけを渡す。絵文字の画像のストアは、アカウントごとに作らない
+- カスタム絵文字の画像は、`ImageStores`が`emojiImageFiles`（`EmojiImageFiles`）に、端末に残した`api/v1/custom_emojis`の応答に載っている画像（A）とそれ以外（B）を分けて置く。応答が変わったら（`CustomEmojiCaches.onListsChanged`）、`EmojiImageFiles.updateListed(_:)`で分け直し、`EmojiPrefetch`でプリフェッチする。絵文字ピッカーのサムネイルは`emojiThumbnails`（`EmojiThumbnails`）。決まりは[animated-custom-emoji.md](animated-custom-emoji.md)
+- 絵文字の画像を、ほかの画面で描くより高く求めるとき（絵文字ピッカーのプレビューやマスなど）は、`EmojiImageStore`の`image(for:pixelHeight:retriesNow:requester:)`と`animation(for:pixelHeight:requester:)`に、`addListener`に渡した持ち主を渡す。再読み込みし終えたことはその持ち主にだけ知らせ、前の画像で描けているほかの画面を再描画させない。持ち主を渡さずに求めた画面があれば、すべてに知らせる
 - 設定のストレージの「絵文字」の中の行は、`EmojiStorageRow.rows(_:)`で数える
-- `CrashMark`と`PostQuarantine`、`PostCrashReport`: クラッシュした投稿の隔離と、開発者に送る文章（[crash-quarantine.md](crash-quarantine.md)）。行の処理の前に印を付け、隠すのと送る画面はUIで書く
+- `CrashMark`と`PostQuarantine`、`PostCrashReport`: クラッシュした投稿の隔離と、開発者に送る文章（[crash-quarantine.md](crash-quarantine.md)）。行の処理の前にマークを付け、隠すのと送る画面はUIで書く
 - `AccountRegistry`と`KeychainCredentialStore(service:)`: ログインしたアカウント。サービス名はUIで決める
-- ログインしているアカウントごとの、「別のアカウントで」の部品（`OtherAccount`、そのアカウントのクライアント、ハッシュタグの状態、投稿欄の上限と既定値）は、アプリに1つ持ち、ウィンドウごとに作らない。使われたアカウントの分だけ作り、アカウントごとの`TaskScope`の子で始める。`AccountRegistry.accounts`を購読し、ログアウトしたアカウントと、ログインし直してトークンが変わったアカウントの部品は、その`TaskScope`を閉じて捨てる。ストリーミングはつながない。ウィンドウごとに持つのは、絵文字のパレットのメニュー、リアクションの絵文字を選ぶシート、ハッシュタグの操作の済んだことと失敗の知らせ先だけ。ハッシュタグの操作は`StatusMenuTree.otherAccountHashtagActions`で、メニューを出すウィンドウが渡す（iOSは`App/Sources/SignedInAccounts.swift`と`OtherAccounts.swift`）
+- ログインしているアカウントごとの、「別のアカウントで」の部品（`OtherAccount`、そのアカウントのクライアント、ハッシュタグの状態、投稿欄の上限と既定値）は、アプリに1つ持ち、ウィンドウごとに作らない。使われたアカウントの分だけ作り、アカウントごとの`TaskScope`の子で始める。`AccountRegistry.accounts`を購読し、ログアウトしたアカウントと、ログインし直してトークンが変わったアカウントの部品は、その`TaskScope`を閉じて捨てる。ストリーミングはつながない。ウィンドウごとに持つのは、絵文字のパレットのメニュー、リアクションの絵文字ピッカー、ハッシュタグの操作の済んだことと失敗のチップの出し先だけ。ハッシュタグの操作は`StatusMenuTree.otherAccountHashtagActions`で、メニューを出すウィンドウが渡す（iOSは`App/Sources/SignedInAccounts.swift`と`OtherAccounts.swift`）
 - ログアウトは`AccountLogout.logOut(_:from:defaults:settings:images:)`。アカウントのリストから消し、そのアカウントのために覚えた設定、メディアのキャッシュ、そのサーバーのカスタム絵文字のリストを消す。呼んだあと、そのアカウントのセッションを閉じ、残ったアカウントかログインの画面を出すのはUI。使う人がログアウトを選んだときだけ呼ぶ
 
 ## ログイン
@@ -35,10 +35,10 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 画面を出すときに`start(networkRecoveryCount:)`を1度呼び、`NetworkConditionsMonitor.recoveryCount`を渡す。やり直しの見張りと、アニメーションの設定を始める。通信はしない
 - そのあと`loadServerInfo()`を1度呼び、サーバーの版、投稿欄の既定、サーバーの機能を読む。起動してすぐのタイムラインの読み込みと同時に送ると、サーバーで順番待ちになってタイムラインが遅れるので、最初のタイムラインを読み終えてから呼ぶ（iOSでは`FeedTimelineModel.onInitialLoadFinished`）。`onPreferencesLoad`、`onCapabilitiesLoad`、`onCredentialsInvalid`は、呼ぶ前に置く
 - アカウントごとに1つ持つ部品は、セッションが作って持つ。UIでは作らない
-  - `accounts`（`AccountCache`）と`relationships`（`RelationshipCache`）: IDからアカウントと関係を引く。IDやハンドルしか持たない行き先（`AppDestination.profile(acct:)`など）は、ここから引く。`accounts`は、セッションのクライアントとストリーミングが受け取ったアカウントを、読み始めた順で一番新しいものにして覚えている。人のアイコンや名前と、プロフィールを開くときに最初に出すアカウントは、ここから取る（[profile.md](profile.md)の「開いたときに出すアカウント」）
+  - `accounts`（`AccountCache`）と`relationships`（`RelationshipCache`）: IDからアカウントと関係を引く。IDやハンドルしか持たない行き先（`AppDestination.profile(acct:)`など）は、ここから引く。`accounts`は、セッションのクライアントとストリーミングが受け取ったアカウントを、読み始めた順で一番新しいものにしてキャッシュしている。人のアイコンや名前と、プロフィールを開くときに最初に出すアカウントは、ここから取る（[profile.md](profile.md)の「開いたときに出すアカウント」）
   - `diagnostics`（`ConnectionDiagnostics`）: 接続の状態の画面に出す値。ストリーミングの状態とサーバーの版（`diagnostics.serverVersion`）は、セッションが入れる
   - `xPosts`（`XPostStore`）、`polls`（`PollVoting`）、`translations`（`StatusTranslationStore`）: Xの投稿、投票、自動翻訳。設定の変化（Xの投稿の展開、自動翻訳の言語など）は、セッションがストアへ流す。自動翻訳は、訳す部品（`StatusTranslationSetup`）をセッションに渡したUIだけが持つ
-  - 届いたものを描き直すのはUI。`xPosts.onChange`、`translations?.onChange`、`onTranslationSettingsChange`で受ける
+  - 届いたものを再描画するのはUI。`xPosts.onChange`、`translations?.onChange`、`onTranslationSettingsChange`で受ける
 - ストリーミングの状態の変化は、`streamingHub.onChange`ではなく`onStreamingChange`で受ける。`streamingHub.onChange`は1つしか置けず、セッションが使う
 - 一覧のモデルは`init(…session:…)`で作る。`session`を受け取らない一覧（`ThreadModel`、`SearchModel`、`AccountNotificationsModel`、UIが持つ一覧）は、`session.statuses.register(_:)`で登録する。登録した一覧は、削除、編集、お気に入りなどで変わった投稿を受け取る
 - アカウントの設定（`onPreferencesLoad`）は、注意書きを最初から開くか（`ServerPreferences.expandsSpoilers`を`SpoilerExpansion`へ）に使う。アニメーションを再生するかとメディアの表示は、セッションが設定（`AppSettings`）へ覚えさせる。添付ファイルをぼかすかは、`MediaCovers`に`AppSettings.mediaDisplay`を渡して決める
@@ -50,7 +50,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 画面は`TimelineDisplay`に従う。モデルからの命令（位置を保つ行、上端に置く行、消える行を動かすか）を守るのがUIの役目
 - どの行を既読として報告し、どんな間は報告しないかは`ReadVisibility`
 - 末尾の何行手前で続きを読み、どのギャップをどちらの端から読むかは`TimelineLoadTrigger`。結果を`approachEnd()`と`approachGap(_:from:)`に渡す
-- 引用元の囲みは、`session.statuses.quoteSources`を当てて出し、`onQuoteSourcesChange`で描き直す
+- 引用元のカードは、`session.statuses.quoteSources`を当てて出し、`onQuoteSourcesChange`で再描画する
 - サムネイルにどの画像を読むかは`MediaThumbnailSelection`に、`NetworkConditionsMonitor.thumbnailPolicy(settings:tuning:)`の条件を渡して決める
 - 添付ファイルのビューアで画像や動画を画面に収める大きさと置き場所は`MediaViewerFit`。避ける辺は、中身の大きさと予約領域（`UIView.ReservedRegion`の`occlusion`）の枠を`edges(for:avoiding:in:)`に渡して決める。収めた中身がかかる領域だけを避ける。拡大して画面より大きくなったら避けない
 
@@ -58,7 +58,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
   - `FeedTimelineModel`、`NotificationsModel`: 起動のときに読むなら`start(purpose:)`、開くまで読まないなら、画面に出るたびに`startIfNeeded()`。`startIfNeeded()`は何度呼んでもよい
   - `SavedStatusesModel`: 画面に出るたびに`startIfNeeded()`
   - `ScheduledStatusesModel`: 画面に出るたびに`appear()`、消えたときに`disappear()`
-  - `ThreadModel`、`SearchModel`: 画面に積む前に`start()`を1度
+  - `ThreadModel`、`SearchModel`: 画面にプッシュする前に`start()`を1度
   - `NotificationRequestsModel`、`AccountNotificationsModel`: `start(purpose:)`を1度。再試行でも同じものを呼ぶ
   - `AnnouncementsModel`: セッションを始めたときに`start()`を1度、シートを開くたびに`appear()`
   - `ListMembershipModel`: シートを開いたときに`load()`
@@ -72,7 +72,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
   - フォローのボタン: `FollowState.buttonTitle`。検索の種類と候補の行: `SearchCategory.title`、`SearchSuggestions.Action`の`title`と`symbolName`
   - 各画面: `NotificationPolicy.Item`と`Value`、`FilterResult.Context`と`Action`、`ReportCategory`、`StorageBreakdown.Category`、`ConnectionDiagnostics.StreamingState.title(of:)`の`title`など、値の型に文言がある
 - 値の型に結び付かない画面の文言は、画面ごとの`…Texts`にある。iOSのアプリは、使う人に見える文言をすべてここか値の型から読む（`make lint`の`user_text_outside_core`で止めている）ので、iOSの画面にある文言はどれもSciaCoreで見つかる
-  - タイムライン: `TimelineScreenTexts`、`BatchActionTexts`（まとめてブースト）、`StreamingStatusTexts`（引っぱると見える接続の状態）、`ScheduledStatusTexts`、`SearchScreenTexts`、`AnnouncementTexts`、`EditHistoryTexts`、`MediaViewerTexts`
+  - タイムライン: `TimelineScreenTexts`、`BatchActionTexts`（まとめてブースト）、`StreamingStatusTexts`（pull to refreshのときに見える接続の状態）、`ScheduledStatusTexts`、`SearchScreenTexts`、`AnnouncementTexts`、`EditHistoryTexts`、`MediaViewerTexts`
   - アカウント一式: `SessionTexts`（操作の失敗の見出しなど）、`HashtagChangeTexts`、`TabMenuTexts`、`NoticeTexts`、`OperationStatusTexts`、`StatusBarTickerTexts`、`LoginTexts`、`AccountSwitchTexts`、`CrashReportTexts`、`APIResponseTexts`、`InAppBrowserSheetTexts`
   - プロフィールとリスト: `ProfileTexts`、`AccountNoteTexts`、`ProfileEditTexts`、`ReportTexts`、`ListTexts`、`ModerationTexts`（ミュートとブロックのリスト）
   - 投稿欄: `ComposeTexts`。設定: `SettingsTexts`
@@ -101,13 +101,13 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - 受け持たない項目を外した並びは、`MenuLayout(defaultElements:)`で作る
 - 失敗の文言は`ErrorPresentation`（`@_spi(FailureDisplay) import SciaCore`で読む）
 - 押しても応答が届くまで画面が変わらない操作は、`SlowActivity.track(_:)`で囲み、`isSlow`の間は待っていることを知らせる。削除は`StatusDeletion.slowActivity`に渡す。待っていることを出すまでの長さ（`SlowActivity`と`LatestLookup(slowAfter:)`に渡す）は、`TuningCatalog.profileLookupChipDelay`から読む
-- 付け外しの操作（お気に入り、ブースト、ブックマーク、会話のミュート、固定、リアクション）の失敗の見出しと、済んだことのチップの文言は、`StatusInteractions.Action`の`failureTitle(addsOnly:)`と`doneTitle(wasOn:)`。どの操作で済んだことを知らせるかは[object-actions.md](object-actions.md)の「結果の知らせ」にある。ほかのアカウントで行ったときは、`OtherAccountTexts.title(_:handle:)`でどのアカウントで行ったかを頭に付ける。相手との関係の変更は`UserRelationChange`の`doneTitle(_:)`と`failureTitle`、ミュートの期間の選択肢は`UserRelationChange.muteDurations`
-- メニューを覚えている値でその場で組むためのキャッシュは`LatestValueCache`（自分のフィルターは`ServerFilterCache`）。読み込み中の行を出してから中身を差し替えずに済む
+- 付け外しの操作（お気に入り、ブースト、ブックマーク、会話のミュート、固定、リアクション）の失敗の見出しと、済んだことのチップの文言は、`StatusInteractions.Action`の`failureTitle(addsOnly:)`と`doneTitle(wasOn:)`。どの操作で済んだことを知らせるかは[object-actions.md](object-actions.md)の「結果のチップ」にある。ほかのアカウントで行ったときは、`OtherAccountTexts.title(_:handle:)`でどのアカウントで行ったかを頭に付ける。相手との関係の変更は`UserRelationChange`の`doneTitle(_:)`と`failureTitle`、ミュートの期間の選択肢は`UserRelationChange.muteDurations`
+- メニューをキャッシュした値でその場で組むためのキャッシュは`LatestValueCache`（自分のフィルターは`ServerFilterCache`）。読み込み中の行を出してから中身を差し替えずに済む
 - 「リストに追加」の通信の口は`session.listMembershipAPI(accountID:acct:)`
 
 ## 設定
 
-- 設定の画面に何を、どの順で、どんな名前で並べるかは、SciaCoreから読む。UIは節と行を上から描き、行の部品（スイッチ、選択、値の行）を選ぶ
+- 設定の画面に何を、どの順で、どんな名前で並べるかは、SciaCoreから読む。UIはセクションと行を上から描き、行の部品（スイッチ、選択、値の行）を選ぶ
   - トップの画面は`SettingsPage.rootSections(handle:)`、各画面の題は`SettingsPage.title`、親の画面の行に出す名前は`rowTitle`
   - 並びが決まっている画面（表示、操作、作成、メディア、リンク先の読み込み、情報）は`SettingsPage.sections`。行は、ほかの画面へ入る行（`.page`）か、その場で値を変える行（`.item`、`SettingsItem`）。UIが出せない行は除く
   - 対象の操作の画面（投稿、ユーザーなど）は`ObjectActionsScreen`。対象の名前と設定の場所は`ObjectEntity`
@@ -126,9 +126,9 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 
 - `AppSettings.userDisplays`は同じ`SettingsStore`を使う全セッションで共有する`UserDisplayStore`。`display(of:in:)`で`Account`または`LocalMention`から共有の`UserDisplay`を取得する。画面はその名前・絵文字・アイコンを読む。`avatar(animates:)`は全体設定と個別設定を合成したURLと再生可否を返す。送信・コピー・共有には元のアカウントを使う。
 - `UserDisplayStore.save(_:for:in:imageData:)`と`remove(forKey:)`を編集・解除の入口にする。画像データはUIで切り抜いて渡す。永続化は`SettingsStore`へ委譲し、全ログインアカウントで共通、端末内保存、プリセット対象外。
-- SwiftUIは`UserDisplay`の読み取りを購読する。UIKitで描画済みの文字や画像を持つ画面は`UserDisplayStore.observeChanges()`を既存の描き直しの購読に含める。画面ごとに変更設定のキーや優先順位を判断しない。
+- SwiftUIは`UserDisplay`の読み取りを購読する。UIKitで描画済みの文字や画像を持つ画面は`UserDisplayStore.observeChanges()`を既存の再描画の購読に含める。画面ごとに変更設定のキーや優先順位を判断しない。
 - `AccountSession`は`ReceivedAccounts`の更新をセッションの`TaskScope`で購読し、既存の`AccountCache`で最新の情報を確認して表示モデルへ伝える。元情報は変更しない。表示モデルは直近の最大2,000人を保持し、画面が持ち続けているモデルは保持枠から外れても共有と更新を維持する。
-- セッション以外で作るクライアントも、同じ取得元の`ReceivedAccounts`・`AccountCache`・`AppSettings`を`UserDisplayStore.connect(accounts:settings:received:tasks:)`へ渡す。取得元の`TaskScope`は呼び出し側で保持し、終了時に閉じる。`ReceivedAccounts`の変化を読めるのは1か所だけなので、1つの取得元をつなぐのは1回にする。2回つなぐと、前のつなぎに変化が届かなくなる。`UserDisplayStore`は端末に1つなので、どのウィンドウから読む人も、つないだ1か所の変化で描き直る。窓に開いたアカウントのセッションとは取得元を分ける。
+- セッション以外で作るクライアントも、同じ取得元の`ReceivedAccounts`・`AccountCache`・`AppSettings`を`UserDisplayStore.connect(accounts:settings:received:tasks:)`へ渡す。取得元の`TaskScope`は呼び出し側で保持し、終了時に閉じる。`ReceivedAccounts`の変化を読めるのは1か所だけなので、1つの取得元をつなぐのは1回にする。2回つなぐと、前のつなぎに変化が届かなくなる。`UserDisplayStore`は端末に1つなので、どのウィンドウから読む人も、つないだ1か所の変化で再描画される。ウィンドウに開いたアカウントのセッションとは取得元を分ける。
 - ローカルユーザーのキーには接続先でなくWebFingerドメインを使う。`AccountSession.loadUserDisplayDomain()`で取得・保持する。セッションを使わないUIは`MastodonClient.accountDomain()`の結果をアカウントごとの`AppSettings.setUserDisplayDomain(_:)`へ渡す。未取得ならローカルユーザーの保存は失敗する。編集前は`prepareUserDisplay(_:)`を待つ。一覧のハンドルから開くときは`resolveUserDisplayAccount(acct:)`で一致する人だけを解決する。
 - ハンドルしかない一覧では`UserDisplayLoader`で共有モデルを取得する。独自のアカウントキャッシュは持たず、未取得の元情報の通信と取消を画面の`TaskScope`で管理する。取得処理には`AccountSession.resolveUserDisplayAccount(acct:sharesRequests:)`へ`sharesRequests: false`を渡す。共有キャッシュの検索を待つと行の取り消しが検索へ伝わらないため、行の通信は共有しない。
 - 選択画像は`SettingsStore.userDisplayImageDirectory`に置く。テストでは一時ディレクトリを渡す。アイコンの読み込みは`ImageStores.avatars`を使う。

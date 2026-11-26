@@ -96,7 +96,7 @@ make readme-screenshots SIM='<シミュレーターの名前>'
 
 シナリオで使う場面が出てきたら、次も差し替える。
 
-- Xの投稿の囲み: `SessionController`の`XPostStore`は、`XPostClient(transport: URLSessionTransport())`を直に作っている
+- Xの投稿のカード: `SessionController`の`XPostStore`は、`XPostClient(transport: URLSessionTransport())`を直に作っている
 - 動画、GIF、音声: ビューアは添付ファイルの`url`から直に`AVPlayerItem(url:)`を作り、data URLは再生できない。同梱したファイルか端末で書き出したファイルの`file://`のURLにする
 
 ## シナリオのサーバー
@@ -104,7 +104,7 @@ make readme-screenshots SIM='<シミュレーターの名前>'
 `ScenarioServer`は、シナリオ（`ScenarioScript`）のJSONを返す。シナリオにないAPIには404を返し、`scenario`のカテゴリーのログに`scenario no response`と残す。シナリオを足したら、このログが出ないことを確かめる。
 
 - 起動するとすぐ読むAPIに答える（`verify_credentials`、`accounts/<自分のID>`、`v2/instance`、`preferences`、`markers`、`custom_emojis`、`timelines/home`、`v2/notifications`）。`preferences`と`markers`は、404だとその機能が止まる
-- 通知は、シナリオには`api/v1/notifications`の形で1件ずつ持たせ、サーバーが`api/v2/notifications`のまとまりの形に組み直して返す。まとめずに1件ずつのまとまりにする
+- 通知は、シナリオには`api/v1/notifications`の形で1件ずつ持たせ、サーバーが`api/v2/notifications`のグループの形に組み直して返す。まとめずに1件ずつのグループにする
 - `markers`で読み始める位置を決める。ホームも通知も一番新しいIDにして、一番上から始め、通知のバッジも出さない
 - ホームと通知は、Mastodonと同じく`max_id`、`since_id`、`min_id`、`limit`で区切って返す
 - 投稿のJSONは、SciaCoreのモデルをエンコードせず、APIと同じ形の辞書から作る（`ScenarioFixtures`）。モデルのデコードは欠けた項目を補うので、エンコードし直してもAPIと同じ形にならない

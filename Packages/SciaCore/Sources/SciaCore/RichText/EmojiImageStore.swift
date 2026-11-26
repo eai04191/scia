@@ -307,7 +307,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         failedStills.contains(url)
     }
 
-    /// 先読みしてよいか。前に読めなかった画像と、読み直しを待っている間の画像は、先読みしない（docs/image-loading.mdの「読めなかった画像の読み直し」）。
+    /// 先読みしてよいか。前に読めなかった画像と、読み直しを待っている間の画像は、先読みしない（docs/image-loading.mdの「読めなかった画像の再読み込み」）。
     /// 読めない画像のために通信を増やさないため。
     public func allowsPrefetch(of url: URL) -> Bool {
         retry.allowsAutomaticLoad(of: url) && !retry.hasFailed(url)
