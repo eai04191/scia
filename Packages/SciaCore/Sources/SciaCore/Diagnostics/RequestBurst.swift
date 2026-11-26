@@ -29,9 +29,10 @@ public struct RequestBurstCounter: Sendable {
     public init() {}
 
     /// 送ったリクエストを数える。異常な数に達したら、`window`の間に送ったものの内訳を返す。
-    /// - Parameter at: 数え始めてからの時間。
+    /// - Parameter at: 数え始めてからの時間。前に渡したものより前の時間は渡さない。
     public mutating func record(url: URL?, purpose: RequestPurpose, at: Duration) -> RequestBurst? {
-        sent.removeAll { at - $0.at >= Self.window }
+        // `sent`は送った順に並ぶので、古いものは先頭にしかない。毎回全部を見ると、続いている間は1回ごとに`threshold`件を見ることになる。
+        sent.removeFirst(sent.firstIndex { at - $0.at < Self.window } ?? sent.count)
         sent.append(Sent(at: at, host: SciaLog.host(of: url), url: url?.absoluteString ?? "", purpose: purpose.logName))
         guard sent.count >= Self.threshold, quietUntil.map({ at >= $0 }) ?? true else { return nil }
         quietUntil = at + Self.cooldown
@@ -91,8 +92,8 @@ public final class RequestBurstMonitor: Sendable {
     func record(_ request: URLRequest) {
         // 口へ渡すのは、目的を名乗った通信だけ（`HTTPClient`が名乗っていない通信を送らない）。
         guard let purpose = RequestPurpose.current else { return }
-        let at = elapsed()
-        guard let burst = counter.withLock({ $0.record(url: request.url, purpose: purpose, at: at) }) else { return }
+        // `RequestBurstCounter`は時刻の順に並ぶことに頼るので、時刻は数えるのと同じロックの中で読む。
+        guard let burst = counter.withLock({ $0.record(url: request.url, purpose: purpose, at: elapsed()) }) else { return }
         onBurst(burst)
     }
 }

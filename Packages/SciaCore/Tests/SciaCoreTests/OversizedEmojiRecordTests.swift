@@ -55,15 +55,16 @@ struct OversizedEmojiRecordTests {
 
     /// 上限の数を超えたら、古いものから消す。
     @Test func dropsOldestOverMaxCount() throws {
-        let record = OversizedEmojiRecord(file: file)
+        let maxCount = 10
+        let record = OversizedEmojiRecord(file: file, maxCount: maxCount)
 
-        for index in 0...OversizedEmojiRecord.maxCount {
+        for index in 0...maxCount {
             record.record(try url("\(index).gif"), width: 2_000, height: 2_000, frameCount: 2)
         }
 
         #expect(!record.contains(try url("0.gif")))
         #expect(record.contains(try url("1.gif")))
-        #expect(record.contains(try url("\(OversizedEmojiRecord.maxCount).gif")))
+        #expect(record.contains(try url("\(maxCount).gif")))
     }
 
     /// 動かす場所は元の画像、動かさない場所は動かない版を読む。

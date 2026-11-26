@@ -187,15 +187,15 @@ struct MediaReencoderTests {
     @Test func shrinksFurtherToFitTheSizeLimit() async throws {
         let directory = try makeDirectory()
         let source = directory.appending(path: "large.png")
-        try writeImage(width: 1000, height: 1000, type: .png, noise: true, to: source)
-        let original = PixelSize(width: 1000, height: 1000)
+        try writeImage(width: 500, height: 500, type: .png, noise: true, to: source)
+        let original = PixelSize(width: 500, height: 500)
         let plan = ImagePlan(mimeType: "image/png", size: original, sizeBySetting: original, exceedsSizeLimit: true)
         let first = try await ImageReencoder.reencode(source, plan: plan, originalSize: original, sizeLimit: nil, quality: 0.85, destination: directory.appending(path: "unlimited"))
         let firstByteCount = try #require(try first.url.resourceValues(forKeys: [.fileSizeKey]).fileSize)
 
         let prepared = try await ImageReencoder.reencode(source, plan: plan, originalSize: original, sizeLimit: firstByteCount / 2, quality: 0.85, destination: directory.appending(path: "limited"))
         let reduction = try #require(prepared.reduction)
-        #expect(reduction.toSize.longSide < 1000)
+        #expect(reduction.toSize.longSide < 500)
         #expect(reduction.toByteCount <= firstByteCount / 2)
     }
 

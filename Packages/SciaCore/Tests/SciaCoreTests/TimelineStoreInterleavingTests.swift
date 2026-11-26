@@ -15,10 +15,13 @@ import Testing
 struct TimelineStoreInterleavingTests {
     private static let pageSize = 3
     private static let steps = 40
-    private static let seeds: Range<UInt64> = 0..<500
+    /// 1つのテストケースが1秒を超えないよう、seedを分けて走らせる。
+    private nonisolated static let seedBatches: [Range<UInt64>] = stride(from: 0, to: 500, by: 100).map { $0..<($0 + 100) }
 
-    @Test func randomInterleavingsKeepEveryStatus() async throws {
+    @Test(arguments: seedBatches)
+    func randomInterleavingsKeepEveryStatus(seeds: Range<UInt64>) async throws {
         if let seed = ProcessInfo.processInfo.environment["SCIA_INTERLEAVING_SEED"].flatMap(UInt64.init) {
+            guard seeds == Self.seedBatches[0] else { return }
             if let failure = await Self.run(seed: seed) {
                 Issue.record("\(failure)")
             }
@@ -26,13 +29,13 @@ struct TimelineStoreInterleavingTests {
         }
         var first: Failure?
         var failedCount = 0
-        for seed in Self.seeds {
+        for seed in seeds {
             guard let failure = await Self.run(seed: seed) else { continue }
             first = first ?? failure
             failedCount += 1
         }
         if let first {
-            Issue.record("\(Self.seeds.count)回のうち\(failedCount)回で失敗しました。\(first)")
+            Issue.record("\(seeds.count)回のうち\(failedCount)回で失敗しました。\(first)")
         }
     }
 

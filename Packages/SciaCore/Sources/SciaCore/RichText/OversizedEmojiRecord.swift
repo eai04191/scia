@@ -27,16 +27,23 @@ public final class OversizedEmojiRecord: Sendable {
     }
 
     /// 残す数の上限。超えたら古いものから消す。消したものは、次に描くときに元の画像を再読み込みして、また残す。
-    static let maxCount = 1_000
+    static let defaultMaxCount = 1_000
 
     public let file: URL
+    private let maxCount: Int
     private let entries: Mutex<[Entry]>
     /// 作ったとき（起動したとき）に残っていたもの。この起動の間に残したものは含めない。
     private let launchEntries: Mutex<[URL: Entry]>
     private let logger = SciaLog.logger(category: "emoji")
 
-    public init(file: URL) {
+    public convenience init(file: URL) {
+        self.init(file: file, maxCount: Self.defaultMaxCount)
+    }
+
+    /// 残すたびにファイルを全部書き直すので、上限を超えるところを確かめるテストでは、小さい上限で作る。
+    init(file: URL, maxCount: Int) {
         self.file = file
+        self.maxCount = maxCount
         // 版のない前の書き方（記録の配列）と、版の違うファイルは読まない。次に残すときに書き直す。
         let stored = (try? Data(contentsOf: file)).flatMap { try? JSONDecoder().decode(Stored.self, from: $0) }
             .flatMap { $0.version == Stored.currentVersion ? $0.entries : nil }
@@ -68,7 +75,7 @@ public final class OversizedEmojiRecord: Sendable {
             guard !entries.contains(entry) else { return nil }
             entries.removeAll { $0.url == url }
             entries.append(entry)
-            entries.removeFirst(max(0, entries.count - Self.maxCount))
+            entries.removeFirst(max(0, entries.count - maxCount))
             return entries
         }
         if let stored {
