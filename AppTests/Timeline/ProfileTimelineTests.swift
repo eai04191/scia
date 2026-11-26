@@ -64,7 +64,8 @@ struct ProfileTimelineTests {
         harness.setStatuses(statuses)
         let first = try #require(statuses.first.map { TimelineEntry.ID.status($0.id) })
         let scale = max(harness.collectionView.traitCollection.displayScale, 1)
-        for pixels in 0..<60 {
+        // 誤差が出るかは1ptの中の画素の位置で決まり、高さの整数部分によらなかったので、1pt分の画素を試す。
+        for pixels in 0..<Int(scale) {
             height.constant = 300 + CGFloat(pixels) / scale
             harness.viewController.headerDidChangeSize()
             try harness.scroll(to: first, at: .top)

@@ -93,12 +93,15 @@ struct PostHeightProbeTests {
         measure("media2.\(width)x\(height)", status: status(content: "", media: [attachment, attachment]))
     }
 
-    @Test func polls() {
+    nonisolated private static let polls: [(String, [String])] = {
         let long = String(repeating: "長い選択肢", count: 400)
-        for (name, options) in [("none", [String]()), ("empty", ["", ""]), ("long", [long, long]), ("many", (0..<200).map(String.init))] {
-            let poll = Poll(id: "1", expiresAt: nil, expired: false, multiple: false, votesCount: 0, options: options.map { Poll.Option(title: $0, votesCount: 0) })
-            measure("poll.\(name)", status: status(content: "<p>本文</p>", poll: poll))
-        }
+        return [("none", []), ("empty", ["", ""]), ("long", [long, long]), ("many", (0..<200).map(String.init))]
+    }()
+
+    @Test(arguments: polls.indices) func polls(index: Int) {
+        let (name, options) = Self.polls[index]
+        let poll = Poll(id: "1", expiresAt: nil, expired: false, multiple: false, votesCount: 0, options: options.map { Poll.Option(title: $0, votesCount: 0) })
+        measure("poll.\(name)", status: status(content: "<p>本文</p>", poll: poll))
     }
 
     @Test func cards() throws {
@@ -110,34 +113,40 @@ struct PostHeightProbeTests {
         }
     }
 
-    /// 「投稿の見た目」の値を1つずつ、またはすべて上限と下限にして、添付ファイルとカードと投票のある投稿を測る。
-    @Test func appearanceExtremes() throws {
+    /// 添付ファイルとカードと投票のある投稿を、「投稿の見た目」の値を`change`で変えて測る。
+    private func appearanceHeight(_ change: (AppSettings) -> Void) throws -> CGFloat {
         let url = try #require(URL(string: "https://example.com/a"))
         let attachment = MediaAttachment(id: "1", type: .image, url: url, previewUrl: url, meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_200, height: 900)))
         let card = PreviewCard(url: url, title: "題名", description: "説明", type: .link, providerName: "example", image: url, width: 400, height: 300)
         let poll = Poll(id: "1", expiresAt: nil, expired: false, multiple: false, votesCount: 0, options: [Poll.Option(title: "A", votesCount: 0), Poll.Option(title: "B", votesCount: 0)])
         let post = status(name: "とても長い名前を持っている人", content: "<p>本文の1行目です。</p><p>2段落目です。</p>", media: [attachment], poll: poll, card: card)
-        let items = AppearanceCatalog.groups.flatMap(\.values)
+        let settings = AppSettings.isolated()
+        change(settings)
+        let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
+        let view = PostContentView(configuration: timeline.contentConfiguration(for: post, base: .cell()))
+        return view.systemLayoutSizeFitting(CGSize(width: 375, height: 3_000_000), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
+    }
 
-        func height(_ change: (AppSettings) -> Void) -> CGFloat {
-            let settings = AppSettings.isolated()
-            change(settings)
-            let timeline = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
-            let view = PostContentView(configuration: timeline.contentConfiguration(for: post, base: .cell()))
-            return view.systemLayoutSizeFitting(CGSize(width: 375, height: 3_000_000), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height
-        }
-
+    /// 「投稿の見た目」の値を1つずつ上限と下限にして測る。
+    @Test(arguments: AppearanceCatalog.groups.map(\.id))
+    func appearanceExtremes(group: AppearanceGroup.ID) throws {
+        let items = try #require(AppearanceCatalog.groups.first { $0.id == group }).values
         for item in items {
             for bound in [item.range.lowerBound, item.range.upperBound] {
-                let measured = height { $0.setValue(bound, for: item) }
+                let measured = try appearanceHeight { $0.setValue(bound, for: item) }
                 print("PROBE appearance.\(item.id)=\(bound) width=375 height=\(measured)")
                 #expect(measured.isFinite && measured <= Self.limit, "\(item.id)=\(bound) height=\(measured)")
             }
         }
-        for (name, pick) in [("allLower", { (item: AppearanceValue) in item.range.lowerBound }), ("allUpper", { (item: AppearanceValue) in item.range.upperBound })] {
-            let measured = height { settings in items.forEach { settings.setValue(pick($0), for: $0) } }
-            print("PROBE appearance.\(name) width=375 height=\(measured)")
-            #expect(measured.isFinite && measured <= Self.limit, "\(name) height=\(measured)")
-        }
+    }
+
+    /// 「投稿の見た目」の値をすべて上限か下限にして測る。
+    @Test(arguments: [false, true])
+    func appearanceAllExtremes(upper: Bool) throws {
+        let items = AppearanceCatalog.groups.flatMap(\.values)
+        let measured = try appearanceHeight { settings in items.forEach { settings.setValue(upper ? $0.range.upperBound : $0.range.lowerBound, for: $0) } }
+        let name = upper ? "allUpper" : "allLower"
+        print("PROBE appearance.\(name) width=375 height=\(measured)")
+        #expect(measured.isFinite && measured <= Self.limit, "\(name) height=\(measured)")
     }
 }

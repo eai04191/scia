@@ -195,7 +195,8 @@ struct EmojiPaletteViewTests {
         // パレットより後に登録したので、ここに知らせが届いたときには、パレットも描き直し終えている。
         var notified: Set<URL> = []
         store.addListener(owner: palette) { notified.formUnion($0) }
-        try await waitUntil { urls.allSatisfy { store.image(for: $0) != nil } && notified.isSuperset(of: urls) }
+        // 毎回すべてを求める。`allSatisfy`で求めると最初の読めていないもので止まり、残りを待つたびに1つずつしか読みに行かない。
+        try await waitUntil { urls.map { store.image(for: $0) }.allSatisfy { $0 != nil } && notified.isSuperset(of: urls) }
 
         collectionView.contentOffset.y += collectionView.bounds.height
         collectionView.layoutIfNeeded()

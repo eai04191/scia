@@ -171,12 +171,13 @@ struct EmojiGlyphArchiveTests {
 
     /// 絵文字ピッカーに並ぶどの絵文字も、ライトとダークで絵が変わるのは、形だけと判定したものに限る。
     /// 外観で変わる絵文字を色のまま持つと、外観を切り替えたときに前の外観の色で出るため。
-    @Test(arguments: EmojiStyle.allCases) func onlyShapesChangeWithAppearance(style: EmojiStyle) async throws {
+    @Test(arguments: EmojiStyle.allCases, StandardEmojiCatalog.groups.indices)
+    func onlyShapesChangeWithAppearance(style: EmojiStyle, group: Int) async throws {
         var geometry = Self.geometry
         geometry.style = style
         var changed: [String] = []
         var shapes: [String] = []
-        for emoji in StandardEmojiAvailability.groups(for: style).flatMap(\.emojis) {
+        for emoji in StandardEmojiAvailability.groups(for: style)[group].emojis {
             func render(_ userInterfaceStyle: UIUserInterfaceStyle) async -> CGImage? {
                 await EmojiGlyphImageStore.draw(EmojiGlyphImageStore.Request(
                     text: emoji.emoji, pointSize: geometry.pointSize, style: style, width: geometry.width, height: geometry.height, scale: geometry.scale, userInterfaceStyle: userInterfaceStyle

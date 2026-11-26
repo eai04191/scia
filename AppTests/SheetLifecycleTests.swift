@@ -18,6 +18,8 @@ struct SheetLifecycleTests {
         let window = UIWindow(windowScene: scene)
         let host = UIViewController()
         window.rootViewController = host
+        // 確かめるのは出し入れの知らせの順なので、UIKitの出し入れの動きを速めて待つ時間を減らす。
+        window.layer.speed = 20
         window.makeKeyAndVisible()
         return (window, host)
     }

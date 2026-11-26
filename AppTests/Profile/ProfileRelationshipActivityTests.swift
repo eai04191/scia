@@ -46,7 +46,8 @@ struct ProfileRelationshipActivityTests {
         }
     }
 
-    private func open(clock: TestClock, cached: Relationship? = nil, relationshipsBody: String = ProfileTransport.following) throws -> Opened {
+    /// - Parameter retry: 関係のほかの要求は失敗させるので、既定の決まりでは、実際の時間で1秒と2秒待って送り直す。
+    private func open(clock: TestClock, cached: Relationship? = nil, relationshipsBody: String = ProfileTransport.following, retry: RetryPolicy = .standard) throws -> Opened {
         let transport = ProfileTransport(relationshipsBody: relationshipsBody)
         let credential = Credential(
             instance: try #require(URL(string: "https://example.social")),
@@ -56,7 +57,7 @@ struct ProfileRelationshipActivityTests {
             accountID: "1",
             username: "alice"
         )
-        let client = MastodonClient(credential: credential, transport: transport)
+        let client = MastodonClient(credential: credential, transport: transport, retry: retry)
         let tasks = TaskScope()
         let cache = RelationshipCache { _ in [] }
         cache[Self.account.id] = cached
@@ -119,7 +120,8 @@ struct ProfileRelationshipActivityTests {
     /// 読み込み中を示し続けないよう、インジケータを消す。
     @Test func emptyResponseStopsIndicator() async throws {
         let clock = TestClock()
-        let opened = try open(clock: clock, relationshipsBody: "[]")
+        // 読み込みを終えるのを待つので、送り直さない。
+        let opened = try open(clock: clock, relationshipsBody: "[]", retry: RetryPolicy(maxRetries: 0, initialDelay: .zero))
         defer { opened.close() }
         try await waitUntil { opened.relationshipWaits == 1 }
         clock.advance(by: opened.delay)
