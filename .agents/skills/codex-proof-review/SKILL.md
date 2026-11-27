@@ -35,20 +35,24 @@ description: SciaCoreの変更を、Codexに使い捨ての複製で実際に動
 
    pr-readinessと同じく、結果はstdoutの`<out-file>`だけを読み、`<log-file>`は失敗したときだけ見る。`codex`が失敗したら、ほかの手段で代わりをせず、エラーを示して未確認とする
 4. 指摘を扱う。pr-readinessのCodexレビューの指摘とまとめて、重なるものは1つにする
-   - 証明のテストが付いた指摘は、テストが変更の意図どおりの前提を試しているかを確かめる。正しければ確かめ済みとして扱い、テストは作業ツリーのテストに書き直して取り込む（複製のファイルをそのままコピーしない）
+   - 証明のテストが付いた指摘は、テストが依頼と作者の説明どおりの前提を試しているかを確かめる。正しければ確かめ済みとして扱い、テストは作業ツリーのテストに書き直して取り込む（複製のファイルをそのままコピーしない）
    - 証明のない指摘は、pr-readinessと同じく、手元で本当に起きると確かめたものだけ相手にする
 5. 複製を消す（`rm -rf "$(dirname "$dir")"`）。証明の出力は`<out-file>`に残っている
 
 ## Codexへの指示
 
-`<base>`、`<merge-base>`、`<review-from>`、変更の意図をうめて、そのまま渡す。
+`<base>`、`<merge-base>`、`<review-from>`、ユーザーの依頼、作者の説明をうめて、そのまま渡す。依頼の文は、pr-readinessと同じく要約せずに貼る。
 
 ````markdown
 Review the code changes against the base branch '<base>'. The merge base commit is <merge-base>. Run `git diff <review-from>` and `git status --short` to inspect the changes to review, including uncommitted and untracked files. Changes before <review-from> were already reviewed; read them only as context. Provide prioritized, actionable findings.
 
-## 変更の意図
+## ユーザーの依頼
 
-<ユーザーの依頼の要約、受け入れ条件、設計判断とその理由>
+<ユーザーの依頼の文をそのまま貼る。受け入れ条件も含める。要約しない>
+
+## 作者の説明
+
+<設計判断とその理由、確かめたことと確かめていないこと>
 
 ## レビューの進め方
 
