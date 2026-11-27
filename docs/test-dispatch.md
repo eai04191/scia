@@ -4,7 +4,7 @@
 
 `make build`と、シミュレーターを触って確かめる作業は手元で行う。
 
-通った回は、そのビルドのアプリを`DerivedData/checked/Scia.app`に、確かめたtreeを`DerivedData/checked/tree`に置く（`Tools/keep-checked-app.sh`）。別のMacで通った回は、別のMacが`~/scia/apps/<依頼のID>`に残したものを入口が受け取る。手元のビルドの成果物（`Build/Products`）とは分けて置き、別のMacでビルドした中身を手元の差分ビルドに混ぜない。入口は手元の`Config/Local.xcconfig`の`DEVELOPMENT_TEAM`を別のMacへ渡し、別のMacは作業コピーの`Config/Local.xcconfig`に書いてビルドする。`application-identifier`が手元のビルドと違うと、受け取ったアプリが手元のキーチェーンのログインを読めないため。
+通った回はそのビルドのアプリを`DerivedData/checked/Scia.app`に、確かめたtreeを`DerivedData/checked/tree`に置く（`Tools/keep-checked-app.sh`）。別のMacで通った回は、別のMacが`~/scia/apps/<依頼のID>`に残したものを入口が受け取る。手元のビルドの成果物（`Build/Products`）とは分けて置き、別のMacでビルドした中身を手元の差分ビルドに混ぜない。入口は手元の`Config/Local.xcconfig`の`DEVELOPMENT_TEAM`を別のMacへ渡し、別のMacは作業コピーの`Config/Local.xcconfig`に書いてビルドする。`application-identifier`が手元のビルドと違うと、受け取ったアプリが手元のキーチェーンのログインを読めないため。
 
 ## 流れ
 
@@ -16,7 +16,7 @@
 
 枠は、別のMacが`SCIA_REMOTE_SIMS`の端末の数、手元が2（`Tools/test-dispatch.sh`の`LOCAL_SLOTS`）。
 
-落ちたテストは、もう一方の枠で走らせ直さない。
+落ちたテストはもう一方の枠で走らせ直さない。
 
 ## 手元の枠だけを使うとき
 
@@ -35,11 +35,11 @@
 
 作業ツリーのtreeを送り、受け取った側で同じtreeになることを確かめてから走らせる。通ったら手元の`.git/scia-check/`にそのtreeを記録するので、mainのhookは手元で通したときと同じように扱う。
 
-別のMacは、`SCIA_REMOTE_SIMS`の端末の数だけ、作業コピー（`~/scia/tree-<番号>`）と端末の組で同時に走らせる。
+別のMacは`SCIA_REMOTE_SIMS`の端末の数だけ、作業コピー（`~/scia/tree-<番号>`）と端末の組で同時に走らせる。
 
 落ちた回のxcresultと出力の全文は、別のMacの`~/scia/results/<依頼のID>`に移し、入口が手元の`DerivedData/test-logs`へ受け取って別のMacの分を消す。xcresultは`failed-<時刻>`、出力の全文は`remote-output-<依頼のID>`に入る。受け取れなければ別のMacに7日残る。
 
-`make check`で並べて走らせるlintとmacOSのテストは、対象ごとに`DerivedData/check-logs/<対象>.log`へ書く。落ちた対象は、`==== 落ちた: <対象>`から`==== ここまで: <対象>`の間に、ログ全体から選んだ失敗の行とログの末尾を入れた区間を`<対象>.failed`に書き、並べた対象が全部終わってから出す（`Tools/check-logged.sh`）。別のMacも、この間の行をそのまま返す。
+`make check`で並べて走らせるlintとmacOSのテストは、対象ごとに`DerivedData/check-logs/<対象>.log`へ書く。落ちた対象は`==== 落ちた: <対象>`から`==== ここまで: <対象>`の間に、ログ全体から選んだ失敗の行とログの末尾を入れた区間を`<対象>.failed`に書き、並べた対象が全部終わってから出す（`Tools/check-logged.sh`）。別のMacもこの間の行をそのまま返す。
 
 ## 手元の端末
 
@@ -86,7 +86,7 @@ SCIA_REMOTE_SIMS=('Scia Remote 1' 'Scia Remote 2')
 
 `.scratch`と`.stallLimit`のテストでは、最初の失敗時に`failure-diagnostics.txt`をSwift Testingの添付ファイルとして残す。OS、CPU数、失敗を記録したスレッドのスタックと、`Gate`・`TestClock`・`waitUntil`の履歴が入る。履歴は直近128件を残し、それ以前の件数を表示する。各待機オブジェクトの最後の状態は、履歴から外れても残る。並列のテストケースは別々に記録する。
 
-`.scratch`では、その時点で残っている登録済みのファイルと設定のplistも、削除する前に添付する。`scratch-files.txt`が添付名と元のパスの対応表で、読み取れなかったファイルの理由もここに残る。テストがすでに削除したファイルは復元しない。シンボリックリンクは添付しない。
+`.scratch`ではその時点で残っている登録済みのファイルと設定のplistも、削除する前に添付する。`scratch-files.txt`が添付名と元のパスの対応表で、読み取れなかったファイルの理由もここに残る。テストがすでに削除したファイルは復元しない。シンボリックリンクは添付しない。
 
 `make test-core`と`make test-release`の添付は`DerivedData/test-logs/failed-attachments-<実行ごとの識別子>/`、Xcodeで走るテストの添付はxcresultに入る。`swift test`を直接使うときは、先に保存先を作って`--attachments-path <保存先>`を渡す。指定しないとSwift Testingが添付を破棄する。Release testのCIでは、失敗時にログと添付を`release-test-diagnostics` artifactへ保存する。
 

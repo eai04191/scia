@@ -28,10 +28,10 @@ URLは`SciaLog.host(of:)`でホストだけを`.public`にし、どのURLかを�
 
 ## 例外
 
-- デバッグ版では、`RequestLog`が失敗した応答の本文を足す。リリース版では足さない
+- デバッグ版では`RequestLog`が失敗した応答の本文を足す。リリース版では足さない
 - `App/Sources/Debug`の`#if DEBUG`の中のコードは、リリース版に入らないため、この決まりの対象にしない。`#if DEBUG`で囲んでいないファイル（デバッグメニュー、部品カタログなど）はリリース版に入るので、ログを足すときはこの決まりに従う。`log_private_value`はフォルダーごと除外しているので、lintでは止まらない
 - 状態ダンプも違和感レポートに入るため、同じ決まりで書く
 
 ## 守らせ方
 
-`make lint`の`log_private_value`が、ログの1行の中で、伏せるものを`.private`か`.sensitive`以外で出す書き方を止める。止めるのは、`localizedDescription`、`absoluteString`、`String(describing: error)`、失敗をそのまま補間する書き方、`acct`や`username`のようなハンドルや本文の名前、URLを丸ごと補間する書き方。名前で見分けているため、別の名前に入れ替えた値は止められない。新しく伏せるものの名前を使い始めたら、この規則に足す。
+`make lint`の`log_private_value`が、ログの1行の中で、伏せるものを`.private`か`.sensitive`以外で出す書き方を止める。止めるのは`localizedDescription`、`absoluteString`、`String(describing: error)`、失敗をそのまま補間する書き方、`acct`や`username`のようなハンドルや本文の名前、URLを丸ごと補間する書き方。名前で見分けているため、別の名前に入れ替えた値は止められない。新しく伏せるものの名前を使い始めたら、この規則に足す。

@@ -59,7 +59,7 @@ brew install xcodegen swiftlint webp
 make generate
 ```
 
-シミュレーター向けには、そのままビルドできます。
+シミュレーター向けにはそのままビルドできます。
 
 ```bash
 make build
@@ -89,7 +89,7 @@ SciaCoreのテストをmacOS上で走らせます。シミュレーターは要�
 make test SIM='iPhone 16 Pro'
 ```
 
-アプリのテストをシミュレーターで走らせます。`make check`は、lint、SciaCoreのテスト、ビルド、警告の検出をまとめて行います。
+アプリのテストをシミュレーターで走らせます。`make check`はlint、SciaCoreのテスト、ビルド、警告の検出をまとめて行います。
 
 ## 謝辞
 

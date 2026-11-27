@@ -14,7 +14,7 @@ disable-model-invocation: true
 
 確かめたいのは「SciaCoreの公開APIと説明だけで、別のUIが正しく作れるか」なので、XがiOS版の作りを知った時点で、そのXでは確かめられなくなる。取り次ぎの誤りは取り返せないので、下の決まりを1つずつ守る。
 
-XとYは、起動のたびに新しく作る。前の回のsessionに頼まない。引数（`$ARGUMENTS`）の`base:`には、Xを始めるMac版のbranchが入る。
+XとYは起動のたびに新しく作る。前の回のsessionに頼まない。引数（`$ARGUMENTS`）の`base:`には、Xを始めるMac版のbranchが入る。
 
 ## 決まり
 
@@ -22,7 +22,7 @@ XとYは、起動のたびに新しく作る。前の回のsessionに頼まな�
 
 - X、Y、親は、それぞれ自分のworktreeとbranchで作業する。X、Yは`use_worktree: true`で始める
 - 親は、XとYのworktreeで、手順5の取り込みのほかは、git（commit、merge、reset、checkout、rebaseなど）もファイルの変更もしない。読むのは`git -C <worktree> log`、`git show <branch>:<path>`など、変えない操作だけ
-- Yは、Xのbranchとworktreeに触らない。XはYのbranchに触らない
+- YはXのbranchとworktreeに触らない。XはYのbranchに触らない
 - 2つのbranchがつながるのは、親がYのbranchをXのbranchへmergeするときだけ。XとYはmergeしない
 - Yのbranchをmainへ入れるのは、ユーザーがYのsessionで`/merge-to-main`を起動したときだけ
 - Mac版のbranchはmainへ入れない
@@ -33,9 +33,9 @@ XとYは、起動のたびに新しく作る。前の回のsessionに頼まな�
 
 ### 伝えること
 
-- Xへは、SciaCore、docs、AGENTS.md、X自身のMac版のコードと記録から分かることしか伝えない。App/Sourcesのパス、iOS版の型や関数の名前、iOS版がどう作っているか、Yがなぜそう直したかのApp側の事情は、どれも伝えない
-- Xに送る文は、送る前に読み直し、上のどれかが入っていたら消す。Yの報告の文をそのまま貼らない
-- Xの記録（`Mac/FINDINGS.md`）に、iOS版の事実を書かせない。Xの推測を確かめた結果は、Yへのbriefとユーザーへの報告にだけ書く
+- XへはSciaCore、docs、AGENTS.md、X自身のMac版のコードと記録から分かることしか伝えない。App/Sourcesのパス、iOS版の型や関数の名前、iOS版がどう作っているか、Yがなぜそう直したかのApp側の事情は、どれも伝えない
+- Xに送る文は送る前に読み直し、上のどれかが入っていたら消す。Yの報告の文をそのまま貼らない
+- Xの記録（`Mac/FINDINGS.md`）に、iOS版の事実を書かせない。Xの推測を確かめた結果はYへのbriefとユーザーへの報告にだけ書く
 - 子が「〜しますか？」と聞いてきたら、答えをそのまま返す前に、それを誰がやるべきかを決まりに照らす。Xのbranchの作業ならXに、SciaCoreの作業ならYに頼む。聞いてきたsessionが違えば、そのsessionには「それは親が別のsessionに頼む」とだけ返す
 
 ### 子の報告を読む
@@ -87,7 +87,7 @@ XとYは、起動のたびに新しく作る。前の回のsessionに頼まな�
 次を入れる。
 
 - やること: Mac版を作る。画面の骨格、タイムライン、入力はAppKitで作る。中に入力もスクロール位置の精密な制御も持たない表示の部品は、SwiftUIで作って載せてよい。UIKitとMac Catalystは使わない（UIKitのコードがそのまま動き、分け方を確かめられないため）。今回作る動線をユーザーの言葉で書く。続きから始めるなら、今あるMac版のどこから何を足すか
-- 読んでよいもの: SciaCoreのソース、公開API、テスト、`docs/`、`AGENTS.md`、自分のbranchのMac版のコードと記録。App/Sourcesは、grep、ファイルを開く、subagentに読ませる、のどれもしない。App側を見ないと分からなかったことは、それ自体を記録する
+- 読んでよいもの: SciaCoreのソース、公開API、テスト、`docs/`、`AGENTS.md`、自分のbranchのMac版のコードと記録。App/Sourcesはgrep、ファイルを開く、subagentに読ませる、のどれもしない。App側を見ないと分からなかったことは、それ自体を記録する
 - SciaCoreは変えない。変えたくなった箇所は記録にとどめる
 - ターゲットは`project.yml`に足し、`make generate`で作る。署名とbundle IDは`macos-app-dev`のskillに従う。`Config/Local.xcconfig`は元のcheckoutからコピーする
 - Macでアプリを`open`したり、画面を操作したりしない。ビルドが通るところまでを確かめ、起動と動線の確認は手順を示してユーザーに頼む

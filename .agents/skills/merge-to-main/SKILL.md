@@ -7,13 +7,13 @@ disable-model-invocation: true
 
 # Merge to Main
 
-作業branchをローカルのdefault branch(以下target)へ入れるまでを、1回の依頼で済ませる。止まるのは、ユーザーに決めてもらうことがあるときと、安全に入れられないときだけにする。pushはしない。
+作業branchをローカルのdefault branch(以下target)へ入れるまでを、1回の依頼で済ませる。止まるのはユーザーに決めてもらうことがあるときと、安全に入れられないときだけにする。pushはしない。
 
 mainへ入れる処理（rebase、`make check`、`make test`、fast-forward）は、`Tools/merge-queue.sh`の列を通して、どのスレッドからでも1つずつ走らせる。順番は問わず、ユーザーが前提に指定したスレッドのbranchがmainに入るまでは、番を待つ。
 
 targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/HEAD`のbranch名(例: `main`)。比較にはremoteではなくローカルのtargetを使う。
 
-引数には、前提のスレッドのID（`after:<ID>`）か、前提のローカルbranch（`after-branch:<branch>`）が入る。複数指定してよい。`make check`と`make test`は、列が`Tools/test-dispatch.sh`を通して、空いている枠で走らせる。
+引数には前提のスレッドのID（`after:<ID>`）か、前提のローカルbranch（`after-branch:<branch>`）が入る。複数指定してよい。`make check`と`make test`は、列が`Tools/test-dispatch.sh`を通して、空いている枠で走らせる。
 
 ## 実行環境の手順
 
@@ -63,7 +63,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 
 ## 4. 終わったら
 
-終了コードで分ける。どの場合も、出力の最後の部分を読んでから動く。
+終了コードで分ける。どの場合も出力の最後の部分を読んでから動く。
 
 - 0（入れた）: 下の報告をして、手順5へ進む
 - 2（未commitの変更がある）: 出力にあるworktreeの変更が何かを確かめて、報告する。片付けずに並び直さない
@@ -93,6 +93,6 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 - 片付け: プロジェクトの指示が置き場所を決めている引き継ぎのメモ（`.handoff/`）で、消すべきものが残っていないか。このセッションが始めた別のセッションが、まだ動いていないか
 - このmergeの外の変更: 別のリポジトリへのcommitなど、ユーザーが後で扱う必要があるもの
 
-見つけたものは、archiveの前に片付けるものと、閉じても困らないものに分けて挙げる。片付けるものがなければ（何も見つからないか、閉じても困らないものだけなら）「archiveしてよい」と書く。どちらも、確認せずに直したりdocsに書き足したりしない。
+見つけたものはarchiveの前に片付けるものと、閉じても困らないものに分けて挙げる。片付けるものがなければ（何も見つからないか、閉じても困らないものだけなら）「archiveしてよい」と書く。どちらも確認せずに直したりdocsに書き足したりしない。
 
 「archiveしてよい」と書いたら、実行環境の参照に従ってthread名の先頭に✅を付ける。そのあと同じthreadで作業を始めたら、最初に✅を外す。

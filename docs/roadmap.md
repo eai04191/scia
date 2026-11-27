@@ -1,6 +1,6 @@
 # Roadmap
 
-各項目は、agentに1タスクとして渡せる単位にしている。済んだ項目は消す。
+各項目はagentに1タスクとして渡せる単位にしている。済んだ項目は消す。
 
 Mastodon APIへの対応（A）と、それ以外の手触り、表示、検証の土台など（X）に分けて書き、2つは並行して進める。それぞれの中では上から順に進める前提で、先の項目は前の項目の成果に依存する。
 
@@ -47,7 +47,7 @@ Mastodonのクライアントとしてできることを、上から優先度の
 - [ ] 投稿を送っている間にも、次の投稿を書けるようにする
 - [ ] 投稿欄の開閉で本文の文字を動かすとき、右から左へ書く文字（ヘブライ語、アラビア語）を含む本文でも、文字を重ねず跳ばさない
 - [ ] インライン投稿欄で読み込み終わる前に開いた動画が、読み込み後に動画のページへ作り直されるときの見え方を確かめる: 読み込みに時間のかかる動画が手元になく、テストでしか確かめていない
-- [ ] Mac（Designed for iPad）で、投稿やチューニングのシートが出始めるまで遅いのを直す: 選択してから何も出ずにもたつき、そのあとパッと出る。iPhoneでは起きない。AeroSpaceを終了しても、Releaseビルドでも変わらなかった。Time Profilerでは、シートを出す直前のSwiftUIの最初のレイアウト（`UISheetPresentationController _transitionWillBegin` → `_UIHostingView.layoutSubviews`）に120〜190msかかっていたが、それだけで説明できるかは分かっていない。次はInstrumentsのAnimation HitchesやSwiftUIのテンプレートで、選択してから出始めるまでを測る
+- [ ] Mac（Designed for iPad）で、投稿やチューニングのシートが出始めるまで遅いのを直す: 選択してから何も出ずにもたつき、そのあとパッと出る。iPhoneでは起きない。AeroSpaceを終了しても、Releaseビルドでも変わらなかった。Time Profilerではシートを出す直前のSwiftUIの最初のレイアウト（`UISheetPresentationController _transitionWillBegin` → `_UIHostingView.layoutSubviews`）に120〜190msかかっていたが、それだけで説明できるかは分かっていない。次はInstrumentsのAnimation HitchesやSwiftUIのテンプレートで、選択してから出始めるまでを測る
 - [ ] インライン投稿欄の添付で、処理中の動画のアクティビティインジケーターと再生アイコンが重なるのを直す: 部品カタログ（`scia-debug://catalog/attachment-strip`）で見られる
 - [ ] タイムラインの添付ファイルで、読み込めなかったことが読み込み中と見分けられるかを確かめる: 部品カタログ（`scia-debug://catalog/media-grid`）では同じ見た目に見える。実物ではまだ確かめていない
 - [ ] 投稿の行を作る処理を軽くする: プロフィールの最初の読み込みのように数件をまとめて作ると、メインスレッドが100msほど止まる

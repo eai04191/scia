@@ -2,7 +2,7 @@
 
 ## 前提のbranchと作業状態
 
-- `after:<ID>`は、`mcp__ccd_session_mgmt__get_session`でそのスレッドのbranchを引く。ツールは`ToolSearch`で定義を読み込む。ローカルbranchの存在を`git show-ref --verify refs/heads/<branch>`で確かめる
+- `after:<ID>`は`mcp__ccd_session_mgmt__get_session`でそのスレッドのbranchを引く。ツールは`ToolSearch`で定義を読み込む。ローカルbranchの存在を`git show-ref --verify refs/heads/<branch>`で確かめる
 - 終了コード5のときは、同じツールで`isRunning`を読む。trueなら並び直し、falseなら共通手順に従って報告する
 
 ## 列の起動と待機
