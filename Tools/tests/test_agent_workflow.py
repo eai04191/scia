@@ -32,6 +32,8 @@ class SimulatorWorkflowTests(unittest.TestCase):
         self.script('axe', '#!/usr/bin/env python3\nimport json,sys\nfrom pathlib import Path\nPath('+repr(str(self.record))+').write_text(json.dumps(sys.argv[1:]))\n')
         self.locks = self.root / '.git/sim-locks'
         self.locks.mkdir()
+        # 手元のmake check-testでは、同じMacで本物のmake testがScia 1を使っていて、sim.shが走っているテストとして見つけるので、処理の一覧は空にする
+        self.script('ps', '#!/bin/sh\nexit 0\n')
 
     def script(self, name, content):
         path = self.bin / name
