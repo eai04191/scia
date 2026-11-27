@@ -30,7 +30,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 ## コマンド
 
 - `make generate`: Xcodeプロジェクトを生成する
-- `make lint`: SwiftLintと、呼び出しや文字列の補間の形を構文木で調べる`Tools/SciaLint`で、決まりに反する書き方を検出する（`brew install swiftlint`が必要）。SciaLintの規則は`// scialint:disable:next <規則>`で外す
+- `make lint`: SwiftLintと、呼び出しや文字列の補間の形を構文木で調べる`Tools/SciaLint`と、書き直した造語を見つける`Tools/check-coined-words.py`で、決まりに反する書き方を検出する（`brew install swiftlint`が必要）。SciaLintの規則は`// scialint:disable:next <規則>`で、造語の検査はその行に`coined-words: allow`と書いて外す
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）
 - `make build`: シミュレーター向けにビルドする
 - `make test`: シミュレーターでテストする。`SIM='<端末>'`で指定もできるが、貸し借りする端末は借りているものしか受け付けない。端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（`SciaSystemUITests`）も走らせる

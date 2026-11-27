@@ -226,5 +226,48 @@ class CheckLoggedTests(unittest.TestCase):
         self.assertIsNone(failed)
 
 
+class CheckStampTests(unittest.TestCase):
+    """Markdownだけ違うcommitに、前の結果を引き継ぐかを、実物のcheck-stamp.shと造語の検査で確かめる。"""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.git('init', '-q', '-b', 'main')
+        self.git('config', 'user.name', 'Workflow test')
+        self.git('config', 'user.email', 'workflow@example.invalid')
+        (self.root / 'Tools').mkdir()
+        for name in ('check-stamp.sh', 'check-coined-words.py'):
+            shutil.copy2(ROOT / 'Tools' / name, self.root / 'Tools' / name)
+        (self.root / 'notes.md').write_text('再読み込みする\n')
+        self.git('add', '.')
+        self.git('commit', '-qm', 'base')
+        self.base = self.git('rev-parse', 'HEAD')
+        for kind in ('check', 'test'):
+            stamps = self.root / '.git/scia-check' / kind
+            stamps.mkdir(parents=True)
+            (stamps / self.git('rev-parse', 'HEAD^{tree}')).touch()
+
+    def git(self, *arguments):
+        return subprocess.check_output(['git', *arguments], cwd=self.root, text=True, stderr=subprocess.PIPE).strip()
+
+    def missing_after_markdown(self, text):
+        (self.root / 'notes.md').write_text(text)
+        self.git('commit', '-qam', 'markdown')
+        return subprocess.run(['Tools/check-stamp.sh', 'missing', 'HEAD', self.base], cwd=self.root,
+                              text=True, capture_output=True, timeout=30)
+
+    def test_inherits_when_markdown_has_no_coined_words(self):
+        result = self.missing_after_markdown('再読み込みしてから再描画する\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '')
+
+    def test_does_not_inherit_when_markdown_adds_a_coined_word(self):
+        result = self.missing_after_markdown('読み直してから描き直す\n')  # coined-words: allow
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['make check', 'make test'])
+        self.assertIn('notes.md:1:', result.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()

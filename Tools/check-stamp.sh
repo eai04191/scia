@@ -9,7 +9,7 @@
 #   Tools/check-stamp.sh record-remote <check|test> <tree>  別のMacが<tree>の中身で走らせて通ったものとして記録する。手元の作業ツリーとは比べない
 #   Tools/check-stamp.sh missing <commit> [<base>]   <commit>の中身でまだ通っていないもの（make check、make test）を1行ずつ出す
 # <base>を渡すと、<base>の中身で通っていて、<commit>との違いがMarkdown（*.md）とサーバーのリスト（known-servers.txt）だけなら、通ったものとして扱い、<commit>の中身も記録する。
-# 追跡しているMarkdownは、ビルドにもlintにもテストにも入らないので、結果が変わらないため。
+# 追跡しているMarkdownは、ビルドにもテストにも入らず、lintで見るのは造語の検査（Tools/check-coined-words.py）だけなので、引き継ぐ前に、変わったMarkdownをその検査にかける。
 # .agents/skills/にはシェルスクリプトもあるので、ディレクトリではなく拡張子で見る。
 # サーバーのリストは、GitHub Actionsが毎週作り直してPRにするデータで、読むテストはServerSuggestionsTestsのloadsTheBundledListだけ。その条件（1000件を超える、mastodon.socialがある、空の行がない）は、Tools/update-known-servers.shが書き出す前に確かめる。
 # 手でリストを書き換えたときは、この条件を誰も確かめないまま通ったものとして扱う。リストを手で直すことはなく、確かめるためにmake testを走らせると、除外する意味がなくなるので、そこまでは見ない。
@@ -47,6 +47,16 @@ only_unchecked_files_differ() {
     esac
 }
 
+# <base>から<commit>で足したり変えたりしたMarkdownを、<commit>の中身で造語の検査にかける。造語があれば、検査の出力を出して1を返す
+markdown_has_no_coined_words() {
+    local files=() file
+    while IFS= read -r -d '' file; do
+        files+=("$file")
+    done < <(git diff --name-only -z --no-renames --diff-filter=AM "$1" "$2" -- '*.md')
+    [[ ${#files[@]} -eq 0 ]] && return 0
+    python3 "$(dirname "$0")/check-coined-words.py" --at "$2" "${files[@]}" >&2
+}
+
 case "${1:-}" in
     tree)
         worktree_tree
@@ -78,9 +88,19 @@ case "${1:-}" in
         tree=$(git rev-parse "$commit^{tree}")
         base_tree=
         [[ -n "$base" ]] && base_tree=$(git rev-parse "$base^{tree}")
+        # 造語の検査は、checkとtestのどちらで引き継ぐときも同じ結果なので、1回だけ走らせる
+        markdown_checked=
         for kind in $KINDS; do
             [[ -e "$(stamp_dir "$kind")/$tree" ]] && continue
+            inherits=no
             if [[ -n "$base_tree" && -e "$(stamp_dir "$kind")/$base_tree" ]] && only_unchecked_files_differ "$base" "$commit"; then
+                if [[ -z "$markdown_checked" ]]; then
+                    markdown_checked=no
+                    markdown_has_no_coined_words "$base" "$commit" && markdown_checked=yes
+                fi
+                inherits=$markdown_checked
+            fi
+            if [[ "$inherits" == yes ]]; then
                 # 次にこの中身と比べるときにも引き継げるよう、記録しておく
                 touch "$(stamp_dir "$kind")/$tree"
                 continue
