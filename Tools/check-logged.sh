@@ -10,8 +10,10 @@ name=$2
 shift 2
 mkdir -p "$dir"
 log=$dir/$name.log
+start=$(date +%s)
 "$@" > "$log" 2>&1
 status=$?
+"$(dirname "$0")/step-time.sh" record "$name" "$start" "$status"
 if [ "$status" -ne 0 ]; then
     {
         echo "==== 落ちた: ${name}（全文: ${log}）"

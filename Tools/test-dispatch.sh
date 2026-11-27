@@ -47,6 +47,8 @@ run_in_free_slot() {
     waiting=$(slots_dir)/waiting
     mkdir -p "$waiting"
     ticket=$(new_ticket "$waiting" "$front")
+    SCIA_SLOT_QUEUED_AT=$(date +%s)
+    export SCIA_SLOT_QUEUED_AT
     trap 'rm -f "$ticket"' EXIT
     trap 'stop_child 129' HUP
     trap 'stop_child 130' INT
@@ -75,6 +77,8 @@ run_in_free_slot() {
                 exec 8> "$(slots_dir)/local-$i.lock"
                 if lockf -s -t 0 8; then
                     rm -f "$ticket"
+                    Tools/step-time.sh place "local-$i"
+                    Tools/step-time.sh record wait-slot "$SCIA_SLOT_QUEUED_AT" 0
                     run_here "$target"
                 fi
                 exec 8>&-
@@ -240,12 +244,21 @@ results_ssh() {
 }
 
 # 別のMacが受け付けて最初の行を書いたら、順番のチケットを外して次の依頼に番を譲る
+# 別のMacが返す段階の時間の行（Tools/remote-test-worker.shが「scia-step」を頭に付けたもの）は、出さずにSCIA_STEP_LOGへ書く
 release_ticket_on_acceptance() {
     local line
     if IFS= read -r line; then
         [[ -z "${SCIA_REMOTE_TICKET:-}" ]] || rm -f "$SCIA_REMOTE_TICKET"
+        Tools/step-time.sh place "remote $SCIA_REMOTE_HOST"
+        [[ -z "${SCIA_SLOT_QUEUED_AT:-}" ]] || Tools/step-time.sh record wait-slot "$SCIA_SLOT_QUEUED_AT" 0
         echo "$line"
-        cat
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            if [[ "$line" == scia-step$'\t'* ]]; then
+                [[ -z "${SCIA_STEP_LOG:-}" ]] || printf '%s\n' "${line#scia-step$'\t'}" >> "$SCIA_STEP_LOG"
+            else
+                printf '%s\n' "$line"
+            fi
+        done
     fi
 }
 
@@ -266,19 +279,19 @@ run_here() {
     local target=$1 status=0 acquired lent sim held=''
     if [[ "$target" == check ]]; then
         echo "make check を手元で走らせます"
-        run_step make --no-print-directory check-here || status=$?
+        run_step check make --no-print-directory check-here || status=$?
         exit "$status"
     fi
     # 端末を借りている間にアプリのコンパイルを待たないよう、借りる前にビルドしておく。make check-testの中のビルドは、そのあとでは差分がないので数秒で済む
     if [[ "$target" == check-test ]]; then
-        run_step make --no-print-directory build || exit "$?"
+        run_step build make --no-print-directory build || exit "$?"
     fi
     # このworktreeが借りていた端末は、貸し出しの期限を延ばすだけで、走らせたあとも返さない
     held=$(Tools/sim.sh leased --numbered 2> /dev/null) || held=
     # 借り終えてから記録するまでの間に止められても返せるよう、借り始める前に記録する。借りていないときのreleaseは何もしない
     [[ -n "$held" ]] || borrowed=1
     acquired=$(mktemp)
-    run_step Tools/sim.sh acquire --wait 0 > "$acquired" || status=$?
+    run_step sim-acquire Tools/sim.sh acquire --wait 0 > "$acquired" || status=$?
     lent=$(tail -1 "$acquired")
     rm -f "$acquired"
     if [[ "$status" != 0 ]]; then
@@ -293,14 +306,14 @@ run_here() {
     fi
     # ほかのworktreeが使ったあとの端末は、その設定やチューニングを持ち込まないよう、既定に戻してからテストする
     if [[ -z "$held" && "${lent##* }" != ready ]]; then
-        run_step Tools/sim.sh reset "$sim" || status=$?
+        run_step sim-reset Tools/sim.sh reset "$sim" || status=$?
         if [[ "$status" != 0 ]]; then
             echo "error: $sim の設定を戻せませんでした" >&2
             leave_here "$status"
         fi
     fi
     echo "make $target を $sim で走らせます"
-    run_step make --no-print-directory "$target-here" SIM="$sim" || status=$?
+    run_step "$target" make --no-print-directory "$target-here" SIM="$sim" || status=$?
     leave_here "$status"
 }
 
@@ -321,10 +334,12 @@ pending_signal=
 # 入口が端末を借りたか。止められたときに返す
 borrowed=
 
-# 手元の枠のロックを持ったまま、プロセスグループを分けてコマンドを走らせ、終わるまで待つ
+# 手元の枠のロックを持ったまま、プロセスグループを分けてコマンドを走らせ、終わるまで待つ。段階の名前とコマンドを受け取り、かかった時間をTools/step-time.shで記録する
 # xcodebuildの常駐プロセスが受け継ぐと、終わっても枠が空かないので、子ではロックのファイル記述子を閉じる
 run_step() {
-    local status=0 pid
+    local status=0 pid name=$1 start
+    shift
+    start=$(date +%s)
     starting=1
     set -m
     "$@" 8>&- &
@@ -334,6 +349,7 @@ run_step() {
     child_started
     wait "$pid" || status=$?
     child=
+    Tools/step-time.sh record "$name" "$start" "$status"
     return "$status"
 }
 

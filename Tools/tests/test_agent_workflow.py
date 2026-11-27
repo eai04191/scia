@@ -115,7 +115,7 @@ class MergeQueueTests(unittest.TestCase):
         self.script('check-stamp.sh', '#!/bin/sh\nprintf "make check\\nmake test\\n"\n')
         (self.root / 'Tools/generate-app-info.py').write_text('import sys\nassert sys.argv[1:] == ["--check"]\n')
         self.script('human-review.sh', '#!/bin/sh\n[ "${SCIA_TEST_HUMAN_MISSING:-0}" != 1 ] || echo README.md\nexit 0\n')
-        self.script('test-dispatch.sh', '#!/bin/sh\n[ "$1 $2" = "dispatch check-test" ] || exit 90\nprintf "%s\\n" "$(git branch --show-current)" >> "$(git rev-parse --git-common-dir)/tested"\nexit "${SCIA_TEST_CHECK_EXIT:-0}"\n')
+        self.script('test-dispatch.sh', '#!/bin/sh\n[ "$1 $2" = "dispatch check-test" ] || exit 90\nprintf "%s\\n" "$(git branch --show-current)" >> "$(git rev-parse --git-common-dir)/tested"\n[ -z "$SCIA_STEP_LOG" ] || printf "place\\tremote runner\\n1700000000\\twait-slot\\t1\\tok\\nplace\\tlocal-1\\n1700000000\\tapp-tests\\t5\\tok\\n" >> "$SCIA_STEP_LOG"\nexit "${SCIA_TEST_CHECK_EXIT:-0}"\n')
         self.git('add', '.')
         self.git('commit', '-qm', 'fixture')
         self.initial = self.git('rev-parse', 'HEAD')
@@ -137,8 +137,10 @@ class MergeQueueTests(unittest.TestCase):
         return work
 
     def run_queue(self, work, *dependencies, **env):
+        environment = dict(os.environ, **env)
+        environment.pop('SCIA_STEP_LOG', None)
         return subprocess.run(['Tools/merge-queue.sh', 'run', *dependencies], cwd=work,
-                              env=dict(os.environ, **env), text=True, capture_output=True, timeout=30)
+                              env=environment, text=True, capture_output=True, timeout=30)
 
     def test_success_checks_and_fast_forwards_local_main(self):
         work = self.branch('feature')
@@ -147,6 +149,19 @@ class MergeQueueTests(unittest.TestCase):
         self.assertEqual(self.git('rev-parse', 'main'), self.git('rev-parse', 'feature'))
         self.assertEqual((self.root / '.git/tested').read_text().splitlines(), ['feature'])
         self.assertEqual(self.git('status', '--porcelain'), '')
+
+    def test_records_steps_inside_check_test_with_place(self):
+        work = self.branch('feature')
+        result = self.run_queue(work)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        rows = [line.split('\t') for line in (self.root / '.git/scia-merge-queue/timing.log').read_text().splitlines()]
+        outer = next(row for row in rows if row[2] == 'check-test')
+        self.assertEqual(outer[5:], ['local-1'])
+        inner = next(row for row in rows if row[2] == 'check-test/app-tests')
+        self.assertEqual(inner[3:], ['5', 'ok', 'local-1'])
+        # 別のMacで受け付けられたあとに手元で走らせ直した回は、別のMacで待った分を別のMacに付ける
+        self.assertEqual(next(row for row in rows if row[2] == 'check-test/wait-slot')[5:], ['remote runner'])
+        self.assertEqual(next(row for row in rows if row[2] == 'total')[5:], [])
 
     def test_failed_check_and_missing_human_approval_leave_main_unchanged(self):
         work = self.branch('feature')
@@ -198,9 +213,12 @@ class CheckLoggedTests(unittest.TestCase):
 
     def run_logged(self, command):
         with tempfile.TemporaryDirectory() as temp:
+            env = dict(os.environ)
+            # make checkの中で走るときに、見本の対象の時間を記録させない
+            env.pop('SCIA_STEP_LOG', None)
             result = subprocess.run(
                 [str(ROOT / 'Tools' / 'check-logged.sh'), temp, 'demo', 'sh', '-c', command],
-                capture_output=True, text=True,
+                capture_output=True, text=True, env=env,
             )
             failed = Path(temp) / 'demo.failed'
             return result, (Path(temp) / 'demo.log').read_text(), failed.read_text() if failed.exists() else None
@@ -273,6 +291,31 @@ class CheckStampTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), ['make check', 'make test'])
         self.assertIn('notes.md:1:', result.stderr)
+
+
+class StepTimeTests(unittest.TestCase):
+    """make checkとmake testの中の段階の時間は、SCIA_STEP_LOGがあるときだけ書き、コマンドの終了コードを変えない。"""
+
+    def step_time(self, *arguments, log=None):
+        env = dict(os.environ)
+        env.pop('SCIA_STEP_LOG', None)
+        if log:
+            env['SCIA_STEP_LOG'] = str(log)
+        return subprocess.run([str(ROOT / 'Tools' / 'step-time.sh'), *arguments], env=env, capture_output=True, text=True)
+
+    def test_records_name_seconds_and_result(self):
+        with tempfile.TemporaryDirectory() as temp:
+            log = Path(temp) / 'steps'
+            self.assertEqual(self.step_time('run', 'lint', 'sh', '-c', 'exit 3', log=log).returncode, 3)
+            self.step_time('place', 'remote runner', log=log)
+            self.step_time('record', 'app-tests', '100', '0', '130', log=log)
+            rows = [line.split('\t') for line in log.read_text().splitlines()]
+            self.assertEqual((rows[0][1], rows[0][3]), ('lint', '3'))
+            self.assertEqual(rows[1:], [['place', 'remote runner'], ['100', 'app-tests', '30', 'ok']])
+
+    def test_writes_nothing_without_log(self):
+        result = self.step_time('run', 'lint', 'true')
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, '', ''))
 
 
 if __name__ == '__main__':

@@ -129,23 +129,24 @@ test-on-sim:
 ifneq ($(strip $(ONLY)),)
 	xcodebuild $(TEST_ARGS) test $(foreach t,$(ONLY),'-only-testing:$(t)')
 else
-	xcodebuild $(TEST_ARGS) build-for-testing
+	Tools/step-time.sh run build-for-testing xcodebuild $(TEST_ARGS) build-for-testing
 	@# SciaCoreTestsとTextKit2LabelTestsはアプリの中で走らないので、まとめてSciaTestsと同じ端末で同時に走らせる。SciaTestsがアプリを入れて起動する15秒ほどの間に、ほぼ走り終える。
 	@# 止められたら、どちらのxcodebuildも止めて終わるのを待つ。前で走らせると、シェルはそれが終わるまで止める合図を扱わないので、どちらも後ろで走らせて待つ
 	@# Tools/watch-tests.shが、負荷と、なかなか終わらないSciaCoreのテストのスタックをtest-logs/watch-<時刻>に残す。Xcodeの結果のファイルは古いものから消えるので、落ちた回の分は、負荷の記録と一緒にtest-logs/failed-<時刻>にコピーする。取っている途中のスタックが欠けないよう、止めたあとに終わりを待ってからコピーする。別のMacで走った回は、このフォルダーだけが手元に届く
 	@# 結果のファイルの名前は始めた秒で決まり、同時に始めると重なるので、SciaCoreTestsの分は名前を決めて書く。出力は混ざらないよう、ファイルに書いて落ちたときだけ出す
-	@stamp=$$(date +%Y.%m.%d_%H-%M-%S); mkdir -p $(DERIVED_DATA)/test-logs; core_log=$(DERIVED_DATA)/test-logs/SciaCore-$$stamp.log; \
+	@# SciaCoreTestsの分は、SciaTestsを待ってから待つので、終わった時刻を出力のファイルの更新日時から取って記録する
+	@stamp=$$(date +%Y.%m.%d_%H-%M-%S); mkdir -p $(DERIVED_DATA)/test-logs; core_log=$(DERIVED_DATA)/test-logs/SciaCore-$$stamp.log; started=$$(date +%s); \
 	stop() { kill $$core $$app $$watch 2>/dev/null; wait; echo "SciaCoreTestsとTextKit2LabelTestsの出力は$$core_log"; exit $$1; }; \
 	trap 'stop 129' HUP; trap 'stop 130' INT; trap 'stop 143' TERM; \
 	xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/SciaCore-$$stamp.xcresult" -only-testing:SciaCoreTests -only-testing:TextKit2LabelTests test-without-building > "$$core_log" 2>&1 & core=$$!; \
 	Tools/watch-tests.sh "$$core_log" "$(DERIVED_DATA)/test-logs/watch-$$stamp" '$(SIM)' & watch=$$!; \
 	xcodebuild $(TEST_ARGS) -resultBundlePath "$(DERIVED_DATA)/Logs/Test/Scia-$$stamp.xcresult" -only-testing:SciaTests test-without-building & app=$$!; \
-	wait $$app; app=$$?; wait $$core; core_status=$$?; \
+	wait $$app; app=$$?; Tools/step-time.sh record app-tests $$started $$app; wait $$core; core_status=$$?; Tools/step-time.sh record core-tests-on-sim $$started $$core_status $$(stat -f %m "$$core_log"); \
 	kill $$watch 2>/dev/null; wait $$watch 2>/dev/null; \
 	if [ $$app -ne 0 ] || [ $$core_status -ne 0 ]; then failed=$(DERIVED_DATA)/test-logs/failed-$$stamp; mkdir -p "$$failed"; cp -R "$(DERIVED_DATA)/Logs/Test/SciaCore-$$stamp.xcresult" "$(DERIVED_DATA)/Logs/Test/Scia-$$stamp.xcresult" "$(DERIVED_DATA)/test-logs/watch-$$stamp" "$$failed/" 2>/dev/null; echo "失敗した回のxcresultと実行中の負荷の記録は$${failed}に残しました"; fi; \
 	if [ $$core_status -ne 0 ]; then grep -aE '✘|error:' "$$core_log" | tail -40; echo "SciaCoreTestsかTextKit2LabelTestsが落ちました。出力は$$core_log"; else grep -a 'Test run with' "$$core_log"; fi; \
 	[ $$app -eq 0 ] && [ $$core_status -eq 0 ]
-	Tools/system-ui-check.sh '$(SIM)' $(DERIVED_DATA)
+	Tools/step-time.sh run system-ui Tools/system-ui-check.sh '$(SIM)' $(DERIVED_DATA)
 	@Tools/check-stamp.sh record test "$$(cat $(TEST_TREE))"
 	@Tools/keep-checked-app.sh "$$(cat $(TEST_TREE))" $(DERIVED_DATA)
 endif
@@ -265,13 +266,13 @@ check-test:
 
 check-test-here: generate
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(CHECK_TREE)
-	@$(MAKE) --no-print-directory warnings
+	@Tools/step-time.sh run warnings $(MAKE) --no-print-directory warnings
 	@rm -rf $(CHECK_REST_STATUS) $(TEST_STATUS) $(CHECK_LOGS); \
 	stop() { kill -TERM -- -$$rest -$$tests 2>/dev/null; wait; exit $$1; }; \
 	trap 'stop 129' HUP; trap 'stop 130' INT; trap 'stop 143' TERM; \
 	set -m; \
-	$(MAKE) --no-print-directory -j4 logged-lint $(addprefix logged-,$(CHECK_TESTS)) > $(CHECK_REST_LOG) 2>&1 & rest=$$!; \
-	$(MAKE) --no-print-directory test-here SIM='$(SIM)' & tests=$$!; \
+	Tools/step-time.sh run check-rest $(MAKE) --no-print-directory -j4 logged-lint $(addprefix logged-,$(CHECK_TESTS)) > $(CHECK_REST_LOG) 2>&1 & rest=$$!; \
+	Tools/step-time.sh run test $(MAKE) --no-print-directory test-here SIM='$(SIM)' & tests=$$!; \
 	set +m; \
 	wait $$tests; echo $$? > $(TEST_STATUS); wait $$rest; echo $$? > $(CHECK_REST_STATUS)
 	@if [ "$$(cat $(CHECK_REST_STATUS))" = 0 ]; then Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"; else cat $(CHECK_LOGS)/*.failed 2>/dev/null; echo "make checkのlintかmacOSのテストが落ちました。出力は$(CHECK_REST_LOG)"; fi

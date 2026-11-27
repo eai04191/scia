@@ -62,7 +62,13 @@ on_term() {
 
 mkdir -p ~/scia/logs ~/scia/jobs ~/scia/results ~/scia/apps
 echo "$$" > ~/scia/jobs/"$id".pid
-trap 'rm -rf "$incoming" ~/scia/jobs/"$id".pid' EXIT
+# 段階の時間はTools/step-time.shでSCIA_STEP_LOGのファイルに書き、終わるときに「scia-step」を頭に付けて返す。Tools/test-dispatch.shがSCIA_STEP_LOGへ移す
+# 途中で失敗したり止められたりした回の段階も返すよう、終わるときに出す
+SCIA_STEP_LOG=
+send_steps() {
+    [ -z "$SCIA_STEP_LOG" ] || sed "s/^/scia-step	/" "$SCIA_STEP_LOG" 2>/dev/null
+}
+trap 'send_steps; rm -rf "$incoming" ~/scia/jobs/"$id".pid' EXIT
 trap on_term TERM
 
 refuse_if_not_lent
@@ -73,6 +79,7 @@ if ! take_slot; then
 fi
 echo "組${slot}（${sim}）で走らせます"
 
+transfer_start=$(date +%s)
 work=~/scia/tree-$slot
 mkdir -p "$work" || exit 1
 incoming=$(mktemp -d ~/scia/incoming.XXXXXX) || exit 1
@@ -81,6 +88,9 @@ tar -x -C "$incoming" || exit 1
 rsync -rlcp --delete --exclude-from="$incoming/.gitignore" --exclude=.git "$incoming/" "$work/" || exit 1
 
 cd "$work" || exit 1
+SCIA_STEP_LOG=~/scia/logs/$id.steps
+export SCIA_STEP_LOG
+Tools/step-time.sh record transfer "$transfer_start" 0
 # 手元のビルドと同じapplication-identifierのアプリにするため、手元のDEVELOPMENT_TEAMを、手元と同じくConfig/Local.xcconfigから読ませる。.gitignoreにあるのでtreeには入らない
 if [ -n "$team" ]; then
     echo "DEVELOPMENT_TEAM = $team" > Config/Local.xcconfig
@@ -98,10 +108,13 @@ git -c user.name=runner -c user.email=runner@localhost commit -q --allow-empty -
 
 # SSHのセッションごとにキーチェーンがロックされているので、SciaCoreのKeychainのテストの前に開ける
 limit 15 security unlock-keychain -p '' login.keychain || { echo "error: キーチェーンを開けません"; exit 1; }
+boot_start=$(date +%s)
 limit 150 xcrun simctl bootstatus "$sim" -b > /dev/null || { echo "error: $sim を起動できません"; exit 1; }
+Tools/step-time.sh record sim-boot "$boot_start" 0
 
 log=~/scia/logs/$tree.$target.$id.log
 # ロックのファイル記述子を閉じてから起動する。xcodebuildの常駐プロセスが受け継ぐと、終わってもロックが外れないため
+make_start=$(date +%s)
 set -m
 SCIA_GIT_BRANCH=$branch SCIA_GIT_COMMIT=$commit caffeinate -i make "$target-here" SIM="$sim" > "$log" 2>&1 8>&- &
 job=$!
@@ -118,6 +131,7 @@ while kill -0 "$job" 2>/dev/null; do
 done
 wait "$job"
 result=$?
+Tools/step-time.sh record "$target" "$make_start" "$result"
 limit 40 xcrun simctl shutdown "$sim"
 find ~/scia/logs -type f -mtime +7 -delete
 find ~/scia/results -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} +

@@ -17,6 +17,8 @@
 # 段階ごとにかかった時間は、列のディレクトリのtiming.logに1行ずつ足す。列は「始めた時刻 branch 段階 秒 結果」のタブ区切りで、結果はokか終了コード。
 #   段階は、wait（並んでから番が来るまで）、rebase、check、test、check-test（checkとtestの両方を走らせるとき。枠を待つ時間も含む）、total（並んでから終わるまで）。
 #   mainが動いて載せ直すと、rebaseからの段階がもう一度並ぶ
+#   check、test、check-testは、Tools/step-time.shが記録した中の段階を「check-test/app-tests」のような名前で前に並べ、6列目に走らせた場所（local-1、remote <ホスト>など）を書く。
+#   中の段階には同時に走るものがあるので、足しても外側の段階の秒にはならない
 set -euo pipefail
 
 TARGET=main
@@ -35,17 +37,41 @@ queue_dir() {
 MERGE_QUEUE_BRANCH=${MERGE_QUEUE_BRANCH:-}
 MERGE_QUEUE_QUEUED_AT=${MERGE_QUEUE_QUEUED_AT:-}
 
-# 段階の名前、始めたUNIX時刻、結果（終了コード）を受け取り、timing.logに1行足す
+# 段階の名前、始めたUNIX時刻、結果（終了コード）と、あれば走らせた場所を受け取り、timing.logに1行足す
 log_timing() {
     local result=$3
     [[ "$result" == 0 ]] && result=ok
-    printf '%s\t%s\t%s\t%s\t%s\n' "$(date -r "$2" '+%Y-%m-%dT%H:%M:%S%z')" "$MERGE_QUEUE_BRANCH" "$1" "$(( $(date +%s) - $2 ))" "$result" >> "$(queue_dir)/timing.log"
+    write_timing "$2" "$1" "$(( $(date +%s) - $2 ))" "$result" "${4:-}"
+}
+
+# 始めたUNIX時刻、段階の名前、秒、結果、走らせた場所（空なら書かない）を受け取り、timing.logに1行足す
+write_timing() {
+    printf '%s\t%s\t%s\t%s\t%s%s\n' "$(date -r "$1" '+%Y-%m-%dT%H:%M:%S%z')" "$MERGE_QUEUE_BRANCH" "$2" "$3" "$4" "${5:+$'\t'$5}" >> "$(queue_dir)/timing.log"
+}
+
+# 走らせ終えた子の段階を、Tools/step-time.shが書いた中の段階と一緒に記録する。終了コードを受け取る
+# 別のMacで受け付けられたあとに接続が切れると手元で走らせ直すので、中の段階には直前のplaceの行の場所を、外側の段階には最後の場所を付ける
+log_child() {
+    local place='' start name seconds result
+    if [[ -s "$child_steps" ]]; then
+        while IFS=$'\t' read -r start name seconds result; do
+            if [[ "$start" == place ]]; then
+                place=$name
+            else
+                write_timing "$start" "$child_phase/$name" "$seconds" "$result" "$place"
+            fi
+        done < "$child_steps"
+    fi
+    log_timing "$child_phase" "$child_start" "$1" "$place"
+    rm -f "$child_steps"
 }
 
 # landが走らせている子のプロセス（自分のプロセスグループの長）と、その段階の名前と始めた時刻。止められたときに、子を止めて段階を記録する
 child=''
 child_phase=''
 child_start=''
+# 子の中の段階の時間を、Tools/step-time.shに書かせるファイル
+child_steps=''
 # 子を起動してからPIDを記録するまでの間か。その間に届いた止める合図は、記録してから扱う。記録する前に扱うと、子を止められないため
 starting=''
 pending_signal=''
@@ -58,16 +84,17 @@ timed() {
     child_phase=$1
     shift
     child_start=$(date +%s)
+    child_steps=$(mktemp)
     starting=1
     set -m
-    "$@" &
+    SCIA_STEP_LOG=$child_steps "$@" &
     child=$!
     set +m
     starting=''
     [[ -z "$pending_signal" ]] || on_land_signal "$pending_signal"
     wait "$child" || status=$?
     child=''
-    log_timing "$child_phase" "$child_start" "$status"
+    log_child "$status"
     return "$status"
 }
 
@@ -327,7 +354,7 @@ on_land_signal() {
         while pgrep -g "$child" > /dev/null; do
             sleep 0.2
         done
-        log_timing "$child_phase" "$child_start" "$1"
+        log_child "$1"
     fi
     if [[ -d "$(git rev-parse --git-path rebase-merge)" || -d "$(git rev-parse --git-path rebase-apply)" ]]; then
         git rebase --abort
