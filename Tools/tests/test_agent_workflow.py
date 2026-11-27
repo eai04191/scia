@@ -227,7 +227,7 @@ class CheckLoggedTests(unittest.TestCase):
 
 
 class CheckStampTests(unittest.TestCase):
-    """Markdownだけ違うcommitに、前の結果を引き継ぐかを、実物のcheck-stamp.shと造語の検査で確かめる。"""
+    """Markdownだけ違うcommitに、前の結果を引き継ぐかを、実物のcheck-stamp.shと造語・読点の検査で確かめる。"""
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -237,7 +237,7 @@ class CheckStampTests(unittest.TestCase):
         self.git('config', 'user.name', 'Workflow test')
         self.git('config', 'user.email', 'workflow@example.invalid')
         (self.root / 'Tools').mkdir()
-        for name in ('check-stamp.sh', 'check-coined-words.py'):
+        for name in ('check-stamp.sh', 'check-coined-words.py', 'check-pause-comma.py'):
             shutil.copy2(ROOT / 'Tools' / name, self.root / 'Tools' / name)
         (self.root / 'notes.md').write_text('再読み込みする\n')
         self.git('add', '.')
@@ -264,6 +264,12 @@ class CheckStampTests(unittest.TestCase):
 
     def test_does_not_inherit_when_markdown_adds_a_coined_word(self):
         result = self.missing_after_markdown('読み直してから描き直す\n')  # coined-words: allow
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['make check', 'make test'])
+        self.assertIn('notes.md:1:', result.stderr)
+
+    def test_does_not_inherit_when_markdown_adds_a_pause_comma(self):
+        result = self.missing_after_markdown('成功は、画面の変化で見えないときだけ知らせる\n')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), ['make check', 'make test'])
         self.assertIn('notes.md:1:', result.stderr)

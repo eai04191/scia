@@ -7,7 +7,7 @@ SIM_ARCH ?= $(shell uname -m)
 # 同じDerivedDataを使うDebugのビルドには、すべてコンパイルキャッシュの設定を渡す（Config/Cache.xcconfig）。Tools/system-ui-check.shも同じものを渡す
 CACHE_XCCONFIG := -xcconfig Config/Cache.xcconfig
 
-.PHONY: generate app-info check-app-info lint test-lint test-sim-guard test-what-to-test test-coined-words test-agent-workflow test-core test-memory-cache test-release build-release-strict build warnings test test-here test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-here check-steps check-test check-test-here hooks scheduled-push scheduled-push-uninstall menu-editor clean
+.PHONY: generate app-info check-app-info lint test-lint test-sim-guard test-what-to-test test-coined-words test-pause-comma test-agent-workflow test-core test-memory-cache test-release build-release-strict build warnings test test-here test-on-sim sim-keyboard scenario-build scenario-setup scenario-reset scenario-run archive testflight testflight-external promo readme-screenshots readme-icons update-known-servers check check-here check-steps check-test check-test-here hooks scheduled-push scheduled-push-uninstall menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -27,11 +27,13 @@ check-app-info:
 ## 設定を明示しないと、worktreeでは親のディレクトリにある元のcheckoutの.swiftlint.ymlも重ねて読み、そちらにない規則が外れる
 ## 呼び出しや文字列の補間の形で決まる規則は、構文木で調べるTools/SciaLintで検出する。規則はTools/SciaLint/Sources/SciaLintRules/Rule.swiftのLinter.rulesにある
 ## 書き直した造語は、Tools/check-coined-words.pyで検出する。語と、同じ綴りで別の意味の語は、同じファイルのRULESにある
+## Markdownの文の頭の短い主題のすぐあとの読点（「成功は、」）は、Tools/check-pause-comma.pyで検出する
 lint:
 	swiftlint lint --quiet --config .swiftlint.yml
 	swift run --package-path Tools/SciaLint --quiet scia-lint .
 	python3 Tools/check-device-cutouts.py
 	python3 Tools/check-coined-words.py
+	python3 Tools/check-pause-comma.py
 	@# macOSのbashは、UTF-8のロケールで変数名の直後の非ASCII文字を変数名の続きと読むので、${name}の形で区切る
 	@git ls-files -z -- '*.sh' Makefile Tools/git-hooks | xargs -0 perl -Mutf8 -CSD -ne 'next if /^\s*@?#/; if (/(?<![\\\$$])\$$\$$?[A-Za-z_][A-Za-z0-9_]*[^\x00-\x7F]/) { print "$$ARGV:$$.: error: 変数名を波括弧で区切る: $$_"; $$bad = 1 } close ARGV if eof; END { exit($$bad // 0) }'
 
@@ -50,6 +52,10 @@ test-what-to-test:
 ## 造語の検査（Tools/check-coined-words.py）の、書き直した言い方を見つけ、同じ綴りで別の意味の語を見逃すことのテスト
 test-coined-words:
 	python3 Tools/check-coined-words.py --self-test
+
+## 読点の検査（Tools/check-pause-comma.py）の、間を作るだけの読点を見つけ、残す読点を見逃すことのテスト
+test-pause-comma:
+	python3 Tools/check-pause-comma.py --self-test
 
 ## ClaudeとCodexのsim操作のガード、端末の貸し借り、マージキューを一時リポジトリで検証する
 test-agent-workflow:
@@ -235,7 +241,7 @@ check-here:
 
 ## SciaCoreのテスト、キャッシュのパッケージのテスト、lintの規則のテスト、アプリのビルドは互いを待たないので、並べて走らせる。
 ## 出力が混ざるので、テストは対象ごとのログに書き、全部終わってから、落ちた対象だけ見出しを付けてその出力を出す（Tools/check-logged.sh）
-CHECK_TESTS := test-core test-memory-cache test-lint test-sim-guard test-what-to-test test-coined-words test-agent-workflow check-app-info
+CHECK_TESTS := test-core test-memory-cache test-lint test-sim-guard test-what-to-test test-coined-words test-pause-comma test-agent-workflow check-app-info
 CHECK_LOGS := $(DERIVED_DATA)/check-logs
 check-steps: lint
 	@rm -rf $(CHECK_LOGS)
