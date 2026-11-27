@@ -2,7 +2,7 @@
 # agentがシミュレーターを見るための道具。画像を小さく撮り、画面が止まってから撮り、画面の要素を文字で取り出す。
 # 使い方:
 #   Tools/sim.sh shot '<端末>' [--width <px>] [--crop <x>,<y>,<w>,<h>] [--out <ファイル>] [--full <ファイル>] [--no-settle] [--display <画面>]
-#     画面が止まるまで待ってから撮り、縮小したJPEGのパスを出す。--widthの既定は端末のポイント幅で、画像の1pxがタップの1ptになる。
+#     画面が止まるまで待ってから撮り、縮小したJPEGのパスを出す。端の帯（ステータスバーとホームインジケーター）のほかが一色のコマ（起動中でアプリがまだ描いていない）は止まったとみなさず、上限まで一色なら「何も描かれていない」と出す。--no-settleでは調べない。--widthの既定は端末のポイント幅で、画像の1pxがタップの1ptになる。
 #     --cropはポイントで指定し、切り出した範囲だけを同じ倍率で出す（座標は切り出した左上からになる）。
 #     --fullを付けると、ユーザーに送るための原寸のPNGも残す。
 #     画面が2つある端末（Scia Duo）では主の画面（primary）を撮る。ほかの画面は--displayに`simctl io`が受け付ける名前か番号で渡す。
@@ -114,25 +114,76 @@ capture() {
     xcrun simctl io "$1" screenshot --display="$SHOT_DISPLAY" --type=png "$2" >/dev/null 2>&1 || fail "撮影できない: ${1}（画面: ${SHOT_DISPLAY}）"
 }
 
-# 縮小した画像のハッシュ。時計の数字の変化などの細かい差を無視するため、小さくしてから比べる。
-fingerprint() {
-    local small="$1.small.png"
-    sips -Z 96 "$1" --out "$small" >/dev/null 2>&1
-    md5 -q "$small"
+# 縮小した画像のハッシュと、何も描かれていないかを「<ハッシュ> blank|drawn」で出す。
+# 時計の数字の変化などの細かい差を無視するため、小さくしてから比べる。圧縮のないBMPにすると、標準のPythonで画素を読める。
+# 何も描かれていないとみなすのは、次のどちらか。
+# - 端の帯を外した残りが一色。上下は8%ずつ外し、ステータスバーとホームインジケーターを除く。Scia Duoはステータスバーが右の端に縦に並ぶので、左右は20%ずつ外す。
+# - 画面でいちばん大きい一色の長方形が、端から5%より内側に収まり、画面の15%以上を占める。iPadのウインドウ表示では、空のウィンドウの周りに壁紙が写り、画面全体は一色にならない。
+#   測ったときは、描き終えた画面のいちばん大きい一色の長方形は画面の10%以下か、端に触れていた。空のウィンドウは22%だった。
+#   中身が一色のまま描き終えたウィンドウも、何も描かれていないとみなす。
+inspect_frame() {
+    local small="$1.small.bmp"
+    sips -Z 96 -s format bmp "$1" --out "$small" >/dev/null 2>&1 || return 1
+    /usr/bin/python3 -I -c '
+import hashlib, struct, sys
+data = open(sys.argv[1], "rb").read()
+offset, = struct.unpack_from("<I", data, 10)
+width, height, _, bpp = struct.unpack_from("<iiHH", data, 18)
+size = bpp // 8
+stride = (width * size + 3) // 4 * 4
+rows = abs(height)
+# 高さが正なら下の行から並ぶ。取り違えると上の帯が残り、時計やバッテリーの色が数に入る。
+order = range(rows) if height < 0 else range(rows - 1, -1, -1)
+pixels = [[data[offset + r * stride + x * size: offset + r * stride + (x + 1) * size] for x in range(width)] for r in order]
+
+def single_color_inside_bands():
+    mx, my = round(width * 0.2), round(rows * 0.08)
+    return len({pixel for line in pixels[my:rows - my] for pixel in line[mx:width - mx]}) <= 1
+
+def blank_window():
+    # いちばん大きい一色の長方形を、行ごとのヒストグラムで求める。
+    heights = [0] * width
+    best, bounds = 0, None
+    for y, line in enumerate(pixels):
+        for x in range(width):
+            heights[x] = heights[x] + 1 if y and pixels[y - 1][x] == line[x] else 1
+        x = 0
+        while x < width:
+            end = x
+            while end < width and line[end] == line[x]:
+                end += 1
+            stack = []
+            for i in range(x, end + 1):
+                current = heights[i] if i < end else 0
+                left = i
+                while stack and stack[-1][1] >= current:
+                    left, h = stack.pop()
+                    if h * (i - left) > best:
+                        best, bounds = h * (i - left), (left, y + 1 - h, i, y + 1)
+                stack.append((left, current))
+            x = end
+    x0, y0, x1, y1 = bounds
+    inside = x0 >= width * 0.05 and x1 <= width * 0.95 and y0 >= rows * 0.05 and y1 <= rows * 0.95
+    return inside and best >= width * rows * 0.15
+
+print(hashlib.md5(data).hexdigest(), "blank" if single_color_inside_bands() or blank_window() else "drawn")
+' "$small"
 }
 
-# 続けて撮った2枚が同じになるまで撮り直す。最後に撮ったファイルのパスを残し、止まったかどうかを返す。
+# 続けて撮った2枚が同じになるまで撮り直す。何も描かれていないコマは、同じでも止まったとみなさない。
+# 最後に撮ったファイルのパスを残し、止まったら0、上限まで変わり続けたら1、上限まで何も描かれていなければ2を返す。
 settle() {
-    local sim=$1 out=$2 previous="" current started
+    local sim=$1 out=$2 previous="" current state started
     started=$(date +%s)
     while true; do
         capture "$sim" "$out"
-        current=$(fingerprint "$out")
-        if [ "$current" = "$previous" ]; then
+        read -r current state <<<"$(inspect_frame "$out")"
+        [ -n "$state" ] || fail "撮ったコマを調べられない: $out"
+        if [ "$current" = "$previous" ] && [ "$state" = drawn ]; then
             return 0
         fi
         if [ $(( $(date +%s) - started )) -ge "$SETTLE_TIMEOUT" ]; then
-            return 1
+            [ "$state" = drawn ] && return 1 || return 2
         fi
         previous=$current
     done
@@ -159,7 +210,12 @@ command_shot() {
     raw="$dir/raw.png"
     started=$(/usr/bin/python3 -I -c 'import time; print(time.time())')
     if [ $do_settle = 1 ]; then
-        settle "$sim" "$raw" || stable="止まっていない（${SETTLE_TIMEOUT}秒で諦めた）"
+        local status=0
+        settle "$sim" "$raw" || status=$?
+        case $status in
+            1) stable="止まっていない（${SETTLE_TIMEOUT}秒で諦めた）" ;;
+            2) stable="何も描かれていない（${SETTLE_TIMEOUT}秒で諦めた）" ;;
+        esac
     else
         capture "$sim" "$raw"
         stable="待っていない"
