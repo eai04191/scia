@@ -111,7 +111,7 @@ public final class SearchModel {
         render(arrived: true)
     }
 
-    /// 結果のリストを引っぱって離したときに、同じ語でもう一度探す。読めるまでは、前の結果を残す。
+    /// 結果のリストでpull to refreshしたときに、同じ語でもう一度探す。読めるまでは、前の結果を残す。
     public func refresh() async {
         guard !isStopped else { return }
         logger.info("refresh")

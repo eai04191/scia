@@ -22,7 +22,7 @@ struct AccountScopedDefaultsTests {
         return (try #require(UserDefaults(suiteName: suite)), suite)
     }
 
-    /// ログアウトしたら、そのアカウントのために覚えた値（最近のメンション、タブの並び、最後に開いたタブ、覚えたサーバーのアニメーションの設定）を全部消す。
+    /// ログアウトしたら、そのアカウントのために保存した値（最近のメンション、タブの並び、最後に開いたタブ、保存したサーバーのアニメーションの設定）を全部消す。
     /// サーバーごとの値（最近使った絵文字、処理できない形式）は、同じサーバーのアカウントが残っている間は残し、いなくなったら消す。
     /// ホスト名にも「.」が入るため、名前が前に一致する別のサーバーのアカウントとサーバーの値を巻き込まない。
     @Test func keepsDataOfServerWhoseNameStartsTheSame() throws {

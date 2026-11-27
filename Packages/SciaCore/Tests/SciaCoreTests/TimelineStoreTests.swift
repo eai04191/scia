@@ -240,7 +240,7 @@ struct TimelineStoreTests {
         #expect(thirdResult == .pendingStarted)
     }
 
-    /// 一番上の投稿より古いIDの投稿が遅れて届いても、読み終えた行の間に入れず、届いた順に一番上へ積む。
+    /// 一番上の投稿より古いIDの投稿が遅れて届いても、読み終えた行の間に入れず、届いた順に一番上へ挿入する。
     @Test func flushStacksArrivalsInArrivalOrderAndDropsDuplicates() async throws {
         let store = try await loadedStore([30, 28])
 
@@ -259,7 +259,7 @@ struct TimelineStoreTests {
         let flushed = try await store.expectChanges(during: { store in store.flushPending().map(\.id) }) {
             $0.pending = []
             $0.entries.insert(contentsOf: [.status(try status(29)), .status(try status(31))], at: 0)
-            // 29は、そのとき一番上だった31の上に積む。
+            // 29は、そのとき一番上だった31の上に挿入する。
             $0.lateArrivalSequence = 1
             $0.lateArrivalPositions["29"] = TimelineStore.DisplayPosition(anchorID: "31", sequence: 1)
         }
@@ -269,7 +269,7 @@ struct TimelineStoreTests {
             _ = store.receive(.update(try status(32)))
             _ = store.flushPending()
         }) {
-            // 32は一番上の31より新しいので、積まずにIDの位置に入り、一番上になる。
+            // 32は一番上の31より新しいので、挿入せずにIDの位置に入り、一番上になる。
             $0.entries.insert(.status(try status(32)), at: 0)
         }
         #expect(store.statuses.map(\.id) == ["32", "29", "31", "30", "28"])
@@ -311,7 +311,7 @@ struct TimelineStoreTests {
         }
         let endedFlushed = try await ended.expectChanges(during: { ended in ended.flushPending().map(\.id) }) {
             $0.pending = []
-            // 一番上の30より古いので、遅れて届いた投稿として一番上に積む。末尾には足さない。
+            // 一番上の30より古いので、遅れて届いた投稿として一番上に挿入する。末尾には足さない。
             $0.entries.insert(.status(old), at: 0)
             $0.lateArrivalSequence = 1
             $0.lateArrivalPositions["10"] = TimelineStore.DisplayPosition(anchorID: "30", sequence: 1)
@@ -343,7 +343,7 @@ struct TimelineStoreTests {
         }
         #expect(deleted == .entriesChanged)
         let unknown = try await store.expectChanges(during: { store in store.receive(.delete(statusID: "999")) }) {
-            // 表示に関わる変化はなくても、あとから届いたときに足さないよう覚える。
+            // 表示に関わる変化はなくても、あとから届いたときに足さないよう記録する。
             $0.deletedIDs.insert("999")
         }
         #expect(unknown == .none)
@@ -622,7 +622,7 @@ struct TimelineStoreTests {
         #expect(store.unreadCount == 0)
     }
 
-    /// 遅れて届いて一番上に積んだ投稿は、IDが既読の位置より古くても未読に数える。サーバーに保存する既読位置は戻さない。
+    /// 遅れて届いて一番上に挿入した投稿は、IDが既読の位置より古くても未読に数える。サーバーに保存する既読位置は戻さない。
     @Test func lateArrivalOnTopCountsAsUnread() async throws {
         let store = try await loadedStore([30, 28])
         try await store.expectChanges(during: { store in store.markRead(["30"]) }) {
@@ -646,13 +646,13 @@ struct TimelineStoreTests {
         try await store.expectChanges(during: { store in
             #expect(store.markRead(["29"]), "IDが既読より古くても、上に積んだ投稿を見れば既読の位置は進みます")
         }) {
-            // サーバーに保存するIDは戻さず、位置だけ積んだ投稿まで進める。
+            // サーバーに保存するIDは戻さず、位置だけ挿入した投稿まで進める。
             $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "30", sequence: 1)
         }
         #expect(store.unreadCount == 0)
     }
 
-    /// 積んだときの一番上の投稿が消えても、次に遅れて届いた投稿は、積んである投稿よりさらに上に積む。
+    /// 挿入したときの一番上の投稿が消えても、次に遅れて届いた投稿は、挿入してある投稿よりさらに上に挿入する。
     @Test func lateArrivalStaysOnTopAfterAnchorIsDeleted() async throws {
         let store = try await loadedStore([30, 20])
         try await store.expectChanges(during: { store in
@@ -672,7 +672,7 @@ struct TimelineStoreTests {
         }
         try await store.expectChanges(during: { store in store.receive(.delete(statusID: "30")) }) {
             $0.deletedIDs = ["30"]
-            // 積んだ投稿の位置は、基準の30が消えても30のまま持つ。
+            // 挿入した投稿の位置は、基準の30が消えても30のまま持つ。
             $0.entries.remove(at: 1)
         }
 
@@ -689,7 +689,7 @@ struct TimelineStoreTests {
         #expect(store.unreadCount == 1)
     }
 
-    /// サーバーの既読位置はIDで取り込む。同じIDの投稿が遅れて届いて一番上に積んであっても、その下の投稿まで既読にしない。
+    /// サーバーの既読位置はIDで取り込む。同じIDの投稿が遅れて届いて一番上に挿入してあっても、その下の投稿まで既読にしない。
     @Test func savedMarkerMatchingLateArrivalDoesNotReadStatusesBelowIt() async throws {
         let store = try await loadedStore([30, 20])
         try await store.expectChanges(during: { store in store.applySavedMarker("20") }) {

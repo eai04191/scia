@@ -46,7 +46,7 @@ struct LinkLabelTests {
         #expect(label.link(at: try center(of: "見て", in: label)) == nil)
     }
 
-    /// 🅰のようにサロゲートペアで書く絵文字や、`U+FE0F`の付いた絵文字だけのリンクも、絵文字の上で押せる。
+    /// 🅰のようにサロゲートペアで書く絵文字や、`U+FE0F`の付いた絵文字だけのリンクも、絵文字の上で選択できる。
     @Test func findsLinkUnderEmoji() throws {
         let url = try #require(URL(string: "https://example.social/tags/ab"))
         let text = RichText(blocks: [
@@ -58,7 +58,7 @@ struct LinkLabelTests {
         #expect(label.link(at: try center(of: "🅱️", in: label)) == .hashtag(name: "🅰️🅱️", url: url))
     }
 
-    /// 行数を限って末尾を「…」で切る本文でも、2行目より後のリンクを、UILabelが描いた位置で押せる。ここでは「…」で切られる3行目のリンクを押す。
+    /// 行数を限って末尾を「…」で切る本文でも、2行目より後のリンクを、UILabelが描いた位置で選択できる。ここでは「…」で切られる3行目のリンクを選択する。
     /// UILabelは折り返してから最後の行だけを切るが、TextKit 2は「…」で切る段落を1行に並べるため、折り返して並べ直す。
     @Test func findsLinkInTruncatedParagraph() throws {
         let url = try #require(URL(string: "https://example.com/a"))
@@ -88,7 +88,7 @@ struct LinkLabelTests {
         #expect(truncated.link(at: point) == .url(url))
     }
 
-    /// 「…」で切った最後の行で、「…」に置き換わって描かれていないリンクは、押しても当たりにしない。
+    /// 「…」で切った最後の行で、「…」に置き換わって描かれていないリンクは、選択しても当たりにしない。
     @Test func ignoresLinkReplacedByEllipsis() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         // 区切りのない長い英字は文字ごとに折り返すので、3行目の行末まで文字が詰まる。
@@ -117,7 +117,7 @@ struct LinkLabelTests {
         #expect(truncated.link(at: CGPoint(x: 20, y: lineY)) == .url(url), "「…」より前のリンクは押せる")
     }
 
-    /// 最後の行に入りきらない単語のリンクも、UILabelは「…」の前まで途中を描くので、見えている部分を押せる。
+    /// 最後の行に入りきらない単語のリンクも、UILabelは「…」の前まで途中を描くので、見えている部分を選択できる。
     /// 段落を折り返しにして並べ直すと、単語ごと次の行に送られて、見えている部分が並ばない。
     @Test func findsPartlyShownLinkOnLastLine() throws {
         let url = try #require(URL(string: "https://example.com/a"))
@@ -134,7 +134,7 @@ struct LinkLabelTests {
         #expect(truncated.link(at: CGPoint(x: prefixWidth + 15, y: truncated.bounds.height - 8)) == .url(url))
     }
 
-    /// 右から左に書く文字を含む段落でも、「…」で切った最後の行の、見えているリンクは押せる。
+    /// 右から左に書く文字を含む段落でも、「…」で切った最後の行の、見えているリンクは選択できる。
     @Test func findsLinkOnLastLineOfParagraphWithRightToLeftText() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let text = RichText(blocks: [
@@ -164,7 +164,7 @@ struct LinkLabelTests {
         return label
     }
 
-    /// 行末より右を押しても、近くのリンクを押したことにしない。
+    /// 行末より右を選択しても、近くのリンクを選択したことにしない。
     @Test func ignoresPointPastLineEnd() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let text = RichText(blocks: [.init(inlines: [.text("見て ", []), .link("example.com/a", .url(url), [])])])
@@ -174,8 +174,8 @@ struct LinkLabelTests {
         #expect(label.link(at: CGPoint(x: label.bounds.maxX - 1, y: link.y)) == nil)
     }
 
-    /// MacのDesigned for iPadでは、アクティブでないウィンドウへの最初のクリックを、押された場所のビューが`UIControl`のときだけ通す。
-    /// リンクの上では`UIControl`に当たり、リンクの外ではラベルに当たらず、後ろのビュー（セルや、Xの投稿の囲みのボタン）へ渡ることを確かめる。
+    /// MacのDesigned for iPadでは、アクティブでないウィンドウへの最初のクリックを、クリックされた場所のビューが`UIControl`のときだけ通す。
+    /// リンクの上では`UIControl`に当たり、リンクの外ではラベルに当たらず、後ろのビュー（セルや、Xの投稿のカードのボタン）へ渡ることを確かめる。
     @Test func hitsControlOnlyOverLink() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let text = RichText(blocks: [.init(inlines: [.text("見て ", []), .link("example.com/a", .url(url), [])])])
@@ -207,7 +207,7 @@ struct LinkLabelTests {
         #expect(label.link(at: wrapped) == .url(url))
     }
 
-    /// リンクを押して少し止めてから引いても、タイムラインと編集履歴はスクロールに切り替える。
+    /// リンクに指を置いて少し止めてから動かしても、タイムラインと編集履歴はスクロールに切り替える。
     @Test func scrollViewsCancelLinkTouches() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let label = label(for: RichText(blocks: [.init(inlines: [.text("見て ", []), .link("example.com/a", .url(url), [])])]))
@@ -224,7 +224,7 @@ struct LinkLabelTests {
         return settings
     }
 
-    /// 本文のリンクのメニューの、見出しと項目の名前。区切り線のまとまりは`|`で、サブメニューは`名前[中身]`で表す。
+    /// 本文のリンクのメニューの、見出しと項目の名前。区切り線で分けたグループは`|`で、サブメニューは`名前[中身]`で表す。
     private func menuOutline(of destination: RichText.LinkDestination, settings: AppSettings, hashtagAccount: Account? = nil) throws -> String? {
         let label = label(for: RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
         label.traitOverrides.appSettings = settings
@@ -283,7 +283,7 @@ struct LinkLabelTests {
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: リンクをコピー|その他[カスタマイズ]")
     }
 
-    /// アプリ内のSafariはhttpとhttps以外のURLを開けず、サーバーもそのURLをプロフィールとして探さないため、そのリンクでは2つを押せない。ほかの開く項目は押せる。
+    /// アプリ内のSafariはhttpとhttps以外のURLを開けず、サーバーもそのURLをプロフィールとして探さないため、そのリンクでは2つを無効にする。ほかの開く項目は有効にする。
     @Test func appSafariAndOpenAsProfileAreDisabledForNonWebLinks() throws {
         let magnet = try #require(URL(string: "magnet:?xt=urn:btih:0"))
         let web = try #require(URL(string: "https://example.com/a"))
@@ -320,7 +320,7 @@ struct LinkLabelTests {
         #expect(URLMenuAction.openInAppSafari.browser(for: magnet, following: .inApp) == nil)
     }
 
-    /// リンクのメニューは、コントロールに組み込まれたメニューではなく、別に付けたコンテキストメニューで出す。組み込まれたメニューでは触覚フィードバックが出ないため。
+    /// リンクのメニューは、コントロールに組み込まれたメニューではなく、別に付けたコンテキストメニューで出す。組み込まれたメニューではハプティクスが出ないため。
     @Test func longPressMenuUsesSeparateInteraction() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let label = label(for: RichText(blocks: [.init(inlines: [.text("見て ", []), .link("example.com/a", .url(url), [])])]))
@@ -345,7 +345,7 @@ struct LinkLabelTests {
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == nil)
     }
 
-    /// 長押しで持ち上げるリンクの下地は、文字が載っている面の色にする。下地が既定のままだと、明るいカードの黒い文字がダークモードの黒い面に載って読めない。
+    /// 長押しで持ち上げるリンクの下地は、文字が載っている背景の色にする。下地が既定のままだと、明るいカードの黒い文字がダークモードの黒い背景に載って読めない。
     @Test func linkPreviewBackdropIsNearestOpaqueBackground() {
         let card = UIView()
         card.backgroundColor = .systemYellow

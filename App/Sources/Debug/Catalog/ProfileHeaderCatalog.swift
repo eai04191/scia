@@ -407,7 +407,7 @@ enum ProfileHeaderCatalog {
             content = content.replacing(followState: nextFollowState(after: content.followState, locked: account.locked))
             header?.apply(content)
         }
-        // 再試行を選択したら読み込み直す途中にし、少し待って読めたことにする。
+        // 再試行を選択したら再読み込みの途中にし、少し待って読めたことにする。
         header.onRetryRelationship = { [weak header] in
             content = content.replacing(isReloadingRelationship: true)
             header?.apply(content)

@@ -75,7 +75,7 @@ public struct FilterWarning: Sendable, Equatable {
 /// タイムラインで、フィルターの警告で折りたたんだ投稿のうち、開いたもの。
 ///
 /// 注意書き（CW）と同じく開閉できる。公式のWebクライアントと同じ。
-/// 開いたかは元の投稿のIDで覚え、同じ投稿のブーストの行もそろえる。覚えるのはアプリを起動している間だけ。
+/// 開いたかは元の投稿のIDで保持し、同じ投稿のブーストの行もそろえる。保持するのはアプリを起動している間だけ。
 public struct FilterWarnings: Sendable, Equatable {
     /// このタイムラインで当てるフィルター。nilなら当てない。
     public var filtering: StatusFiltering?

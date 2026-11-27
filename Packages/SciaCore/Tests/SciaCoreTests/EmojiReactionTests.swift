@@ -200,7 +200,7 @@ struct EmojiReactionTests {
         #expect(update.accountIDs == ["5", "6"])
     }
 
-    /// デバッグのダミーのサーバーと同じく、APIの形（snake_case）に書き出しても、読み直せる。
+    /// デバッグのダミーのサーバーと同じく、APIの形（snake_case）に書き出しても、また読める。
     @Test func roundTripsThroughEncoding() throws {
         let original = status([EmojiReaction(emoji: remoteCat, count: 2, me: true)])
         let encoder = JSONEncoder()

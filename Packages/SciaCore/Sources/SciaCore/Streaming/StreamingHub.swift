@@ -80,7 +80,7 @@ public final class StreamingHub {
     /// 受け取った側は`connected`で補完を始めるので、先に新着をタイムラインに入れると補完の基準が進み、その手前を読み飛ばすため。
     /// 待っている間に切れても捨てず、再接続した`connected`の後に渡す。削除や編集は、補完では再読み込みできないため。
     private var heldEvents: [Int: [StreamingEvent]] = [:]
-    /// 購読と解除を、申し込みの順に1つずつ送る。テストで、積んだ送信が終わるまで待つ。
+    /// 購読と解除を、申し込みの順に1つずつ送る。テストで、キューに入れた送信が終わるまで待つ。
     private(set) var sending: Task<Void, Never>?
     /// 送り終えてから`connected`を届けるTaskの、最後に始めたもの。テストで、届けるか捨てるかが決まるまで待つ。
     private(set) var lastConnectedReportAfterSending: Task<Void, Never>?
@@ -232,7 +232,7 @@ public final class StreamingHub {
         runTask.cancel()
         self.runTask = nil
         connection = nil
-        // 積んだ送信と、送り終えてから知らせる待ちも止める。前の接続へ送り続けないため。
+        // キューに入れた送信と、送り終えてから`connected`を届ける待ちも止める。前の接続へ送り続けないため。
         initialSubscribing?.cancel()
         initialSubscribing = nil
         sending?.cancel()
@@ -267,7 +267,7 @@ public final class StreamingHub {
         let previous = sending
         let logger = logger
         sending = Task {
-            // 止めたら、積んである前の送信もまとめて止める。
+            // 止めたら、キューにある前の送信もまとめて止める。
             await withTaskCancellationHandler {
                 await previous?.value
             } onCancel: {
@@ -283,7 +283,7 @@ public final class StreamingHub {
         }
     }
 
-    /// 今までに積んだ送信が終わってから、まだ同じ接続で申し込んでいる相手に`connected`を届ける。
+    /// 今までにキューに入れた送信が終わってから、まだ同じ接続で申し込んでいる相手に`connected`を届ける。
     /// その前に切れたら届けない。再接続したときに、全員へ届くため。
     private func reportConnectedAfterSending(to id: Int) {
         let sent = sending

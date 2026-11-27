@@ -32,7 +32,7 @@ public final class ScheduledStatusesModel {
 
     /// 結果を伝えるタイムラインの画面。
     public weak var display: (any ScheduledStatusesDisplay)?
-    /// 日時の変更や取り消しに失敗したときに呼ぶ。知らせ方は作る側が決める。
+    /// 日時の変更や取り消しに失敗したときに呼ぶ。失敗の出し方は作る側が決める。
     public var onFailure: (Operation, ErrorPresentation) -> Void = { _, _ in }
     /// 並べている予約。
     public private(set) var statuses: [ScheduledStatus] = []

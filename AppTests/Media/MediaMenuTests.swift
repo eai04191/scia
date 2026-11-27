@@ -3,7 +3,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// メディアのメニューから始めた共有と、持ち上げた画像の読み直しを確かめる。メニューの組み方は、SciaCoreの`MediaMenuTreeTests`で確かめる。
+/// メディアのメニューから始めた共有と、持ち上げた画像の再読み込みを確かめる。メニューの組み方は、SciaCoreの`MediaMenuTreeTests`で確かめる。
 @MainActor
 @Suite(.failureState)
 struct MediaMenuTests {
@@ -58,7 +58,7 @@ struct MediaMenuTests {
         #expect(content.anchor === thumbnail)
     }
 
-    /// 持ち上げた画像の読み直しは、画面に収まる大きさに合わせ、ビューアと同じ上限を超えない。
+    /// 持ち上げた画像の再読み込みは、画面に収まる大きさに合わせ、ビューアと同じ上限を超えない。
     @Test func sharperImageFitsScreenAndViewerLimit() {
         let screen = CGSize(width: 390, height: 844)
         // 縦横比1:20の画像は、画面の幅のまま縦に長い大きさを渡すが、読むのは画面の高さに収まる大きさまで。

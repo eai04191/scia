@@ -238,7 +238,7 @@ final class EditHistoryViewController: UIViewController {
     }
 }
 
-/// 編集履歴の版を並べるスクロールビュー。本文のリンクを押下して少し止めてから引いても、スクロールできるようにする。
+/// 編集履歴の版を並べるスクロールビュー。本文のリンクに触れて少し止めてから引いても、スクロールできるようにする。
 final class EditHistoryScrollView: UIScrollView {
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is LinkHitArea || super.touchesShouldCancel(in: view)

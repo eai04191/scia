@@ -43,7 +43,7 @@ struct ProfileHeaderFollowRevealTests {
         )
     }
 
-    /// ヘッダーを窓に置く。返した窓は、テストの終わりに`close`で外す。
+    /// ヘッダーをウィンドウに置く。返したウィンドウは、テストの終わりに`close`で外す。
     private func placeHeader(width: CGFloat = 393) throws -> (ProfileHeaderView, UIWindow) {
         let header = ProfileHeaderView(
             emojiImages: .offline,
@@ -72,7 +72,7 @@ struct ProfileHeaderFollowRevealTests {
         window.rootViewController = nil
     }
 
-    /// 補足情報の行は描き直すたびに作り直す。関係が届いたときのクロスフェードの中で並べると、作ったばかりの行が大きさ0から伸び、
+    /// 補足情報の行は再描画するたびに作り直す。関係が届いたときのクロスフェードの中で並べると、作ったばかりの行が大きさ0から伸び、
     /// 中の文字が空になったり縦に潰れたりして見えていた。補足情報の行は、クロスフェードより前に並べ終え、動かさない。
     @Test func fieldRowsDoNotAnimateWhenRelationshipArrives() throws {
         let (header, window) = try placeHeader()

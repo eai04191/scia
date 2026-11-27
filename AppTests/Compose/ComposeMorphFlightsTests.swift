@@ -69,7 +69,7 @@ struct ComposeMorphFlightsTests {
         // 載せた影は、動き始めに薄くし始める。
         #expect(shadow.alpha == 0)
     }
-    /// 列のサムネイルへ向かう複製は、サムネイルに重ねている表示（バッジなど）を載せ、近づくにつれて濃くする。
+    /// 列のサムネイルへ向かう複製は、サムネイルに重ねている表示（バッジなど）を載せ、近づくにつれて不透明度を上げる。
     /// 載せないと、列に着いて本物に替わったコマで、バッジが1コマで付く。
     @Test func landingOnStripFadesInBadge() throws {
         let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
@@ -116,10 +116,10 @@ struct ComposeMorphFlightsTests {
         #expect((fade.fromValue as? Float) == 1)
     }
 
-    /// カプセルの写真へ向かう複製は、写真の右下の失敗のアイコンを載せ、近づくにつれて濃くする。本物に替えたあとで浮かび上がらせると、
+    /// カプセルの写真へ向かう複製は、写真の右下の失敗のアイコンを載せ、近づくにつれて不透明度を上げる。本物に替えたあとでフェードインさせると、
     /// 開閉の完了は動きが止まって見えてからしばらく後なので、写真が止まってからアイコンが遅れて出る。
     @Test func landingOnCapsuleFadesInFailureMarkOnCopy() throws {
-        // 本物の像を撮るので、ウィンドウに載せる。
+        // 本物のスナップショットを撮るので、ウィンドウに載せる。
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
@@ -134,7 +134,7 @@ struct ComposeMorphFlightsTests {
         target.addSubview(mark)
         container.addSubview(source)
         container.addSubview(target)
-        // 像は描いたことのあるビューからしか撮れない。
+        // スナップショットは描いたことのあるビューからしか撮れない。
         CATransaction.flush()
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.attachment(UUID())
@@ -163,8 +163,8 @@ struct ComposeMorphFlightsTests {
         #expect(mark.layer.animation(forKey: "opacity") == nil, "本物に替えてから、失敗のアイコンを浮かび上がらせています")
     }
 
-    /// 描く前に行き先を測り直し、そのまま逆へ向かうとき、行き先の失敗のアイコンの像は、まだ見せていない濃さに戻る。
-    /// 測り直しで撮り直した像を戻さないと、見せ始める前のアイコンが濃いまま起点へ向かう。
+    /// 描く前に行き先を測り直し、そのまま逆へ向かうとき、行き先の失敗のアイコンのスナップショットは、まだ見せていない不透明度に戻る。
+    /// 測り直しで撮り直したスナップショットを戻さないと、見せ始める前のアイコンが濃いまま起点へ向かう。
     @Test func reversingBeforeFirstDrawKeepsTargetMarkHidden() throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -180,7 +180,7 @@ struct ComposeMorphFlightsTests {
         target.addSubview(mark)
         container.addSubview(source)
         container.addSubview(target)
-        // 像は描いたことのあるビューからしか撮れない。
+        // スナップショットは描いたことのあるビューからしか撮れない。
         CATransaction.flush()
         let flights = ComposeMorphFlights(container: container)
         let key = ComposeMorphFlights.Key.attachment(UUID())

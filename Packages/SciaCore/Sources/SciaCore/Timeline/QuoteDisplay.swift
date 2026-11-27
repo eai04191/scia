@@ -87,7 +87,7 @@ public enum NestedQuote: Equatable, Sendable {
 }
 
 /// タイムラインで、ブロックかミュートしている人の引用元のうち、選択して開いたもの。
-/// 引用した投稿のIDで覚え、同じ投稿のブーストや通知の行もそろえる。覚えるのはアプリを起動している間だけ。
+/// 引用した投稿のIDで保持し、同じ投稿のブーストや通知の行もそろえる。保持するのはアプリを起動している間だけ。
 public struct QuoteReveals: Sendable, Equatable {
     private var revealed: Set<Status.ID> = []
 
@@ -105,13 +105,13 @@ public struct QuoteReveals: Sendable, Equatable {
 
 /// 引用元の、受け取ったあとの変化。編集と削除のイベント、読み込んだあとのミュートとブロックを、どのタイムラインのカードにも当てるためにセッションで1つ持つ。
 /// タイムラインが持つ投稿の中の引用元は書き換えず、カードを出すときに当てる。ミュートやブロックを解除したときに、元の引用元に戻せるようにするため。
-/// 覚えるのはアプリを起動している間だけ。
+/// 保持するのはアプリを起動している間だけ。
 public struct QuoteSourceChanges: Sendable, Equatable {
-    /// 編集のイベントで届いた投稿。どの投稿が引用されているかはイベントからは分からないため、届いた編集をすべて覚える。編集のイベントは少ないので、捨てない。
+    /// 編集のイベントで届いた投稿。どの投稿が引用されているかはイベントからは分からないため、届いた編集をすべて保持する。編集のイベントは少ないので、捨てない。
     private var edited: [Status.ID: Status] = [:]
     private var deletedIDs: Set<Status.ID> = []
     /// 読み込んだあとにミュートかブロックしたアカウントと、その引用元を隠す`state`。nilは、どちらも解除したこと。
-    /// 解除も覚えるのは、ミュートやブロックをしている間に読んだ引用は、サーバーが`state`を`muted_account`などにして返すため。
+    /// 解除も保持するのは、ミュートやブロックをしている間に読んだ引用は、サーバーが`state`を`muted_account`などにして返すため。
     private var accountStates: [String: Quote.State?] = [:]
 
     public init() {}

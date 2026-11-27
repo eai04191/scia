@@ -130,7 +130,7 @@ public enum SettingsTexts {
         public static let notInPreset = "プリセットに含まれず、どのプリセットでも共通です。"
         /// プリセットに含めない設定の情報ボタンの読み上げ。
         public static let notInPresetInfo = "プリセットに含まれない設定"
-        /// 組み込みのプリセットに添える鍵のアイコンの読み上げ。
+        /// 組み込みのプリセットに添えるロックのアイコンの読み上げ。
         public static let builtIn = "組み込み"
         /// 「標準」の画面の説明。
         public static let standardFooter = "アプリのデフォルトの値をそのまま使います。"
@@ -426,7 +426,7 @@ public enum SettingsTexts {
             return "\(format)の画像を送る"
         }
 
-        /// サーバーが処理できない画像の形式の行の値。どの版のサーバーで覚えたかを添える。
+        /// サーバーが処理できない画像の形式の行の値。どの版のサーバーで記録したかを添える。
         public static func unprocessableFormatValue(serverVersion: String) -> String {
             "JPEGで送っています・\(serverVersion.isEmpty ? "版が不明" : serverVersion)"
         }

@@ -5,7 +5,7 @@ import TextKit2Label
 import UIKit
 @testable import Scia
 
-/// 引用の囲みの本文の並べ方。投稿の本文と同じくTextKit 2で描き、大きくした絵文字の行を絵の高さにする。
+/// 引用のカードの本文の並べ方。投稿の本文と同じくTextKit 2で描き、大きくした絵文字の行を絵の高さにする。
 @Suite(.scratch, .failureState)
 @MainActor
 struct EmbeddedPostTextTests {
@@ -38,7 +38,7 @@ struct EmbeddedPostTextTests {
         return view
     }
 
-    /// 本文が訳文に替わって高さが変わるとき、本文より下の部品と囲みの下端は、一度に移らず、前の位置から動く。
+    /// 本文が訳文に替わって高さが変わるとき、本文より下の部品とカードの下端は、一度に移らず、前の位置から動く。
     @Test func partsBelowTextMoveWhenTranslationChangesHeight() throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -63,7 +63,7 @@ struct EmbeddedPostTextTests {
         #expect(view.subviews.map { shiftCount(of: $0.layer) }.max() == 2)
         #expect(shiftCount(of: view.layer) == 4)
 
-        // 使い回されて別の囲みに替わったら、前の囲みの動きを残さない。
+        // 使い回されて別のカードに替わったら、前のカードの動きを残さない。
         var other = translating("other", isTranslated: false)
         other.id = "quote-2"
         view.apply(other)
@@ -100,7 +100,7 @@ struct EmbeddedPostTextTests {
         #expect(abs(unicodeHeight - customHeight) < 1, "\(unicodeHeight) \(customHeight)")
     }
 
-    /// 本文の右に出すサムネイルの上端は、本文の1行目の字面の上端にそろえる。字面の上端は、囲みの上端から内側の余白だけ下に置く。
+    /// 本文の右に出すサムネイルの上端は、本文の1行目の字面の上端にそろえる。字面の上端は、カードの上端から内側の余白だけ下に置く。
     @Test func besideMediaTopAlignsWithFirstLine() throws {
         let attachment = MediaAttachment(
             id: "1",

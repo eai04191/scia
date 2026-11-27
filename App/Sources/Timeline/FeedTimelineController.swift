@@ -20,7 +20,7 @@ final class FeedTimelineController {
     var runningTaskCount: Int { model.runningTaskCount }
     /// タイムラインのストリームを購読している。
     var isSubscribedToStreaming: Bool { model.isSubscribedToStreaming }
-    /// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態。
+    /// タイムラインを最上部からさらにオーバースクロールしたときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
     #if DEBUG
     /// ダミー投稿の「ステータスバーの通知」が選ばれたとき。通知はホームのタイムラインではなく、ステータスバーに流す。
@@ -93,7 +93,7 @@ final class FeedTimelineController {
     }
 
     #if DEBUG
-    /// 始めているタイムラインだけ読み込み直す。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
+    /// 始めているタイムラインだけ再読み込みする。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
     func reloadIfStarted() {
         model.reloadIfStarted()
     }
@@ -125,7 +125,7 @@ final class FeedTimelineController {
         model.enterForeground()
     }
 
-    /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。
+    /// ストリーミングの接続の状態を、オーバースクロールしたときに見せる表示へ伝える。
     func showStreamingState(_ state: ConnectionDiagnostics.StreamingState?) {
         model.showStreamingState(state)
     }

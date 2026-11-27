@@ -8,7 +8,7 @@ import UIKit
 @MainActor
 @Suite(.scratch, .serialized, .failureState)
 struct PostSwipeButtonTests {
-    /// 投稿のメニューが空になる投稿では、押しても何も起きないので「メニュー」のボタンを出さない。
+    /// 投稿のメニューが空になる投稿では、選択しても何も起きないので「メニュー」のボタンを出さない。
     @Test func menuButtonIsHiddenWhenMenuIsEmpty() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -26,7 +26,7 @@ struct PostSwipeButtonTests {
         #expect(configuration.actions.map(\.title) == ["返信"])
     }
 
-    /// 投稿と同じ見た目で出す通知にも、投稿のスワイプを出し、通知でだけ出る項目も押せる。再掲する通知には出さない。
+    /// 投稿と同じ見た目で出す通知にも、投稿のスワイプを出し、通知でだけ出る項目も選択できる。再掲する通知には出さない。
     @Test func notificationsLookingLikePostsAreSwipedAsPosts() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

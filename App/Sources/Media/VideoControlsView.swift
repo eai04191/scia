@@ -138,7 +138,7 @@ final class VideoControlsView: UIView {
     }
 
     /// 10秒戻ったか進んだことを、矢印を`duration`秒で1回転させて知らせる。ボタンを選択したときも、ダブルタップしたときも呼ぶ。
-    /// 部品を出しているときは、そのボタンの矢印を回す。ボタンは押下されたようには動かさない。指で押下したときの反応は、ボタン自身に任せる。
+    /// 部品を出しているときは、そのボタンの矢印を回す。ボタンは押されている状態のようには動かさない。指で触れたときの反応は、ボタン自身に任せる。
     /// 部品を隠しているときは、ほかの部品は出さず、同じ場所に10秒のボタンと同じ形の表示を`duration`秒だけ出して矢印を回す。
     func showSkipEffect(forward: Bool, duration: TimeInterval) {
         let button = forward ? forwardButton : backButton
@@ -361,7 +361,7 @@ private final class FastForwardChip: UIView {
     }
 }
 
-/// メニューを開いているかを知らせるボタン。`UIButton`は、メニューを開いているかを外から読めないため、メニューの出入りを受けて覚える。
+/// メニューを開いているかを知らせるボタン。`UIButton`は、メニューを開いているかを外から読めないため、メニューの出入りを受けて記録する。
 final class MenuButton: UIButton {
     private(set) var isMenuOpen = false
     var onMenuOpenChange: ((Bool) -> Void)?

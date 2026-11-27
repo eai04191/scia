@@ -505,7 +505,7 @@ public final class AppSettings {
         set { write(.list(newValue.tokens), Keys.linkMenuLayout) }
     }
 
-    /// ほかのサービスの投稿（Xの投稿の囲みなど）を長押しして出すメニューの並び。
+    /// ほかのサービスの投稿（Xの投稿のカードなど）を長押しして出すメニューの並び。
     public var externalPostMenuLayout: MenuLayout<ExternalPostMenuItem> {
         get { layout(Keys.externalPostMenuLayout, default: ExternalPostMenuItem.defaultLayout) }
         set { write(.list(newValue.tokens), Keys.externalPostMenuLayout) }
@@ -546,7 +546,7 @@ public final class AppSettings {
         set { writeActions(newValue, Keys.statusActions) }
     }
 
-    /// 引用の囲みをタップ、長押ししたときの操作。項目は投稿のメニューから選ぶ。
+    /// 引用のカードをタップ、長押ししたときの操作。項目は投稿のメニューから選ぶ。
     public var quotedStatusActions: ObjectActions<StatusMenuItem> {
         get { actions(Keys.quotedStatusActions) }
         set { writeActions(newValue, Keys.quotedStatusActions) }
@@ -570,7 +570,7 @@ public final class AppSettings {
         set { writeActions(newValue, Keys.linkActions) }
     }
 
-    /// ほかのサービスの投稿（Xの投稿の囲みなど）をタップ、長押ししたときの操作。
+    /// ほかのサービスの投稿（Xの投稿のカードなど）をタップ、長押ししたときの操作。
     public var externalPostActions: ObjectActions<ExternalPostMenuItem> {
         get { actions(Keys.externalPostActions) }
         set { writeActions(newValue, Keys.externalPostActions) }
@@ -1169,7 +1169,7 @@ public final class SettingsStore {
         _ = selectionChange.revision
     }
 
-    /// 前のプリセットと比べ、変わったものの購読だけに知らせる。プリセットを作っただけでは、ほかのプリセットの値は変わらないので知らせない。
+    /// 前のプリセットと比べ、変わったものの購読だけに通知する。プリセットを作っただけでは、ほかのプリセットの値は変わらないので通知しない。
     private func notifyChanges(from old: PresetLibrary) {
         anyChange.revision += 1
         let selectionChanged = old.appPreset != library.appPreset || old.accountPresets != library.accountPresets

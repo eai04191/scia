@@ -198,8 +198,8 @@ public struct ReconnectingStream: Sendable {
     }
 }
 
-/// 受信とpingの2つの経路から、成立とイベントを順序を保って積む。
-/// 成立はイベントより先に、1回だけ積む。
+/// 受信とpingの2つの経路から、成立とイベントを順序を保ってキューに入れる。
+/// 成立はイベントより先に、1回だけキューに入れる。
 private final class ActivityQueue: Sendable {
     private let state: Mutex<(continuation: AsyncThrowingStream<ReconnectingStream.Activity, any Error>.Continuation, isConnected: Bool)>
 

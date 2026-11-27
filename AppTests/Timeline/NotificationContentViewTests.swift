@@ -111,7 +111,7 @@ struct NotificationContentViewTests {
         #expect(element.accessibilityLabel?.hasPrefix(custom ? "Bobとほか2人が:blobcat:でリアクションしました" : "Bobとほか2人が👍でリアクションしました") == true)
     }
 
-    /// 名前の前に差し込むアイコンも、角丸の四角の丸みを「投稿の見た目」の設定に従わせる。丸みを0にすると、四隅も中央と同じ濃さで塗る。
+    /// 名前の前に差し込むアイコンも、四角の角の丸さを「投稿の見た目」の設定に従わせる。角の丸さを0にすると、四隅も中央と同じ不透明度で塗る。
     @Test func headerAvatarFollowsCornerRatio() throws {
         let settings = AppSettings.isolated()
         settings.appearance.avatarShape = .roundedSquare
@@ -122,14 +122,14 @@ struct NotificationContentViewTests {
         let configuration = try #require(vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
         let attachment = try #require(configuration.header.attribute(.attachment, at: 0, effectiveRange: nil) as? NSTextAttachment)
         let image = try #require(attachment.image?.cgImage)
-        // 画像のないアイコンは半透明の灰色で塗るので、濃さは中央の画素と比べる。
+        // 画像のないアイコンは半透明の灰色で塗るので、不透明度は中央の画素と比べる。
         let center = try alpha(of: image, x: image.width / 2, y: image.height / 2)
         #expect(center > 0)
         #expect(try alpha(of: image, x: 0, y: 0) == center)
     }
 
-    /// 名前の前のアイコンは、角を丸めて描き直した画像のほかに、元のアイコンも持つ。メモリ警告で使っていないアイコンを手放しても、
-    /// 出ている行を組み直したときに、灰色に戻して読み直さないため（docs/image-loading.mdの「メモリに持つ画像」）。
+    /// 名前の前のアイコンは、角を丸めて再描画した画像のほかに、元のアイコンも持つ。メモリ警告で使っていないアイコンを手放しても、
+    /// 出ている行を組み直したときに、灰色に戻して再読み込みしないため（docs/image-loading.mdの「メモリに持つ画像」）。
     @Test func headerAvatarKeepsSourceAcrossMemoryRelease() async throws {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -165,12 +165,12 @@ struct NotificationContentViewTests {
         withExtendedLifetime(shown) {}
     }
 
-    /// 上端から数えた位置の画素の濃さ。
+    /// 上端から数えた位置の画素の不透明度。
     private func alpha(of image: CGImage, x: Int, y: Int) throws -> UInt8 {
         try rgba(of: image, x: x, y: y)[3]
     }
 
-    /// 上端から数えた位置の画素の、乗算済みの赤、緑、青、濃さ。
+    /// 上端から数えた位置の画素の、乗算済みの赤、緑、青、不透明度。
     private func rgba(of image: CGImage, x: Int, y: Int) throws -> [UInt8] {
         var pixel: [UInt8] = [0, 0, 0, 0]
         let context = try #require(CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
@@ -308,7 +308,7 @@ struct NotificationAppearanceTests {
         #expect(bodyFont.pointSize == typography.font(.body).pointSize)
     }
 
-    /// 名前の前のアイコンと名前のすき間は、設定の値だけ広がる。添付ファイルの文字には字送りが効かないため、効く文字で空ける。
+    /// 名前の前のアイコンと名前の間隔は、設定の値だけ広がる。添付ファイルの文字には字送りが効かないため、効く文字で空ける。
     @Test func headerAvatarNameSpacingWidensHeader() throws {
         func headerWidth(spacing: Double) throws -> CGFloat {
             let settings = AppSettings.isolated()
@@ -351,7 +351,7 @@ struct NotificationAppearanceTests {
         }
     }
 
-    /// まとめた通知のアイコンを0にすると、出さないアイコンの画像を先読みしない。
+    /// まとめた通知のアイコンを0にすると、出さないアイコンの画像をプリフェッチしない。
     @Test func zeroGroupAvatarSizeSkipsPrefetch() throws {
         let settings = AppSettings.isolated()
         settings.setValue(0, for: NotificationAppearanceCatalog.groupAvatarSize)
@@ -422,7 +422,7 @@ struct NotificationAppearanceTests {
         #expect(avatar.minY >= settings.rowMargins.top - 0.5, "アイコンの上端が\(avatar.minY)で、上の余白\(settings.rowMargins.top)より上に出ました")
     }
 
-    /// 名前の前のアイコンの大きさを0にすると、アイコンもすき間も置かない。
+    /// 名前の前のアイコンの大きさを0にすると、アイコンも間隔も置かない。
     @Test func headerAvatarSizeZeroRemovesAvatar() throws {
         let settings = AppSettings.isolated()
         settings.setValue(0, for: NotificationAppearanceCatalog.headerAvatarSize)

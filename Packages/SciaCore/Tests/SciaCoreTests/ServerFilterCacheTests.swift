@@ -55,7 +55,7 @@ struct ServerFilterCacheTests {
         #expect(server.requests == 1)
     }
 
-    /// 読めたら、読んだ値を知らせる。後から始めた再読み込みに追い越された古い応答と、読めなかったときは知らせない。
+    /// 読めたら、読んだ値を`onValueChange`で渡す。後から始めた再読み込みに追い越された古い応答と、読めなかったときは渡さない。
     @Test func onValueChangeReportsOnlyLatestSuccess() async throws {
         let server = Server(titles: ["a"], holds: true)
         let cache = makeCache(server)

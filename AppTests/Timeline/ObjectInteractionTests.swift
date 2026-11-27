@@ -23,7 +23,7 @@ final class ObjectInteractionTests {
         window.makeKeyAndVisible()
     }
 
-    /// 押した位置を、メニューの構成の識別子に入れる（`ObjectInteraction`が構成を作るときと同じ）。
+    /// 選択した位置を、メニューの構成の識別子に入れる（`ObjectInteraction`が構成を作るときと同じ）。
     private func previews(lift: ObjectLift, on view: UIView) throws -> (highlight: UITargetedPreview?, dismissal: UITargetedPreview?) {
         let objectInteraction = ObjectInteraction(on: view, tapsSelf: true, lift: lift)
         let interaction = try #require(view.interactions.lazy.compactMap { $0 as? UIContextMenuInteraction }.first)
@@ -34,7 +34,7 @@ final class ObjectInteractionTests {
         return (highlight, dismissal)
     }
 
-    /// アイコンは、押したビューを今の角丸の形のまま持ち上げ、同じ形で戻す。
+    /// アイコンは、選択したビューを今の角丸の形のまま持ち上げ、同じ形で戻す。
     @Test func shapeLiftsTheViewWithItsCorners() throws {
         defer { window.isHidden = true }
         let avatar = UIView(frame: CGRect(x: 20, y: 100, width: 48, height: 48))
@@ -50,7 +50,7 @@ final class ObjectInteractionTests {
         }
     }
 
-    /// 文字の行は、タイムラインの行と同じく持ち上げず、押した位置に置いた見えない目印からメニューだけを出す。
+    /// 文字の行は、タイムラインの行と同じく持ち上げず、選択した位置に置いた見えない目印からメニューだけを出す。
     @Test func noneShowsMenuAtTouchWithoutLifting() throws {
         defer { window.isHidden = true }
         let header = UILabel(frame: CGRect(x: 60, y: 100, width: 300, height: 20))

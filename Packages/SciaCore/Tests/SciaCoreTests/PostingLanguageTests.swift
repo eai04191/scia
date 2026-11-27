@@ -70,7 +70,7 @@ struct PostingLanguageTests {
         #expect(result[2].rows.isEmpty)
     }
 
-    /// 選んだ言語は新しい順に5つまで覚え、同じ言語は先頭へ動かす。アカウントごとに分ける。
+    /// 選んだ言語は新しい順に5つまで保存し、同じ言語は先頭へ動かす。アカウントごとに分ける。
     @Test func recordsRecentLanguagesPerAccount() throws {
         let defaults = try #require(UserDefaults(suiteName: TestScratch.suiteName("PostingLanguageTests")))
         let recent = RecentPostingLanguages(defaults: defaults, account: "alice@example.social")

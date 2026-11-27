@@ -28,7 +28,7 @@ struct TextKitLabelTests {
         #expect(label.textKitLineCount(width: width) == metrics.lineCount)
     }
 
-    /// 押下した点の文字は、その文字を描いた枠から求める。描いている文字列は`attributedText`で読め、UILabelに渡した空白1文字は出さない。
+    /// 選択した点の文字は、その文字を描いた枠から求める。描いている文字列は`attributedText`で読め、UILabelに渡した空白1文字は出さない。
     @Test func characterAtPointIsTheDrawnCharacter() throws {
         let label = label("あいうえお")
         label.frame = CGRect(origin: .zero, size: label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)))

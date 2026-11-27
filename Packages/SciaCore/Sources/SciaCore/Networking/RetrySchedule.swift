@@ -1,6 +1,6 @@
 public import Foundation
 
-/// 読めなかったもの（画像、Xの投稿、動画の最初のコマ）を覚え、行を描いたときのような自動の読み込みで、いつ再読み込みしてよいかを決める。
+/// 読めなかったもの（画像、Xの投稿、動画の最初のコマ）を記録し、行を描いたときのような自動の読み込みで、いつ再読み込みしてよいかを決める。
 /// 待てば直る失敗（通信の失敗、408、429、5xx）は、失敗するたびに間隔を倍にして上限で止め、応答が再開の時刻を示していればそれまで待つ。
 /// 待っても直らない失敗（そのほかの4xx、読めない中身）は、自動では再読み込みしない。分け方は`HTTPFailure`に従う。
 /// 使う人が自分で見に行った操作（ビューアを開くなど）は、これに聞かずに読む。読めたら`recordSuccess`で忘れる。
@@ -80,7 +80,7 @@ public struct RetrySchedule {
     /// 行を再描画したときだけ再読み込みすると、画面に出たままの行は、間隔が過ぎても、レート制限が明けても、読めないまま残るため。
     /// 最初の1回は、見えているかによらず読む。再読み込みは見えている間だけにし、隠れている間（ほかのタブ、折りたたんだ注意書きの下、使い回しを待つセルなど）は、
     /// `recheck`ごとに見えたかを確かめる。隠れたまま再読み込みすると、見ている画像と同じ`/media_proxy`の制限を使ってしまうため。
-    /// 待っても直らない失敗、覚えない失敗（回線で控えたものなど）、取り消し、`isWanted`がfalseになったら、nilを返してやめる。
+    /// 待っても直らない失敗、記録しない失敗（回線で控えたものなど）、取り消し、`isWanted`がfalseになったら、nilを返してやめる。
     /// - Parameter isWanted: まだその画像を描こうとしているか。描く画像が替わったり、ビューがなくなったりしたらfalse。
     /// - Parameter delay: 読めなかったあとに、再読み込みしてよくなるまでの長さ（`delayUntilAutomaticLoad(of:)`）。
     static func loadWhileShown<Value>(
@@ -101,7 +101,7 @@ public struct RetrySchedule {
             if let value = try? await load() {
                 return value
             }
-            // 覚えない失敗は今すぐ読んでよいことになるので、ここで続けると再読み込みし続けてしまう。
+            // 記録しない失敗は今すぐ読んでよいことになるので、ここで続けると再読み込みし続けてしまう。
             guard let wait = delay(), wait > .zero, (try? await clock.sleep(for: wait)) != nil else { return nil }
         }
         return nil
@@ -123,10 +123,10 @@ public struct RetrySchedule {
         records[url] != nil
     }
 
-    /// 読めなかったことを覚える。取り消しは失敗ではないので覚えない。
+    /// 読めなかったことを記録する。取り消しは失敗ではないので記録しない。
     public mutating func recordFailure(_ error: any Error, for url: URL) {
         switch HTTPFailure(error) {
-        // 回線で控えたものは、回線が変わって再描画したときに読むものを選び直すので、時間では覚えない。
+        // 回線で控えたものは、回線が変わって再描画したときに読むものを選び直すので、時間では記録しない。
         case nil, .unavailableOnNetwork:
             return
         case .permanent, .unauthorized:

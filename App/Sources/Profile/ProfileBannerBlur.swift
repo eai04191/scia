@@ -16,7 +16,7 @@ struct ProfileBannerBlur {
     /// どこも同じ強さでぼかした、伸ばす部分の画像。隠すビューを出している間に使う。上端の近くまで強くぼけた隠すビューと、境目でつながる。
     let uniformReflection: UIImage
 
-    /// 伸ばす部分の画像の高さの、枠の高さに対する倍率。引っぱってこれより高く伸ばした分は、何も描かない。
+    /// 伸ばす部分の画像の高さの、枠の高さに対する倍率。オーバースクロールでこれより高く伸ばした分は、何も描かない。
     static let reflectionHeightRatio: CGFloat = 4
 
     struct Style: Equatable {

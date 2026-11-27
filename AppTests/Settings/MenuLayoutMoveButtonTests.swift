@@ -16,7 +16,7 @@ struct MenuLayoutMoveButtonTests {
         #expect(!screen.collectionView.dragInteractionEnabled)
     }
 
-    /// 「メニュー」の節の最後の行を下へ動かすと、「その他」の節の先頭に入る。ドラッグで節をまたいで動かせるのと揃える。
+    /// 「メニュー」のセクションの最後の行を下へ動かすと、「その他」のセクションの先頭に入る。ドラッグでセクションをまたいで動かせるのと揃える。
     @Test func movingDownFromLastRowCrossesMoreBoundary() throws {
         var saved: MenuLayout<ComposeToolItem>?
         let screen = try Screen(layout: ComposeToolItem.defaultLayout) { saved = $0 }
@@ -30,7 +30,7 @@ struct MenuLayoutMoveButtonTests {
         #expect(Self.title(of: elements[more + 1]) == last)
     }
 
-    /// 端の行では、動けない向きのボタンを押せない。動かした行のボタンも、新しい位置に合わせて変わる。
+    /// 端の行では、動けない向きのボタンを無効にする。動かした行のボタンも、新しい位置に合わせて変わる。
     @Test func disablesButtonsAtEnds() async throws {
         let screen = try Screen(layout: ComposeToolItem.defaultLayout)
         defer { screen.close() }
@@ -46,7 +46,7 @@ struct MenuLayoutMoveButtonTests {
         #expect(try screen.button(SettingsTexts.MenuLayout.moveDown, inRowTitled: lastRow).isEnabled == false)
     }
 
-    /// 動かしたあと、ボタンの押せる状態は変えても、行のスイッチとボタンは作り直さない。作り直すと、入れ替わる動きが右端に出るため。
+    /// 動かしたあと、ボタンの有効と無効は変えても、行のスイッチとボタンは作り直さない。作り直すと、入れ替わる動きが右端に出るため。
     @Test func keepsAccessoriesWhenMoving() async throws {
         let screen = try Screen(layout: ComposeToolItem.defaultLayout)
         defer { screen.close() }
@@ -63,7 +63,7 @@ struct MenuLayoutMoveButtonTests {
         #expect(try screen.button(SettingsTexts.MenuLayout.moveDown, inRowTitled: other) === otherDown)
     }
 
-    /// 区切り線を足して最後の行が端でなくなったら、その行の下ボタンを押せるようにする。行を足したり消したりしても、端が変わるため。
+    /// 区切り線を足して最後の行が端でなくなったら、その行の下ボタンを有効にする。行を足したり消したりしても、端が変わるため。
     @Test func updatesButtonsAfterAddingSeparator() async throws {
         let screen = try Screen(layout: ComposeToolItem.defaultLayout)
         defer { screen.close() }
@@ -75,7 +75,7 @@ struct MenuLayoutMoveButtonTests {
         try await waitUntil { (try? screen.button(SettingsTexts.MenuLayout.moveDown, inRowTitled: last).isEnabled) == true }
     }
 
-    /// 境目の後ろの節を出さない並びでは、最後の行を下へ動かせない。境目より後ろへ動かすと、画面から消えるため。
+    /// 境目の後ろのセクションを出さない並びでは、最後の行を下へ動かせない。境目より後ろへ動かすと、画面から消えるため。
     @Test func cannotMovePastBoundaryWithoutMoreSection() throws {
         let screen = try Screen<PostActionBarItem>(layout: PostActionBarItem.defaultLayout)
         defer { screen.close() }
@@ -137,7 +137,7 @@ struct MenuLayoutMoveButtonTests {
         if case .item(let item, _) = element { item.title } else { nil }
     }
 
-    /// ボタンで動かす並びの画面を、すべての行が見える高さの窓に出す。
+    /// ボタンで動かす並びの画面を、すべての行が見える高さのウィンドウに出す。
     @MainActor
     private struct Screen<Item: MenuItemKind & MenuItemPresentable> {
         let window: UIWindow
@@ -191,7 +191,7 @@ struct MenuLayoutMoveButtonTests {
             })
         }
 
-        /// 並びの下のボタンの行を押す。
+        /// 並びの下のボタンの行を選択する。
         func select(_ title: String) throws {
             window.layoutIfNeeded()
             let indexPath = try #require((0..<collectionView.numberOfSections).lazy.flatMap { section in

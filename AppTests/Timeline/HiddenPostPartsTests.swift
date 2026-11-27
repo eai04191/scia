@@ -66,7 +66,7 @@ struct HiddenPostPartsTests {
 
         let text = try #require(visibleLabels(in: view).compactMap(\.attributedText).first { $0.string.contains("*") })
         #expect(text.attribute(.attachment, at: 0, effectiveRange: nil) != nil)
-        // 記号、すき間を作る空白、「*」だけで、時刻の文字はない。
+        // 記号、間隔を作る空白、「*」だけで、時刻の文字はない。
         #expect(text.length == 3)
         let frames = view.previewFrames()
         #expect(frames[.visibilitySymbol] != nil)
@@ -256,7 +256,7 @@ struct HiddenPostPartsTests {
         #expect(ReactionGlow.Style(tuning: TuningStore(defaults: nil), settings: settings).height == 0)
     }
 
-    /// 引用とXの投稿の囲みのアイコンを出さないと、大きさも名前とのすき間も取らない。
+    /// 引用とXの投稿のカードのアイコンを出さないと、大きさも名前との間隔も取らない。
     @Test func hiddenEmbedAvatarHasNoSize() throws {
         let settings = AppSettings.isolated()
         settings.appearance.showsEmbedAvatar = false

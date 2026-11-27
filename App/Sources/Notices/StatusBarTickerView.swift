@@ -197,7 +197,7 @@ enum DeviceModel {
 
 /// ステータスバーの場所に出す、1件の通知。左に誰が何をしたか、右に対象の投稿の文頭かサムネイルを出す。
 /// アイランドとノッチは黒いので、同じ黒を切り欠きから左右に広げ、切り欠きが広がったように見せる。
-/// アイランドの機種では、アイランドと同じ丸みのカプセルを浮かせる。画面の外形を、アイランドの上から画面の上端までの余白（iPhone 16 Proで14pt）だけ内側へ縮めた範囲に、
+/// アイランドの機種では、アイランドと同じ角の丸さのカプセルを浮かせる。画面の外形を、アイランドの上から画面の上端までの余白（iPhone 16 Proで14pt）だけ内側へ縮めた範囲に、
 /// カプセルの縦の真ん中の左右の端が収まるところまで広げる。左右の余白が上より狭いと、黒い板が画面の上に貼ってあるように見えたため。
 /// 切り欠きのない画面では、黒い帯を張らず、ステータスバーの文字を入れ替えたように、地を透かしてふだんの文字の色で描く。
 /// 次の通知へは、文字を上へ送って入れ替える。
@@ -212,7 +212,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     private(set) var cutout: StatusBarCutout
     private let capsule = UIView()
     private var content: ContentViews?
-    /// 背景を広げたり縮めたりしている動き。背景の枠と丸み、中身の位置と不透明度を、UIKitと同じスプリングの進み具合から前もって計算し、
+    /// 背景を広げたり縮めたりしている動き。背景の枠と角の丸さ、中身の位置と不透明度を、UIKitと同じスプリングの進み具合から前もって計算し、
     /// 同じ時刻表のキーフレームのアニメーションにして描画に任せる。
     /// 中身は背景の子なので、背景をUIKitのアニメーションで動かして毎コマ中身を合わせると、置いた位置が画面に出るときには背景がもう1コマ動いていて、
     /// その分だけ中身が横にも縦にもずれる。毎コマ自分で動かすと、メインスレッドが重いときにコマが落ち、UIKitのスプリングとも曲線が変わる。
@@ -449,7 +449,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         leavingContents = []
     }
 
-    /// 背景を広げたり縮めたりしている動きの、始まりと行き先の枠と丸み。途中から加わる中身の動きを、残りの時間に合わせて作るために持つ。
+    /// 背景を広げたり縮めたりしている動きの、始まりと行き先の枠と角の丸さ。途中から加わる中身の動きを、残りの時間に合わせて作るために持つ。
     /// 始まった時刻は持たず、描き始めた時刻を`motionStartTime`で読む。
     private struct Motion {
         let id: UUID
@@ -516,8 +516,8 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             }
         }
         if let fadingContent {
-            // 不透明度は、濃くした状態からの差として重ねる。入れ替えで薄い状態から出てくる途中なら、その動きを残したまま、背景と一緒に出入りする分だけ薄くする。
-            // 置き換えると、出てくる途中の不透明度が1コマで濃くなる。
+            // 不透明度は、不透明にした状態からの差として重ねる。入れ替えで薄い状態から出てくる途中なら、その動きを残したまま、背景と一緒に出入りする分だけ薄くする。
+            // 置き換えると、出てくる途中の不透明度が1コマで不透明になる。
             fadingContent.setAlpha(1)
             for layer in [fadingContent.left.layer, fadingContent.right.layer] {
                 addKeyframes(to: layer, keyPath: "opacity", values: progresses.map { Float(contentAlpha($0) - 1) }, times: times, beginTime: nil, additive: true)

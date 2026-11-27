@@ -55,7 +55,7 @@ Sciaは、一覧に`application/octet-stream`があれば、形式を絞らな�
 
 ## form形式の`media_ids[]`を捨てる
 
-Mastodonは、本文をform形式でもJSONでも同じように受け付け、form形式では配列を`media_ids[]=…`で送ると[ドキュメント](https://docs.joinmastodon.org/client/intro/#parameters)に書いている。SharkeyとCatodonは、`media_ids[]`を`media_ids`に読み替えようとするが、`querystring`で文字列にして読み直すだけなので名前が変わらず、添付のない投稿をエラーなしで作る（Dockerで確かめた）。`poll[options][]`も同じ処理を通る。
+Mastodonは、本文をform形式でもJSONでも同じように受け付け、form形式では配列を`media_ids[]=…`で送ると[ドキュメント](https://docs.joinmastodon.org/client/intro/#parameters)に書いている。SharkeyとCatodonは、`media_ids[]`を`media_ids`に読み替えようとするが、`querystring`で文字列にしてもう一度解析するだけなので名前が変わらず、添付のない投稿をエラーなしで作る（Dockerで確かめた）。`poll[options][]`も同じ処理を通る。
 
 - Sharkey 2025.4.7（developも同じ）: [status.ts#L19-L22](https://activitypub.software/TransFem-org/Sharkey/-/blob/a5d61c9394bb7a9c61d5ff19d17966b2d55f7b1f/packages/backend/src/server/api/mastodon/endpoints/status.ts#L19-L22)、[#L159-L168](https://activitypub.software/TransFem-org/Sharkey/-/blob/a5d61c9394bb7a9c61d5ff19d17966b2d55f7b1f/packages/backend/src/server/api/mastodon/endpoints/status.ts#L159-L168)
 - Catodon 26.11.1: [status.ts#L29-L32](https://codefloe.com/catodon/catodon/src/commit/c7445fc10d94da08bb48f945123913cbfb45bcc5/packages/backend/src/server/api/mastodon/endpoints/status.ts#L29-L32)。developでは[ea9b0e2](https://codefloe.com/catodon/catodon/commit/ea9b0e25959e65a6d892cc65d191ac8529a88bcb)で直っている（投票は未対応）

@@ -24,7 +24,7 @@ struct EmojiArrivalTests {
     }
 
     /// 空けていた場所に絵文字の画像が入ったら、ラベルを1コマで描き替えず、あとの文字を前の位置から新しい位置へ動かし、
-    /// 絵文字はその場で薄い状態から濃くする。動いている間は、ラベル自身の描画を隠す。同じ中身を入れ直したときは、動かさない。
+    /// 絵文字はその場で薄い状態から不透明度を上げる。動いている間は、ラベル自身の描画を隠す。同じ中身を入れ直したときは、動かさない。
     @Test func labelMovesTextWhenEmojiArrives() async throws {
         let blobcat = try emoji("blobcat")
         let png = try widePNG()
@@ -59,7 +59,7 @@ struct EmojiArrivalTests {
         let pieces = label.layer.sublayers?.last?.sublayers ?? []
         #expect(pieces.contains { $0.animation(forKey: "move") != nil }, "あとの文字を動かしていません")
         #expect(pieces.contains { $0.animation(forKey: "fadeIn") != nil }, "絵文字を薄い状態から濃くしていません")
-        // 行数を限らないラベルでは、像をラベルの枠で切らない。折り返しが減ると、前の最後の行から上がる文字が枠の外から動き始めるため。
+        // 行数を限らないラベルでは、スナップショットをラベルの枠で切らない。折り返しが減ると、前の最後の行から上がる文字が枠の外から動き始めるため。
         #expect(label.layer.sublayers?.last?.masksToBounds == false)
 
         // 動いている途中に、動く絵文字のアニメーション版が届いて層が出し直されても、隠したままにする。
@@ -76,7 +76,7 @@ struct EmojiArrivalTests {
         #expect(label.layer.contentsRect == CGRect(x: 0, y: 0, width: 1, height: 1))
     }
 
-    /// 動いている途中に、使い回された行で別の文字列に替わったら、前の文字列の像を残さない。
+    /// 動いている途中に、使い回された行で別の文字列に替わったら、前の文字列のスナップショットを残さない。
     @Test func reuseDropsEmojiArrival() async throws {
         let blobcat = try emoji("blobcat")
         let png = try widePNG()
@@ -106,8 +106,8 @@ struct EmojiArrivalTests {
         #expect(label.layer.contentsRect == CGRect(x: 0, y: 0, width: 1, height: 1))
     }
 
-    /// 文字は、同じ行に並び、同じだけ動く、続いた文字のまとまりで動かす。次の行へ移る文字は、行をまたいで動く。
-    /// 新しく入った絵文字は、動かさずに薄い状態から濃くする。
+    /// 文字は、同じ行に並び、同じだけ動く、続いた文字のグループで動かす。次の行へ移る文字は、行をまたいで動く。
+    /// 新しく入った絵文字は、動かさずに薄い状態から不透明度を上げる。
     @Test func piecesFollowLines() {
         typealias Placement = EmojiArrivalTransition.Placement
         // 「A[絵文字]BC」で、絵文字が広がり、Cが次の行の頭へ移る。
@@ -133,14 +133,14 @@ struct EmojiArrivalTests {
         #expect(pieces[3].offset == CGPoint(x: -40, y: 20))
     }
 
-    /// 編集の前の文字の位置を、編集のあとの位置へ写す。前後で変わらない先頭と末尾の文字と、そのあいだで変わらない行を残し、ほかの文字は除く。
+    /// 編集の前の文字の位置を、編集のあとの位置へ対応付ける。前後で変わらない先頭と末尾の文字と、そのあいだで変わらない行を残し、ほかの文字は除く。
     /// 絵文字が別の絵文字に替わって、UTF-16の前半だけが同じになるときは、その絵文字を変わらない文字に数えない。
     @Test func remapsUnchangedEndsOfEditedText() {
         func remap(_ old: String, _ new: String) -> [Int: Int] {
             let keys = Dictionary(uniqueKeysWithValues: (0..<(old as NSString).length).map { ($0, $0) })
             return EmojiLabel.remappingUnchanged(keys, from: old, to: new)
         }
-        // 写した先の位置をキーに、元の位置を値に持つ。
+        // 対応付けた先の位置をキーに、元の位置を値に持つ。
         #expect(remap("あいう", "あXXいう") == [0: 0, 3: 1, 4: 2], "途中に足した")
         #expect(remap("あい", "あいう") == [0: 0, 1: 1], "末尾に足した")
         #expect(remap("あいう", "いう") == [0: 1, 1: 2], "先頭を消した")
@@ -154,7 +154,7 @@ struct EmojiArrivalTests {
         #expect(remap("X\n\u{FFFC}\nY", "Z\n\u{FFFC}\nW") == [:], "あいだの行にカスタム絵文字がある")
     }
 
-    /// 編集で新しく入った文字は、動き始める見え方がないので、透明から濃くする。
+    /// 編集で新しく入った文字は、動き始める見え方がないので、透明から不透明度を上げる。
     @Test func newCharactersFadeInWhenAsked() {
         let start: [Int: EmojiArrivalTransition.Placement] = [0: .init(frame: CGRect(x: 0, y: 0, width: 10, height: 20), opacity: 1)]
         let final: [Int: CGRect] = [0: CGRect(x: 0, y: 0, width: 10, height: 20), 1: CGRect(x: 10, y: 0, width: 10, height: 20)]
@@ -265,7 +265,7 @@ struct EmojiArrivalTests {
     }
 
     /// 表示領域の上端をまたぐ行が同じ絵文字を使っていても、その行の高さが変わらなければ、その行の位置を保ち、見えている行が伸びた分は下の行ごと動かす。
-    /// 伸びる行が、上端をまたぐ行のすぐ下にあっても同じ。描き直す行かどうかで基準を決めると、高さの変わらない上端の行まで、下の行が伸びた分だけ上へ流れる。
+    /// 伸びる行が、上端をまたぐ行のすぐ下にあっても同じ。再描画する行かどうかで基準を決めると、高さの変わらない上端の行まで、下の行が伸びた分だけ上へ流れる。
     @Test(arguments: [11, 12])
     func unchangedRowAcrossTopDoesNotStopShifting(growingIndex: Int) async throws {
         let (harness, gate, statuses) = try widePostHarness(at: growingIndex)
@@ -342,7 +342,7 @@ struct EmojiArrivalTests {
         #expect(abs(harness.initialOffsetY(of: bar, in: cell)) < 0.5, "本文より下の部品が、動き始めに\(harness.initialOffsetY(of: bar, in: cell))ptずれています")
     }
 
-    /// 引用の中の絵文字が届いて動く間も、引用の縦線を見せる。縦線は文字の枠の外（字下げの中）にあり、ラベル自身の描画は隠すため、
+    /// 引用の中の絵文字が届いて動く間も、引用の縦線を見せる。縦線は文字の枠の外（インデントの中）にあり、ラベル自身の描画は隠すため、
     /// 文字と別に切り出さないと、動きの間だけ消えて、終わると戻る。
     @Test func quoteBarsStayDuringEmojiArrival() async throws {
         let blobcat = try emoji("blobcat")

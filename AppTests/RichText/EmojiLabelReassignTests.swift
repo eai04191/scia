@@ -8,7 +8,7 @@ import UniformTypeIdentifiers
 @testable import Scia
 
 /// 同じ中身の文字列を入れ直したときに、ラベルが文字列を入れ替えず、測った結果を使い回すこと。
-/// 行を組み直すたびに描き直す文字列は作り直され、絵文字の添付も毎回新しくなるので、渡されたもの同士の中身で比べる。
+/// 行を組み直すたびに再描画する文字列は作り直され、絵文字の添付も毎回新しくなるので、渡されたもの同士の中身で比べる。
 @Suite(.scratch, .failureState)
 @MainActor
 struct EmojiLabelReassignTests {
@@ -76,8 +76,8 @@ struct EmojiLabelReassignTests {
         return data as Data
     }
 
-    /// アニメーション版を読めなかった絵文字は、間隔が過ぎてから同じ中身を入れ直すと読み直し、届いたら動かす。
-    /// 入れ直しを省いても、入れ替えていたときと同じく読み直す。ウィンドウにないラベルは、ウィンドウに入ってから動かす。
+    /// アニメーション版を読めなかった絵文字は、間隔が過ぎてから同じ中身を入れ直すと再読み込みし、届いたら動かす。
+    /// 入れ直しを省いても、入れ替えていたときと同じく再読み込みする。ウィンドウにないラベルは、ウィンドウに入ってから動かす。
     @Test func reassigningSameContentRetriesFailedAnimation() async throws {
         let crab = CustomEmoji(
             shortcode: "crab",
@@ -109,7 +109,7 @@ struct EmojiLabelReassignTests {
         label.layoutIfNeeded()
         #expect(gifReads.withLock { $0 } == 1)
 
-        // ストアは知らせを別のTaskで配る。ラベルより後に登録したので、読み直したアニメーション版の知らせがここに届いたら、ラベルにも届いている。
+        // ストアはコールバックを別のTaskで呼ぶ。ラベルより後に登録したので、再読み込みしたアニメーション版のコールバックがここに届いたら、ラベルにも届いている。
         let arrival = ArrivalRecorder()
         store.addListener(owner: arrival) { [weak arrival] urls in
             if urls.contains(crab.url), gifReads.withLock({ $0 }) == 2, store.hasFinishedLoadingAnimation(for: crab.url) {
@@ -143,7 +143,7 @@ struct EmojiLabelReassignTests {
     }
 }
 
-/// 絵文字のストアの知らせが届いたかを記録する。
+/// 絵文字のストアのコールバックが届いたかを記録する。
 private final class ArrivalRecorder {
     var delivered = false
 }

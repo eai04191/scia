@@ -16,7 +16,7 @@ public struct StreamingClient: Sendable {
     /// - Parameters:
     ///   - rateLimit: REST APIと共有する、アカウントの自動の通信を止める門。
     ///   - now: 断られた応答の再開の時刻を、待つ長さに直すための今の日付。
-    ///   - receivedAccounts: イベントの中で読んだアカウントを覚える先。nilなら覚えない。
+    ///   - receivedAccounts: イベントの中で読んだアカウントを記録する先。nilなら記録しない。
     public init(
         credential: Credential,
         connector: any WebSocketConnector,

@@ -198,7 +198,7 @@ final class NoticeOverlay: UIView {
 
     private func move(toTop top: CGFloat, _ movement: Movement) {
         placedTop = top
-        // 指が触れている間は、押そうとしているチップが逃げないよう動かさない。離したら動かす。
+        // 指が触れている間は、選択しようとしているチップが逃げないよう動かさない。離したら動かす。
         guard !column.isHeld else { return }
         let frame = columnFrame(top: top)
         guard column.frame != frame else { return }

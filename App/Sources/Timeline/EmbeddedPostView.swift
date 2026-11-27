@@ -6,7 +6,7 @@ import UIKit
 ///
 /// 上から、作者の行、注意書き、本文、添付ファイル、補足の行を並べる。引用元を出せないときは、作者の行を出さず、理由の1行だけを本文として出す。
 /// 添付ファイルを重ねて出すときは、本文の右に置き、本文はその分をあけて折り返す。補足の行は、本文とサムネイルのどちらよりも下に置く。決まりは`docs/timeline-media.md`。
-/// カードのどこかが選択されたら、置く側が決めた先を開く。アイコン、注意書き、サムネイル、本文のリンク、選択できる補足の行の押下は、並べた部品が受ける。
+/// カードのどこかが選択されたら、置く側が決めた先を開く。アイコン、注意書き、サムネイル、本文のリンク、選択できる補足の行の選択は、並べた部品が受ける。
 final class EmbeddedPostView: UIButton {
     struct Content: Equatable {
         /// 作者の行。出せない理由だけを出すときはnil。
@@ -21,7 +21,7 @@ final class EmbeddedPostView: UIButton {
         /// 本文と添付ファイルの下に並べる1行。引用元の投票や、引用元がさらに引用していることを示す。
         struct Note: Equatable {
             var text: NSAttributedString
-            /// 選択できる見た目にし、押下をカードに渡さず受ける。
+            /// 選択できる見た目にし、選択をカードに渡さず受ける。
             var isPressable: Bool
         }
 
@@ -61,7 +61,7 @@ final class EmbeddedPostView: UIButton {
         /// 添付ファイルがなければnil。
         var media: MediaGridView.Content?
         var notes: [Note] = []
-        /// カードを選択して開けるか。開けなければ押下を受けず、行に渡す。
+        /// カードを選択して開けるか。開けなければ選択を受けず、行に渡す。
         var isPressable = true
         /// 読み上げで、カードを選択する操作の名前。
         var openActionName: String
@@ -167,7 +167,7 @@ final class EmbeddedPostView: UIButton {
         // 投稿の本文と同じくTextKit 2で描き、大きくした絵文字の行を絵の高さにする。文字列を入れる前に切り替える。
         textLabel.drawsWithTextKit = true
         textLabel.numberOfLines = 0
-        // 本文はリンクの上だけ押下を受ける。リンクの外の押下は、カードのボタンが受ける。
+        // 本文はリンクの上だけ選択を受ける。リンクの外の選択は、カードのボタンが受ける。
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         textLabel.onExpand = { [weak self] in self?.onExpandBody?() }
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
@@ -236,7 +236,7 @@ final class EmbeddedPostView: UIButton {
             textLabel.cancelTextReplacement()
             cancelShiftBelowText()
         }
-        // 制約を外すと部品の位置が崩れうるので、その前に今の位置を覚える。
+        // 制約を外すと部品の位置が崩れうるので、その前に今の位置を記録する。
         if let replacement {
             prepareShiftBelowText(duration: replacement.shiftDuration)
         }
@@ -453,7 +453,7 @@ final class EmbeddedPostView: UIButton {
         didSet { backgroundColor = isHighlighted ? .systemFill : nil }
     }
 
-    /// カードを選択できないときは、選択できる部品の外の押下を受けず、行に渡す。
+    /// カードを選択できないときは、選択できる部品の外の選択を受けず、行に渡す。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let view = super.hitTest(point, with: event)
         return view === self && content?.isPressable == false ? nil : view
@@ -634,7 +634,7 @@ final class EmbeddedPostView: UIButton {
     }
 }
 
-/// カードの補足の1行。選択できる行は、押下を受けて薄くなる。選択できない行は押下をカードに渡す。
+/// カードの補足の1行。選択できる行は、選択を受けて薄くなる。選択できない行は選択をカードに渡す。
 private final class NoteRow: UIControl {
     private let label = UILabel()
 

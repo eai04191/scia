@@ -59,13 +59,13 @@ public struct LocalMention: Codable, Hashable, Sendable, Identifiable {
     }
 }
 
-/// 補完で選んだアカウントを、ログインしているアカウントごとに新しい順で覚える。
+/// 補完で選んだアカウントを、ログインしているアカウントごとに新しい順で保存する。
 /// `RecentEmojis`と同じく、複数のウィンドウで開いても上書きし合わないよう、手元に持たずに毎回UserDefaultsを読み書きする。
 @MainActor
 public final class RecentMentions {
     private let defaults: UserDefaults
     private let key: String
-    /// 覚えておく人数。
+    /// 保存しておく人数。
     public static let capacity = 20
 
     /// - Parameter account: ログインしているアカウントのハンドル（`Credential.handle`）。
@@ -80,7 +80,7 @@ public final class RecentMentions {
         return (try? JSONDecoder().decode([LocalMention].self, from: data)) ?? []
     }
 
-    /// 表示名とアイコンを持たない人（返信先でメンションされた人）を選んだときは、覚えている同じ人の情報を残し、並びだけを先頭にする。
+    /// 表示名とアイコンを持たない人（返信先でメンションされた人）を選んだときは、保存している同じ人の情報を残し、並びだけを先頭にする。
     public func record(_ mention: LocalMention) {
         var mentions = mentions
         let remembered = mentions.first { $0.id == mention.id }

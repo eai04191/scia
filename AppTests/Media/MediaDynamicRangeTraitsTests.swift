@@ -8,7 +8,7 @@ import UIKit
 @Suite(.scratch, .failureState)
 @MainActor
 struct MediaDynamicRangeTraitsTests {
-    /// コレクションビューの中の画像にも、選び直した明るさがすぐ効く。窓の`imageDynamicRange`だけでは、コレクションビューが受け継がず、実機ではどれを選んでも控えめなHDRで描かれた。
+    /// コレクションビューの中の画像にも、選び直した明るさがすぐ効く。ウィンドウの`imageDynamicRange`だけでは、コレクションビューが受け継がず、実機ではどれを選んでも控えめなHDRで描かれた。
     @Test func imageInsideCollectionViewFollowsListSetting() async throws {
         let settings = AppSettings(defaults: TestScratch.defaults("MediaDynamicRangeTraitsTests"))
         settings.mediaDynamicRange = .standard

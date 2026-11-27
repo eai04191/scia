@@ -12,7 +12,7 @@ public enum HTTPFailure: Equatable, Sendable {
     /// 質を上げるとプリフェッチの通信を、今の回線では送らないとOSが断った（`RequestPurpose`）。時間をおいては再読み込みせず、回線が変わって再描画したときに選び直す。
     case unavailableOnNetwork
 
-    /// 取り消しはnil。失敗ではないので、覚えも知らせもしない。
+    /// 取り消しはnil。失敗ではないので、記録も通知もしない。
     public init?(_ error: any Error) {
         switch error {
         case is CancellationError:

@@ -8,7 +8,7 @@ import UIKit
 @MainActor
 @Suite(.failureState, .scratch)
 struct PostListStyleTests {
-    /// 投稿の見た目の設定が変わるたびに、描き直しを求める。1回で見張りをやめない。
+    /// 投稿の見た目の設定が変わるたびに、再描画を求める。1回で見張りをやめない。
     @Test func asksForRedrawOnEveryAppearanceChange() async throws {
         let settings = AppSettings.isolated()
         let style = PostListStyle(settings: settings, tuning: TuningStore(defaults: nil), network: AppDependencies.network)
@@ -22,7 +22,7 @@ struct PostListStyleTests {
         try await waitUntil { count >= 2 }
     }
 
-    /// 見えていない間と、設定の画面が手前にある間は、描き直しを求めずに溜め、見えたとき、手前でなくなったときに1回だけ求める。
+    /// 見えていない間と、設定の画面が手前にある間は、再描画を求めずに溜め、見えたとき、手前でなくなったときに1回だけ求める。
     @Test func holdsRedrawWhileHiddenOrBehindSettings() async throws {
         let settings = AppSettings.isolated()
         let style = PostListStyle(settings: settings, tuning: TuningStore(defaults: nil), network: AppDependencies.network)

@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// カスタム絵文字の画像が届いたら、その絵文字を描く行を描き直す。
+/// カスタム絵文字の画像が届いたら、その絵文字を描く行を再描画する。
 @MainActor
 @Suite(.scratch, .serialized, .failureState)
 struct TimelineEmojiArrivalTests {
@@ -32,7 +32,7 @@ struct TimelineEmojiArrivalTests {
         return image != nil
     }
 
-    /// 行が入れ替わったあとに届いた画像でも、それを描く新しい行を描き直す。届いた画像のURLから行を引く索引を、行が変わったら作り直すため。
+    /// 行が入れ替わったあとに届いた画像でも、それを描く新しい行を再描画する。届いた画像のURLから行を引く索引を、行が変わったら作り直すため。
     @Test func redrawsRowsAddedAfterEarlierArrivals() async throws {
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).image { _ in }.pngData())
         let store = EmojiImageStore<UIImage> { _ in png }
@@ -49,7 +49,7 @@ struct TimelineEmojiArrivalTests {
         try await waitUntil { showsImage(in: harness, of: added.id) }
     }
 
-    /// 画像が届いても、その絵文字を描かない行は描き直さない。
+    /// 画像が届いても、その絵文字を描かない行は再描画しない。
     @Test func leavesRowsWithoutArrivedEmoji() async throws {
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).image { _ in }.pngData())
         let store = EmojiImageStore<UIImage> { _ in png }

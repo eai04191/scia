@@ -342,7 +342,7 @@ extension HTTPClient {
     }
 }
 
-/// エラーの本文をファイルに落とす口。消されたかを確かめられるよう、書いたファイルを覚える。
+/// エラーの本文をファイルに落とす口。消されたかを確かめられるよう、書いたファイルを記録する。
 private final class RecordingDownloadTransport: HTTPTransport {
     let statusCode: Int
     let file = TestScratch.url("RecordingDownloadTransport")

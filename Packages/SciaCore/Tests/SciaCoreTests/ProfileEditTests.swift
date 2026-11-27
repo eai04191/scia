@@ -562,7 +562,7 @@ struct ProfileEditTests {
         #expect(rect == CGRect(x: 500, y: 0, width: 1000, height: 1000))
     }
 
-    /// 端まで引っぱったときなど、枠が画像の外にはみ出していても、画像の中に収める。
+    /// 端までドラッグしたときなど、枠が画像の外にはみ出していても、画像の中に収める。
     @Test func cropRectStaysInsideImage() {
         let rect = ProfileImageCrop.header(.wide).cropRect(
             imageSize: CGSize(width: 1200, height: 900),

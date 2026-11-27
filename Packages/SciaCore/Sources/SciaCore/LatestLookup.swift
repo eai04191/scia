@@ -26,7 +26,7 @@ public final class LatestLookup {
 
     /// - Parameters:
     ///   - clock: 長引いたかを測る。テストでは手で進める時計を渡す。
-    ///   - slowAfter: 待ち始めてから長引いたとみなすまでの時間。nilなら知らせない。チューニングで変えた値を使うよう、待ち始めるたびに読む。
+    ///   - slowAfter: 待ち始めてから長引いたとみなすまでの時間。nilなら`onSlowChange`を呼ばない。チューニングで変えた値を使うよう、待ち始めるたびに読む。
     public init(clock: any Clock<Duration> = SystemTime.clock, slowAfter: @escaping @MainActor () -> Duration?) {
         self.clock = clock
         self.slowAfter = slowAfter

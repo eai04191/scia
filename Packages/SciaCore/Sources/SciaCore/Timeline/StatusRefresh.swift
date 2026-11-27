@@ -10,7 +10,7 @@ public struct StatusRefreshNeeds: OptionSet, Sendable {
     }
 
     /// サーバーがまだカードを付けていない。
-    /// Mastodonは投稿を配信してからリンク先を取りに行ってカードを付け、付けたことをストリーミングで知らせない。
+    /// Mastodonは投稿を配信してからリンク先を取りに行ってカードを付け、付けたことをストリーミングのイベントで送らない。
     /// 自分のサーバーの投稿には数秒で付き、ほかのサーバーの投稿は、受け取ってから0〜60秒のランダムな時間をおいて取りに行く。
     /// 取りに行く仕事は優先度の低いキューに入るため、混んでいるサーバーではさらに遅れる。
     public static let linkCard = StatusRefreshNeeds(rawValue: 1 << 0)
@@ -25,7 +25,7 @@ public struct StatusRefreshNeeds: OptionSet, Sendable {
     }
 
     /// `status`を取り直す理由。`card`には、`status`から作ったリンクカードを渡す。
-    /// 作ってあるカードを使い回すため。カードは本文のHTMLを読み直して作るので、スクロールのたびに作ると重い。
+    /// 作ってあるカードを使い回すため。カードは本文のHTMLを解析して作るので、スクロールのたびに作ると重い。
     public init(_ status: Status, card: LinkCard?) {
         self = []
         if case .link = card { insert(.linkCard) }

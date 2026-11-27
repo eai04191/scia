@@ -396,7 +396,7 @@ extension AppearanceChoice {
 }
 
 extension AppearanceCatalog {
-    /// 今の選択で、数値の項目が見た目に効くか。光のアイコンを出さないときの、アイコンの大きさと濃さは効かない。効かない項目は、変えられなくする。
+    /// 今の選択で、数値の項目が見た目に効くか。光のアイコンを出さないときの、アイコンの大きさと不透明度は効かない。効かない項目は、変えられなくする。
     public static func isUsed(_ value: AppearanceValue, in appearance: AppearanceChoices) -> Bool {
         !(appearance.reactionGlowIcons == .none && [reactionGlowIconSize, reactionGlowIconOpacity].contains(value))
     }

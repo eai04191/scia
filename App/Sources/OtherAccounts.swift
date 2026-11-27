@@ -116,10 +116,10 @@ final class OtherAccounts {
         ))
     }
 
-    /// アカウントごとの、リアクションする絵文字を選ぶシート。そのアカウントのサーバーのカスタム絵文字と、そのサーバーで最近使った絵文字を出す。ログインし直したら作り直す。
+    /// アカウントごとの、リアクションする絵文字ピッカー。そのアカウントのサーバーのカスタム絵文字と、そのサーバーで最近使った絵文字を出す。ログインし直したら作り直す。
     private var emojiReactionPickers: [Credential.ID: (credential: Credential, picker: EmojiReactionPicker)] = [:]
 
-    /// `account`としてリアクションする絵文字を選ぶシート。
+    /// `account`としてリアクションする絵文字ピッカー。
     func emojiReactionPicker(for account: OtherAccount) -> EmojiReactionPicker {
         let credential = account.credential
         if let known = emojiReactionPickers[credential.id], known.credential == credential {

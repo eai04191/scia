@@ -94,7 +94,7 @@ struct ModerationAccountListTests {
         #expect(opened.cell(of: "12") == nil, "読んでいる途中に解除した人が出ています")
     }
 
-    /// 行のスワイプは「ブロックを解除」で、押すと解除を送る。行を消すのは、関係が届いてから。
+    /// 行のスワイプは「ブロックを解除」で、選択すると解除を送る。行を消すのは、関係が届いてから。
     @Test func swipeSendsUnblock() async throws {
         let opened = try await open(.blocks)
         defer { opened.close() }

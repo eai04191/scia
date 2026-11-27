@@ -110,7 +110,7 @@ public enum HapticStyle: String, TuningChoice {
 /// アプリで使うチューニング項目のリスト。値を足すときは、ここに定義を追加してTuningStoreから読む。
 public enum TuningCatalog {
 
-    /// 行が押されている状態の背景の色の強さ。UIKitの既定の押下の色に対する割合で、1なら既定のまま。
+    /// 行が押されている状態の背景の色の強さ。UIKitの既定の押されている状態の色に対する割合で、1なら既定のまま。
     public static let rowHighlightBackgroundStrength = NumberTuning(
         id: "timeline.rowHighlightBackgroundStrength",
         title: "行が押されている状態の背景の色の強さ",
@@ -119,7 +119,7 @@ public enum TuningCatalog {
         defaultValue: 0.5
     )
 
-    /// 行が押されている状態で、行の中身に押下の色を混ぜる強さ。背景の色の強さより大きくすると、背景は重ねた分の色になる。
+    /// 行が押されている状態で、行の中身に押されている状態の色を混ぜる強さ。背景の色の強さより大きくすると、背景は重ねた分の色になる。
     public static let rowHighlightContentStrength = NumberTuning(
         id: "timeline.rowHighlightContentStrength",
         title: "行が押されている状態の中身に混ぜる色の強さ",
@@ -254,7 +254,7 @@ public enum TuningCatalog {
         defaultValue: 0.5
     )
 
-    /// 本文が編集されたとき、新しく入った文字を濃くし始めるまでの、動きの時間に対する割合。前の文字が通り終える前に濃くすると、同じ場所で重なって見える。
+    /// 本文が編集されたとき、新しく入った文字の不透明度を上げ始めるまでの、動きの時間に対する割合。前の文字が通り終える前に不透明度を上げると、同じ場所で重なって見える。
     public static let textEditNewCharacterFadeDelay = NumberTuning(
         id: "timeline.textEditNewCharacterFadeDelay",
         title: "本文の編集で入った文字を濃くし始めるまでの割合",
@@ -272,7 +272,7 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
-    /// カスタム絵文字の画像が届いたとき、同じ行のあとの文字を前の位置から新しい位置へ動かし、絵文字を薄い状態から濃くする時間。0なら切り替える。
+    /// カスタム絵文字の画像が届いたとき、同じ行のあとの文字を前の位置から新しい位置へ動かし、絵文字の不透明度を低い状態から上げる時間。0なら切り替える。
     public static let customEmojiArrivalDuration = NumberTuning(
         id: "timeline.customEmojiArrivalDuration",
         title: "カスタム絵文字が届いたときの動きの時間（秒）",
@@ -538,7 +538,7 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
-    /// ダークモードで、地に敷くカードの色の明るさに掛ける倍率。暗い画面で色の面がまぶしくならないようにする。
+    /// ダークモードで、地に敷くカードの色の明るさに掛ける倍率。暗い画面でカードの色がまぶしくならないようにする。
     public static let profileAccentDarkLightness = NumberTuning(
         id: "profile.accentDarkLightness",
         title: "ダークモードのカードの色の明るさの倍率",
@@ -547,7 +547,7 @@ public enum TuningCatalog {
         defaultValue: 0.85
     )
 
-    /// ダークモードで、灰色のカードの明るさの上限。白い地のアイコンの人のカードが、黒い画面の中で明るい面として浮かないようにする。
+    /// ダークモードで、灰色のカードの明るさの上限。白い地のアイコンの人のカードが、黒い画面の中で明るいカードとして浮かないようにする。
     public static let profileAccentDarkNeutralMaxLightness = NumberTuning(
         id: "profile.accentDarkNeutralMaxLightness",
         title: "ダークモードの灰色のカードの明るさの上限",
@@ -713,7 +713,7 @@ public enum TuningCatalog {
     )
 
     /// 読み進めて既読位置が進んでから、操作が止まってこの時間だけ進まなければ、サーバーに保存する。
-    /// 指のスクロールが止まったとき（`interactionDidSettle`）とバックグラウンドに入るときにも保存するので、それを知らせない読み進め方（マウスのホイール、新着のボタンで先頭へ戻るなど）のためのもの。
+    /// 指のスクロールが止まったとき（`interactionDidSettle`）とバックグラウンドに入るときにも保存するので、それらが起きない読み進め方（マウスのホイール、新着のボタンで先頭へ戻るなど）のためのもの。
     public static let readPositionSaveDelay = NumberTuning(
         id: "streaming.readPositionSaveDelay",
         title: "読み進めてから既読位置を保存するまでの時間（秒）",
@@ -741,7 +741,7 @@ public enum TuningCatalog {
         defaultValue: 10
     )
 
-    /// ストリーミングにつながらない状態がこれだけ続いたら、ナビゲーションバーで知らせる。短い切断のたびには知らせない。
+    /// ストリーミングにつながらない状態がこれだけ続いたら、ナビゲーションバーに表示を出す。短い切断のたびには出さない。
     public static let outageNoticeDelay = NumberTuning(
         id: "streaming.outageNoticeDelay",
         title: "切れていると知らせるまでの時間（秒）",
@@ -834,7 +834,7 @@ public enum TuningCatalog {
     )
 
     /// 一覧とビューアの明るさが違うときの開閉で、2つの明るさの画像を入れ替える終わりに、下の画像を薄くしてなくす区間。入れ替えの進み具合の幅。0から1。
-    /// 下の画像を最後まで残すと、透明な部分のある画像が濃く描かれたまま着き、複製を外したところで薄くなる。広げるほど、不透明な画像が途中で透けて見える。
+    /// 下の画像を最後まで残すと、透明な部分のある画像が不透明度の高いまま描かれて着き、複製を外したところで薄くなる。広げるほど、不透明な画像が途中で透けて見える。
     public static let mediaDynamicRangeUnderFadePortion = NumberTuning(
         id: "media.dynamicRangeUnderFadePortion",
         title: "開閉で明るさを入れ替える終わりに、下の画像を薄くする区間",
@@ -1347,7 +1347,7 @@ public enum TuningCatalog {
     )
 
     /// アプリ内のSafariを、伏せた高さで出してから中くらいの高さへ広げる。
-    /// 実機では、中くらいの高さで直接出すと、ページを描く前の面が上がってきて、手前で本物のシートに跳んで止まって見える。
+    /// 実機では、中くらいの高さで直接出すと、ページを描く前の空のシートが上がってきて、手前で本物のシートに跳んで止まって見える。
     /// 小さく出して上がりきってから広げると、広げる動きはページを描いたシートで動き、跳ぶ動きが目立ちにくくなる。実機で比べて、こちらを既定にした。
     public static let inAppBrowserGrowsFromCollapsed = ToggleTuning(
         id: "browser.growsFromCollapsed",
@@ -1490,7 +1490,7 @@ public enum TuningCatalog {
         defaultValue: 2500
     )
 
-    /// カプセルに重ねた写真のスタックが、カプセルの面に落とす影の不透明度。
+    /// カプセルに重ねた写真のスタックが、カプセルに落とす影の不透明度。
     public static let composeStackShadowOpacity = NumberTuning(
         id: "compose.stackShadowOpacity",
         title: "カプセルの写真のスタックが背景に落とす影の不透明度",
@@ -1988,7 +1988,7 @@ public enum TuningCatalog {
         )
     }
 
-    /// 光をHDRで描くときの倍率。にじみをSDRの白の何倍の明るさで描くかで、1ならSDRのまま描く。ライトでは1を超えると、照らされた面を白より明るく描く。
+    /// 光をHDRで描くときの倍率。にじみをSDRの白の何倍の明るさで描くかで、1ならSDRのまま描く。ライトでは1を超えると、照らされた背景を白より明るく描く。
     /// どこまで明るくなるかは、画面の明るさと周りの明るさで変わる。
     public static let reactionGlowHDRExposure = NumberTuning(
         id: "timeline.reactionGlowHDRExposure",

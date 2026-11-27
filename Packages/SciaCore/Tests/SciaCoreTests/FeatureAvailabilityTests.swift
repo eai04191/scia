@@ -139,7 +139,7 @@ struct FeatureAvailabilityTests {
         #expect(await transport.requests.count == 1)
     }
 
-    /// 次のセッションでは、もう一度試す。サーバーが更新されて使えるようになることがあるため、サーバーごとには覚えない。
+    /// 次のセッションでは、もう一度試す。サーバーが更新されて使えるようになることがあるため、サーバーごとには記録しない。
     @Test func newSessionTriesAgain() async throws {
         let transport = StubTransport([
             .json("<html>Not Found</html>", statusCode: 404),

@@ -1,6 +1,6 @@
 public import Foundation
 
-/// ストリーミングが切れていた間の投稿や通知を読む補完の、直近の状態。タイムラインを引っぱったときに見せる。
+/// ストリーミングが切れていた間の投稿や通知を読む補完の、直近の状態。タイムラインをpull to refreshしたときに見せる。
 /// つながっていても、補完がまだ終わっていなければ新着は出てこないため、ストリーミングの状態とは別に持つ。
 public struct CatchUpStatus: Sendable, Equatable {
     public enum Phase: Sendable, Equatable {
@@ -24,7 +24,7 @@ public struct CatchUpStatus: Sendable, Equatable {
 
     public init() {}
 
-    /// 補完の最中に次の補完を求められても、ストアは今の補完で続けて読むので、読んだ件数はそのまま積み上げる。
+    /// 補完の最中に次の補完を求められても、ストアは今の補完で続けて読むので、読んだ件数はそのまま足し合わせる。
     public mutating func begin() {
         if case .loading = phase { return }
         attempt += 1

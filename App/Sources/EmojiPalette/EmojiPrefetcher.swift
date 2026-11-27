@@ -61,7 +61,7 @@ final class EmojiPrefetcher {
         let prefetch = EmojiPrefetch(
             files: files,
             fetch: { url in
-                // 前に読めなかった画像はプリフェッチせず、プリフェッチで読めなかったら、表示の読み込みと同じく覚える（docs/image-loading.md）。
+                // 前に読めなかった画像はプリフェッチせず、プリフェッチで読めなかったら、表示の読み込みと同じく記録する（docs/image-loading.md）。
                 guard await emojiImages.allowsPrefetch(of: url) else { throw EmojiPrefetch.Skipped() }
                 guard let purpose = await network.usePolicy(settings: settings).prefetch else { throw EmojiPrefetch.NotAllowed() }
                 do {

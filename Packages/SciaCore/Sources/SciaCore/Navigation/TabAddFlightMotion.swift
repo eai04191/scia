@@ -2,21 +2,21 @@ public import CoreGraphics
 
 /// 「タブに追加」で、足した項目のアイコンを右上の「タブ」ボタンから切り替えタブのボタンへ飛ばす動きの値と、飛ぶ間の計算。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
 ///
-/// アイコンは2枚重ねのビューで動かす。内側のビューが浮かび上がりのスプリング（大きさと不透明度）を、外側のビューが飛ぶ間の位置と、大きさと不透明度に掛ける倍率を持つ。
+/// アイコンは2枚重ねのビューで動かす。内側のビューがフェードインのスプリング（大きさと不透明度）を、外側のビューが飛ぶ間の位置と、大きさと不透明度に掛ける倍率を持つ。
 /// 見える大きさと不透明度は2つの掛け算になり、飛び始めてもスプリングは止まらずに続くので、倍率を1から始めれば値も速さも途切れない。
 /// 値は、作者がブラウザで再生しながら決めたもので、固定にしている。
 public enum TabAddFlightMotion {
     /// アイコンの大きさ（pt）。
     public static let iconSide: CGFloat = 34
 
-    /// 浮かび上がりのスプリング。大きさは`popScaleFrom`倍から`popScalePeak`倍へ、不透明度は`popOpacityFrom`から1へ。
+    /// フェードインのスプリング。大きさは`popScaleFrom`倍から`popScalePeak`倍へ、不透明度は`popOpacityFrom`から1へ。
     public static let popScaleFrom: CGFloat = 0.2
     public static let popScalePeak: CGFloat = 1.25
     public static let popScaleSpring = SpringCurve(duration: 0.27, bounce: 0.5)
     public static let popOpacityFrom: CGFloat = 0
     public static let popOpacitySpring = SpringCurve(duration: 0.35, bounce: 0)
 
-    /// 浮かび上がり始めてから飛び始めるまでの時間（秒）と、飛ぶ時間（秒）。
+    /// フェードインし始めてから飛び始めるまでの時間（秒）と、飛ぶ時間（秒）。
     public static let departDelay: Double = 0.22
     public static let flightDuration: Double = 0.55
 
@@ -25,7 +25,7 @@ public enum TabAddFlightMotion {
     public static let endHandle = CGVector(dx: -104, dy: -394)
     /// 軌道の上の進み具合を、時間に対してどう進めるか。CSSや`CAMediaTimingFunction`と同じcubic-bezier。
     public static let positionTiming = UnitBezier(x1: 0.55, y1: 0, x2: 0.85, y2: 0.6)
-    /// 飛ぶ間の進み具合（0〜1）に対する、浮かび上がった大きさと不透明度に掛ける倍率。
+    /// 飛ぶ間の進み具合（0〜1）に対する、フェードインした大きさと不透明度に掛ける倍率。
     public static let scaleMultiplier = KeyframeCurve(points: [(0, 1), (0.25, 0.977), (0.508, 0.957), (0.724, 0.957), (0.892, 0.843), (1, 0.28)], smooth: true)
     public static let opacityMultiplier = KeyframeCurve(points: [(0, 1), (0.9, 1), (1, 0)], smooth: false)
 

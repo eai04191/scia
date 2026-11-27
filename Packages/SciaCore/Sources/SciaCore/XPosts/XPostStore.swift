@@ -17,7 +17,7 @@ public struct XPostClient: Sendable {
         self.client = client
     }
 
-    /// 投稿を読むURL。読めなかった投稿を、URLごとに再読み込みの間隔で覚えるのにも使う。
+    /// 投稿を読むURL。読めなかった投稿を、URLごとに再読み込みの間隔で記録するのにも使う。
     static func url(id: String) -> URL? {
         baseURL?.appending(components: "status", id)
     }
@@ -110,7 +110,7 @@ public final class XPostStore {
                     guard !Task.isCancelled else { return }
                     self?.finish(id, with: .loaded(post))
                 } catch {
-                    // `cancelAll()`で取り消したら、読んでいないものに戻してあるので、失敗として覚えない。
+                    // `cancelAll()`で取り消したら、読んでいないものに戻してあるので、失敗として記録しない。
                     guard !Task.isCancelled else { return }
                     self?.logger.error("x post fetch failed: \(SciaLog.describe(error), privacy: .public)")
                     self?.fail(id, with: error)
@@ -139,14 +139,14 @@ public final class XPostStore {
         finish(id, with: .failed)
     }
 
-    /// 再読み込みしてよくなった時刻に、まだ読めていなければ`onChange`で知らせる。待っても読めない失敗なら知らせない。
-    /// 取り消しのように失敗として覚えないものも知らせない。すぐ読んでよいことになるので、知らせると、再描画した行が読み、待たずに繰り返すため。
+    /// 再読み込みしてよくなった時刻に、まだ読めていなければ`onChange`を呼ぶ。待っても読めない失敗なら呼ばない。
+    /// 取り消しのように失敗として記録しないものも呼ばない。すぐ読んでよいことになるので、呼ぶと、再描画した行が読み、待たずに繰り返すため。
     private func scheduleRetry(_ id: String, url: URL) {
         guard retryWakes[id] == nil, retry.hasFailed(url) else { return }
         let clock = clock
         retryWakes[id] = Task { [weak self] in
             let allowed = await RetrySchedule.waitUntilAutomaticLoad(clock: clock) { self?.retry.delayUntilAutomaticLoad(of: url) }
-            // `cancelAll()`で取り消したら、知らせない。あとで同じ投稿に作った待ちも消さない。
+            // `cancelAll()`で取り消したら、`onChange`を呼ばない。あとで同じ投稿に作った待ちも消さない。
             guard let self, !Task.isCancelled else { return }
             retryWakes[id] = nil
             if allowed, hasFailed(id: id) {

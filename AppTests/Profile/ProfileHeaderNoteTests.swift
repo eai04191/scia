@@ -34,7 +34,7 @@ struct ProfileHeaderNoteTests {
         )
     }
 
-    /// ヘッダーを窓に置く。返した窓は、テストの終わりに`close`で外す。
+    /// ヘッダーをウィンドウに置く。返したウィンドウは、テストの終わりに`close`で外す。
     private func placeHeader() throws -> (ProfileHeaderView, UIWindow) {
         let header = ProfileHeaderView(
             emojiImages: .offline,

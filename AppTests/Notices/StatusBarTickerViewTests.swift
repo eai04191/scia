@@ -14,7 +14,7 @@ struct StatusBarTickerViewTests {
         StatusBarTickerItem(id: id, kind: .favourite, account: account, subject: .text(RichText.plain("本文\(id)", emojis: [])))
     }
 
-    /// 縮めている途中に次の通知が来たら、残っている中身を見えている濃さから薄くして入れ替える。その場で取り除くと、中身が1コマで消える。
+    /// 縮めている途中に次の通知が来たら、残っている中身を見えている不透明度から薄くして入れ替える。その場で取り除くと、中身が1コマで消える。
     @Test func arrivalWhileShrinkingFadesOutRemainingContent() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -57,7 +57,7 @@ struct StatusBarTickerViewTests {
 }
 
 extension StatusBarTickerViewTests {
-    /// 縮め始めてから描くまでにメインスレッドが止まっても（押して通知タブへ移るときなど）、止まっていた分だけ進んだところから描かず、広げた形から縮め始める。
+    /// 縮め始めてから描くまでにメインスレッドが止まっても（選択して通知タブへ移るときなど）、止まっていた分だけ進んだところから描かず、広げた形から縮め始める。
     /// あとから加わる中身も、背景と同じ時刻表で端に沿わせる。
     @Test func shrinkStartsWhenFirstDrawnAfterStall() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -89,7 +89,7 @@ extension StatusBarTickerViewTests {
 }
 
 extension StatusBarTickerViewTests {
-    /// 文字を上へ送って入れ替えている途中に縮め始めても（押して通知タブへ移るときなど）、出ていく中身と入ってくる中身の高さと濃さは、上へ送る動きの続きから動かす。
+    /// 文字を上へ送って入れ替えている途中に縮め始めても（選択して通知タブへ移るときなど）、出ていく中身と入ってくる中身の高さと不透明度は、上へ送る動きの続きから動かす。
     @Test func shrinkDuringSwapKeepsContentWhereShown() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -116,7 +116,7 @@ extension StatusBarTickerViewTests {
         window.layer.timeOffset += 0.1
         CATransaction.flush()
 
-        // 押した時点の高さと濃さへ戻らず、上へ送る動きの続きにいる。
+        // 選択した時点の高さと不透明度へ戻らず、上へ送る動きの続きにいる。
         for (part, before) in zip([outgoing, incoming], shown) {
             let after = try #require(part.layer.presentation())
             #expect(after.position.y < before.0 - 0.5)
@@ -127,7 +127,7 @@ extension StatusBarTickerViewTests {
 }
 
 /// ステータスバーの通知を消してから、ステータスバーを出し直すまで。
-/// ステータスバーを出し直している途中に隠し直すと、システムは1コマで濃く出してから薄くするため、出し直すのは縮め終えてからにし、出し直している間は次を出さない。
+/// ステータスバーを出し直している途中に隠し直すと、システムは1コマで不透明にしてから薄くするため、出し直すのは縮め終えてからにし、出し直している間は次を出さない。
 @MainActor
 @Suite(.serialized, .failureState)
 struct StatusBarTickerStatusBarTests {

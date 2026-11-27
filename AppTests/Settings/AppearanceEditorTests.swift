@@ -117,7 +117,7 @@ struct AppearanceEditorTests {
         #expect(found?.rects == [CGRect(x: 60, y: 30, width: 300, height: 12)])
     }
 
-    /// プレビューの見本だけで、どの項目も場所を示せる。引用の区画は、いつも見本へ足す引用の囲みで示す。
+    /// プレビューの見本だけで、どの項目も場所を示せる。引用の区画は、いつも見本へ足す引用のカードで示す。
     @Test func samplesShowEveryItem() throws {
         let settings = try makeSettings()
         // アクションバーは、いつも出す設定のときだけすべての見本に出る。
@@ -152,7 +152,7 @@ struct AppearanceEditorTests {
         }
     }
 
-    /// 投稿の添付ファイルは本文の下、囲みの添付ファイルだけ本文の右に並べるときも、右に並べる写真にだけ効く項目を触っている間は、その場所を示せる。
+    /// 投稿の添付ファイルは本文の下、カードの添付ファイルだけ本文の右に並べるときも、右に並べる写真にだけ効く項目を触っている間は、その場所を示せる。
     @Test func besideItemsShowWhenOnlyEmbedIsBeside() throws {
         let settings = try makeSettings()
         settings.appearance.mediaArrangement = .belowBody
@@ -265,7 +265,7 @@ struct AppearanceEditorTests {
         _ = try size(.gridSecond)
     }
 
-    /// 2×2に並べたサムネイルでは、横の2つと縦の2つのすき間を示し、斜めの組は示さない。
+    /// 2×2に並べたサムネイルでは、横の2つと縦の2つの間隔を示し、斜めの組は示さない。
     @Test func gapsBetweenTiles() {
         let tiles = [
             CGRect(x: 0, y: 0, width: 100, height: 50),
@@ -308,8 +308,8 @@ struct AppearanceEditorTests {
         #expect(CGImageSourceGetCount(source) > 1)
     }
 
-    /// 光の高さと濃さは、設定ではHDRのときの値を選び、ライトでHDRを使わずに描くときは、決まった割合で低く薄くする。
-    /// 既定では、設定に移す前にチューニングで決めていた値（高さ64ptと38pt、ライトの濃さ0.95と0.3）になる。
+    /// 光の高さと不透明度は、設定ではHDRのときの値を選び、ライトでHDRを使わずに描くときは、決まった割合で低く薄くする。
+    /// 既定では、設定に移す前にチューニングで決めていた値（高さ64ptと38pt、ライトの不透明度0.95と0.3）になる。
     @Test func reactionGlowStyleScalesLightSDR() throws {
         let settings = try makeSettings()
         let tuning = TuningStore(defaults: nil)
@@ -360,7 +360,7 @@ struct AppearanceEditorTests {
         #expect(highlight.locate(in: layOutSamples(settings)) != nil)
     }
 
-    /// アイコンを大きくして散らしても、アイコンは消えない。濃さは、下の余白に収めて縮めたあとの大きさで、光源からの遠さを測って決めるため。
+    /// アイコンを大きくして散らしても、アイコンは消えない。不透明度は、下の余白に収めて縮めたあとの大きさで、光源からの遠さを測って決めるため。
     @Test func largeScatteredIconsStayVisible() throws {
         let settings = try makeSettings()
         settings.appearance.reactionGlowIcons = .scattered
@@ -418,14 +418,14 @@ struct AppearanceEditorTests {
         }
     }
 
-    /// すき間を示す帯の太さは、その項目の値と同じになる。帯がラベルの枠から測られていると、文字の上下の余白の分だけずれる。
-    /// 名前と時刻の最小のすき間は、名前が時刻に詰まった投稿で測る。
+    /// 間隔を示す帯の太さは、その項目の値と同じになる。帯がラベルの枠から測られていると、文字の上下の余白の分だけずれる。
+    /// 名前と時刻の最小の間隔は、名前が時刻に詰まった投稿で測る。
     @Test(arguments: AppearanceCatalog.values.filter { item in
         item.unit == .point && AppearanceHighlight(item)?.measuresGap == true
     })
     func gapBandMatchesValue(item: AppearanceValue) throws {
         let settings = try makeSettings()
-        // 名前の後ろに添える部分がないと、そのすき間を示せないため、名前の上の行にもハンドルを出す。
+        // 名前の後ろに添える部分がないと、その間隔を示せないため、名前の上の行にもハンドルを出す。
         settings.appearance.contextNameStyle = .nameAndAcct
         // 1段目と2段目のあいだは、2段に分けないと示せない。
         settings.appearance.stacksNameParts = item == AppearanceCatalog.nameStackSpacing
@@ -444,7 +444,7 @@ struct AppearanceEditorTests {
         }
     }
 
-    /// 囲みの区画は「引用」の区画で、見本の囲みも引用だけにする。Xの投稿は設定でオンにしたときだけ出すため、見本に出さない。
+    /// カードの区画は「引用」の区画で、見本のカードも引用だけにする。Xの投稿は設定でオンにしたときだけ出すため、見本に出さない。
     @Test func embedSamplesAreQuotesOnly() throws {
         // Xの投稿を展開するようにしていても、見本には出さない。
         let settings = try makeSettings()
@@ -505,7 +505,7 @@ struct AppearanceEditorTests {
 }
 
 private extension AppearanceHighlight {
-    /// すき間を示すか。部品そのものを示すものは、太さが値と一致しないので除く。
+    /// 間隔を示すか。部品そのものを示すものは、太さが値と一致しないので除く。
     var measuresGap: Bool {
         switch self {
         case .verticalGap, .horizontalGap: true

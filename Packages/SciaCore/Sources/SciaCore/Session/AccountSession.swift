@@ -38,7 +38,7 @@ public final class AccountSession {
     public let accounts: AccountCache
     /// セッションで読んだ相手との関係。プロフィール、メニュー、人のリストで同じものを使い、どこで変えても揃える。
     public let relationships: RelationshipCache
-    /// 今の版のサーバーが処理できないと分かった画像の形式。サーバーごとに端末に覚える。
+    /// 今の版のサーバーが処理できないと分かった画像の形式。サーバーごとに端末に保存する。
     public let mediaFormats: UnprocessableMediaFormats
     /// 接続の状態。ストリーミングの状態とサーバーの版は、セッションが入れる。
     public let diagnostics: ConnectionDiagnostics
@@ -54,7 +54,7 @@ public final class AccountSession {
     public var onTranslationSettingsChange: () -> Void = {}
     /// トークンが無効になり、ストリーミングと登録したタイムラインを止めたあとに呼ぶ。ログインし直しを促す表示はアプリが出す。
     public var onCredentialsInvalid: () -> Void = {}
-    /// アカウントの設定を読めたときと、入れ替えたときに呼ぶ。アニメーションを再生するかは、呼ぶ前にセッションが設定（`AppSettings`）へ覚えさせる。
+    /// アカウントの設定を読めたときと、入れ替えたときに呼ぶ。アニメーションを再生するかは、呼ぶ前にセッションが設定（`AppSettings`）へ保存させる。
     public var onPreferencesLoad: (ServerPreferences) -> Void = { _ in }
     /// 読めたアカウントの設定。まだ読めていなければnil。
     public private(set) var preferences: ServerPreferences?
@@ -82,8 +82,8 @@ public final class AccountSession {
 
     /// - Parameters:
     ///   - http: APIの外の通信の口。アプリで1つ作ったものを渡す。Xの投稿を読むのに使う。
-    ///   - settings: アプリの設定。Xの投稿の展開と自動翻訳の設定の変化を追い、サーバーのアニメーションの設定を覚えさせる。
-    ///   - defaults: サーバーごとに覚える値（処理できない画像の形式）の置き場所。`AppSettings`に渡したものと同じ。
+    ///   - settings: アプリの設定。Xの投稿の展開と自動翻訳の設定の変化を追い、サーバーのアニメーションの設定を保存させる。
+    ///   - defaults: サーバーごとに保存する値（処理できない画像の形式）の置き場所。`AppSettings`に渡したものと同じ。
     ///   - translation: 自動翻訳の、UIが用意する部品。訳せないUIではnil。
     ///   - pollOperations: セッションのクライアントから、投票の通信の口を作る。省略すると、そのクライアントで送る。
     ///   - requestLog: 失敗の記録。デバッグ版では応答の本文も残すものを渡す。
@@ -329,7 +329,7 @@ public final class AccountSession {
 
     // MARK: - 投稿欄の口
 
-    /// 投稿欄がメディアのアップロードに使う口。処理できない画像の形式を、このサーバーの版ごとに覚える。
+    /// 投稿欄がメディアのアップロードに使う口。処理できない画像の形式を、このサーバーの版ごとに記録する。
     /// - Parameter makeThumbnail: 添付のサムネイルを、UIの画像の型で作る。
     public func composeMediaService<Thumbnail>(makeThumbnail: @escaping (LocalMediaFile) async -> Thumbnail?) -> ComposeMediaService<Thumbnail> {
         ComposeMediaService(client: { [client] in client }, settings: settings, tuning: tuning, formats: mediaFormats, serverVersion: { [diagnostics] in diagnostics.serverVersion }, makeThumbnail: makeThumbnail)

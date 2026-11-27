@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// iOS 27.2の設定アプリのアイコンと同じ描き方で、システムカラーを敷いた角丸の四角に白い記号を描く。値は、シミュレーターで設定アプリとSciaを撮り、画素を比べて合わせた。
+/// iOS 27.2の設定アプリのアイコンと同じ描き方で、システムカラーを敷いた四角に白い記号を描く。値は、シミュレーターで設定アプリとSciaを撮り、画素を比べて合わせた。
 struct SymbolTile: View {
     static let baseSide: CGFloat = 28
     let systemImage: String

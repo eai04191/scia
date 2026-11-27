@@ -69,7 +69,7 @@ struct ProfileTabLoadingTests {
         }
     }
 
-    /// 開く前に読んだアカウントは、アイコンのためにすぐ渡し、画面の差し替えは開いたときにする。読み直さない。
+    /// 開く前に読んだアカウントは、アイコンのためにすぐ渡し、画面の差し替えは開いたときにする。再読み込みしない。
     @Test func loadsBeforeOpeningAndReplacesWhenOpened() async throws {
         let fetcher = Fetcher([.success(Self.account)])
         let opened = Opened(fetcher: fetcher)
@@ -85,7 +85,7 @@ struct ProfileTabLoadingTests {
         #expect(fetcher.purposes == [.display])
     }
 
-    /// 並びに出たときに読めなかったら、初めて開いたときに読み直す。
+    /// 並びに出たときに読めなかったら、初めて開いたときに再読み込みする。
     @Test func retriesOnFirstOpenAfterFailure() async throws {
         let fetcher = Fetcher([.failure(URLError(.notConnectedToInternet)), .success(Self.account)])
         let opened = Opened(fetcher: fetcher)
@@ -101,8 +101,8 @@ struct ProfileTabLoadingTests {
         #expect(fetcher.purposes == [.display, .display])
     }
 
-    /// 読めなかったら、開く前でも、頼まれたときに読み直す。読めていたら読み直さず、アカウントをもう一度渡す。
-    /// 並びが変わるたびに、アイコンのないプロフィールを読み直すため。
+    /// 読めなかったら、開く前でも、頼まれたときに再読み込みする。読めていたら再読み込みせず、アカウントをもう一度渡す。
+    /// 並びが変わるたびに、アイコンのないプロフィールを再読み込みするため。
     @Test func loadAccountRetriesFailureAndRepeatsLoadedAccount() async throws {
         let fetcher = Fetcher([.failure(URLError(.notConnectedToInternet)), .success(Self.account)])
         let opened = Opened(fetcher: fetcher)

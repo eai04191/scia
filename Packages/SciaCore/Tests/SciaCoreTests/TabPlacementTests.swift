@@ -219,7 +219,7 @@ struct TabLayoutSettingsTests {
         #expect(relaunched.tabLayout(for: "@alice@example.social").elements.contains(.item(.home, isVisible: true)))
     }
 
-    /// 切り替えタブで最後に開いた項目は、起動し直しても覚えておく。アカウントごとに持つ。
+    /// 切り替えタブで最後に開いた項目は、起動し直しても保存しておく。アカウントごとに持つ。
     @Test func switchTabItemIsPerAccountAndPersists() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)
@@ -230,7 +230,7 @@ struct TabLayoutSettingsTests {
         #expect(relaunched.switchTabItem(for: "@bob@example.social") == nil)
     }
 
-    /// 最後に見ていたタブの項目は、起動し直しても覚えておく。アカウントごとに持つ。
+    /// 最後に見ていたタブの項目は、起動し直しても保存しておく。アカウントごとに持つ。
     @Test func shownTabItemIsPerAccountAndPersists() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)

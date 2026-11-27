@@ -25,7 +25,7 @@ struct PostContentConfiguration: UIContentConfiguration {
         let accessibilityText: String
         /// 選択すると開くプロフィールの人の名前。VoiceOverの、プロフィールを開く操作の名前に使う。人を指さない行ではnil。
         var accountName: String?
-        /// 選択すると`onOpenContextAccount`を呼ぶ。返信のラベルは選択できる見た目にせず、押下を行に渡してスレッドを開かせるため、受けない。
+        /// 選択すると`onOpenContextAccount`を呼ぶ。返信のラベルは選択できる見た目にせず、選択を行に渡してスレッドを開かせるため、受けない。
         var opensAccount = true
     }
 
@@ -135,7 +135,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     var opensLinksOnTapOnly = false
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
-    /// カードの押下と、カードの中の部品の押下で呼ぶ処理。
+    /// カードの選択と、カードの中の部品の選択で呼ぶ処理。
     var embedActions = EmbedActions()
     /// リンクカードのタップと長押し。決まりはdocs/object-actions.mdにある。
     var linkCardTarget: (any ObjectActionTarget)?
@@ -376,7 +376,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onPollAction = { [weak self] action in self?.current.onPollAction?(action) }
         bodyView.onToggleReaction = { [weak self] name in self?.current.onToggleReaction?(name) }
         bodyView.onActionBarPress = { [weak self] item, button in self?.current.onActionBarPress?(item, button) }
-        // 名前の行は押下を受けず、行全体の押下に渡す。受けると、1行の投稿では行のヒット領域が本文の1行ほどしか残らない。
+        // 名前の行は選択を受けず、行全体の選択に渡す。受けると、1行の投稿では行のヒット領域が本文の1行ほどしか残らない。
         avatarView.isUserInteractionEnabled = true
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
         authorInteraction = ObjectInteraction(on: avatarView, tapsSelf: false, lift: .shape)

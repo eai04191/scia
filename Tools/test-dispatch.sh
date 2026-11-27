@@ -1,6 +1,6 @@
 #!/bin/bash
 # make check、make test、make check-testを、空いている枠で走らせる入口。makeとTools/merge-queue.shの両方がここを通る。決まりはdocs/test-dispatch.md。
-# 流れ: 順番札を取る → 札が先頭になるまで待つ → 別のMacに依頼する → 断られたら手元の枠を取る → どちらも空いていなければ、間をおいて別のMacから試し直す。
+# 流れ: 順番のチケットを取る → チケットが先頭になるまで待つ → 別のMacに依頼する → 断られたら手元の枠を取る → どちらも空いていなければ、間をおいて別のMacから試し直す。
 # 使い方:
 #   Tools/test-dispatch.sh dispatch <target> '<SIM>' '<ONLY>' [front]   空いている枠で走らせ、その結果の終了コードで終わる。frontを付けると列の先頭に並ぶ
 #   Tools/test-dispatch.sh remote <target>                               今の作業ツリーの中身を別のMacに1回依頼する。dispatchが呼ぶ
@@ -36,7 +36,7 @@ common_dir() {
     git rev-parse --path-format=absolute --git-common-dir
 }
 
-# 手元の枠のロックと順番札を置くフォルダー
+# 手元の枠のロックと順番のチケットを置くフォルダー
 slots_dir() {
     echo "$(common_dir)/scia-test-slots"
 }
@@ -52,7 +52,7 @@ run_in_free_slot() {
     trap 'stop_child 130' INT
     trap 'stop_child 143' TERM
     while true; do
-        # 受け付けられたあとに中断されたら、札を外したあとなので、同じ名前で置き直して元の順番に戻る
+        # 受け付けられたあとに中断されたら、チケットを外したあとなので、同じ名前で置き直して元の順番に戻る
         : > "$ticket"
         if [[ "$(first_ticket "$waiting")" == "$ticket" ]]; then
             if [[ -z "$local_only" ]]; then
@@ -68,7 +68,7 @@ run_in_free_slot() {
                 child=
                 [[ "$status" == "$UNREACHABLE" || "$status" == "$NOT_ACCEPTED" ]] || exit "$status"
                 quiet=1
-                # 札が外れているのは、受け付けられたあとで中断されたとき。手元で最初から走らせ直す
+                # チケットが外れているのは、受け付けられたあとで中断されたとき。手元で最初から走らせ直す
                 [[ -e "$ticket" ]] || local_only=1
             fi
             for ((i = 1; i <= LOCAL_SLOTS; i++)); do
@@ -88,7 +88,7 @@ run_in_free_slot() {
     done
 }
 
-# 順番札のパスを出す。札の名前は「番号-プロセスID」で、番号の順に走る。frontなら番号を0にして、ほかの札より前に並ぶ。番号を取る間はほかの依頼と重ねない
+# 順番のチケットのパスを出す。チケットの名前は「番号-プロセスID」で、番号の順に走る。frontなら番号を0にして、ほかのチケットより前に並ぶ。番号を取る間はほかの依頼と重ねない
 new_ticket() {
     local seq=0
     if [[ -z "$2" ]]; then
@@ -101,7 +101,7 @@ new_ticket() {
     printf '%s/%010d-%d' "$1" "$seq" "$$"
 }
 
-# 順番札のうち一番前のものを出す。消えたプロセスの札は消す
+# 順番のチケットのうち一番前のものを出す。消えたプロセスのチケットは消す
 first_ticket() {
     local ticket command
     for ticket in "$1"/*; do
@@ -239,7 +239,7 @@ results_ssh() {
     ssh "${ssh_args[@]}" -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$SCIA_REMOTE_HOST" "$@"
 }
 
-# 別のMacが受け付けて最初の行を書いたら、順番札を外して次の依頼に番を譲る
+# 別のMacが受け付けて最初の行を書いたら、順番のチケットを外して次の依頼に番を譲る
 release_ticket_on_acceptance() {
     local line
     if IFS= read -r line; then
@@ -249,7 +249,7 @@ release_ticket_on_acceptance() {
     fi
 }
 
-# 通ったtreeを手元に覚える。別のMacは送ったtreeと同じ中身で走らせたので、走らせている間に手元を変えていても、このtreeは通っている
+# 通ったtreeを手元に記録する。別のMacは送ったtreeと同じ中身で走らせたので、走らせている間に手元を変えていても、このtreeは通っている
 remember() {
     local target=$1 tree=$2 kind kinds
     case "$target" in
@@ -315,7 +315,7 @@ leave_here() {
 
 # 走らせている子。プロセスグループごと止めるものは、グループを負の番号で持つ
 child=
-# 子を起動してからchildに覚えるまでの間か。その間に届いた止める合図は、覚えてから扱う。覚える前に扱うと、子を止められないため
+# 子を起動してからchildに記録するまでの間か。その間に届いた止める合図は、記録してから扱う。記録する前に扱うと、子を止められないため
 starting=
 pending_signal=
 # 入口が端末を借りたか。止められたときに返す

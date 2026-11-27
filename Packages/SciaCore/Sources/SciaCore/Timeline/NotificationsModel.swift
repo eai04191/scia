@@ -9,7 +9,7 @@ public final class NotificationsModel {
 
     /// 結果を伝えるタイムラインの画面。
     public weak var display: (any TimelineDisplay)?
-    /// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態の表示。
+    /// タイムラインを最上部からpull to refreshしたときに見せる、ストリーミングの状態の表示。
     public weak var streamingStatus: (any StreamingStatusDisplay)?
     /// 未読の数が変わったときに呼ぶ。タブのバッジに出す。2つめの値は、実際はもっと多いかもしれないこと。
     public var onUnreadCountChange: ((Int, Bool) -> Void)?
@@ -38,9 +38,9 @@ public final class NotificationsModel {
     private var isDisabled = false
     /// `user`ストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
-    /// 切れていた間の通知を読む補完の状態。ストリーミングの状態と並べて、引っぱったときに見せる。
+    /// 切れていた間の通知を読む補完の状態。ストリーミングの状態と並べて、pull to refreshしたときに見せる。
     private var catchUp = CatchUpStatus()
-    /// ストリーミングで届いた通知の流れの速さ。引っぱったときに見せる。
+    /// ストリーミングで届いた通知の流れの速さ。pull to refreshしたときに見せる。
     private var arrivalRate = ArrivalRate()
     private var hasLoadedInitial = false
     private var isInForeground = true
@@ -430,7 +430,7 @@ public final class NotificationsModel {
         }
     }
 
-    /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。
+    /// ストリーミングの接続の状態を、pull to refreshしたときに見せる表示へ伝える。
     public func showStreamingState(_ state: ConnectionDiagnostics.StreamingState?) {
         streamingStatus?.setState(state)
     }
@@ -636,7 +636,7 @@ public final class NotificationsModel {
     }
 
     /// 通知を隠すミュートか、ブロックをした相手からの通知を除き、あとから届いても足さない。使う人の操作の結果なので、閉じる動きで消す。
-    /// 解除したら、また足すようにする。除いた通知は、読み込み直すまで戻さない。
+    /// 解除したら、また足すようにする。除いた通知は、再読み込みするまで戻さない。
     public func setAccount(_ id: String, excluded: Bool) {
         guard !isStopped else { return }
         guard excluded else {

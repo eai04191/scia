@@ -415,7 +415,7 @@ extension TimelineViewController {
         return otherAccountMenuIcon(for: account)
     }
 
-    /// 記号のプレースホルダーを返し、`loadPendingMenuIcons()`で読んで差し替えるよう積む。
+    /// 記号のプレースホルダーを返し、`loadPendingMenuIcons()`で読んで差し替えるようキューに入れる。
     private func pendingMenuIcon(_ source: PendingMenuIcon.Source) -> UIImage {
         let placeholder = contextMenuIcons.placeholder(symbolName: "person.crop.circle", side: Self.menuIconSide, traitCollection: traitCollection)
         pendingMenuIcons.append(PendingMenuIcon(source: source, placeholder: placeholder))

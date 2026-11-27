@@ -33,7 +33,7 @@ enum ScenarioHeartbeat {
             if dot.superview !== window {
                 window.addSubview(dot)
             }
-            // 画面を重ねて開いても隠れないよう、毎コマいちばん上へ出す
+            // モーダルビューを開いても隠れないよう、毎コマいちばん上へ出す
             window.bringSubviewToFront(dot)
             dot.alpha = tick ? 0.02 : 0.04
         }

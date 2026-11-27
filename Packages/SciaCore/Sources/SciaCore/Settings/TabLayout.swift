@@ -20,7 +20,7 @@ public enum TabItem: MenuItemKind {
     /// `name`は`#`を除いた名前。`title`は使う人が付けたタブの名前で、空なら`#名前`を出す。
     /// 同じ項目かどうかは、サーバーと同じ決まりでそろえた名前（`Hashtag.normalizedName`）で見る。サーバーは大文字と小文字などを区別しないため。
     case hashtag(name: String, title: String = "")
-    /// あるユーザーの、ハッシュタグの付いた投稿。サーバーには覚える仕組みがないため、使う人がこの端末の並びに足す。`name`は`#`を除いた名前。
+    /// あるユーザーの、ハッシュタグの付いた投稿。サーバーには保存する仕組みがないため、使う人がこの端末の並びに足す。`name`は`#`を除いた名前。
     /// `acct`は、タブとタイムラインの見出しにハンドルを出すため、並びと一緒に保存する。`title`は使う人が付けたタブの名前で、空なら`#名前`を出す。
     /// 同じ項目かどうかは、アカウントのIDと、ハッシュタグのそろえた名前で見る。
     case accountHashtag(accountID: String, acct: String, name: String, title: String = "")

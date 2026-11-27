@@ -47,7 +47,7 @@ final class ContentNavigationController: UINavigationController, UIGestureRecogn
         applyCoveredBottom(to: viewControllers)
     }
 
-    /// 画面を読み込む前は値だけを覚え、読み込んだあとのsafe areaの変化で反映する。
+    /// 画面を読み込む前は値だけを保持し、読み込んだあとのsafe areaの変化で反映する。
     private func applyCoveredBottom(to viewControllers: [UIViewController]) {
         guard isViewLoaded else { return }
         let extra = max(0, coveredBottomHeight - view.safeAreaInsets.bottom)

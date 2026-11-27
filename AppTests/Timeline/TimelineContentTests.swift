@@ -38,7 +38,7 @@ struct TimelineContentTests {
         #expect(content.symbolName == "star.fill")
     }
 
-    /// 絵文字やアイコンの画像が届いて同じ大きさで描き直したあとも、読み上げの要素は画面上の文字の位置を指したままにする。
+    /// 絵文字やアイコンの画像が届いて同じ大きさで再描画したあとも、読み上げの要素は画面上の文字の位置を指したままにする。
     @Test func notificationAccessibilityFrameSurvivesRedrawWithoutLayout() throws {
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let actor = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: status.account.avatar)

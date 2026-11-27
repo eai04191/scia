@@ -35,7 +35,7 @@ final class ModerationScreens {
         }
     }
 
-    /// ミュートかブロックの人のリストを覚え、関係が変わったら行を消せるようにする。
+    /// ミュートかブロックの人のリストを保持し、関係が変わったら行を消せるようにする。
     func register(_ controller: AccountListController) {
         accountLists.add(controller)
     }

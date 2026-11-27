@@ -48,7 +48,7 @@ struct PushAnchorTests {
         #expect(anchor.isStillShowing)
     }
 
-    /// 待つ間にほかのタブへ移ったら、見ていないタブに積まない。戻ってくれば、また積む。
+    /// 待つ間にほかのタブへ移ったら、見ていないタブにプッシュしない。戻ってくれば、またプッシュする。
     @Test func notShowingAfterMovingToAnotherTab() throws {
         let harness = try Harness()
         let anchor = PushAnchor(try harness.source(.home))
@@ -62,7 +62,7 @@ struct PushAnchorTests {
         #expect(anchor.isStillShowing)
     }
 
-    /// 切り替えタブの中で別の項目に切り替えたときも、前の項目に積まない。
+    /// 切り替えタブの中で別の項目に切り替えたときも、前の項目にプッシュしない。
     @Test func notShowingAfterSwitchingWithinSwitchTab() throws {
         let harness = try Harness()
         harness.arrangement.show(.local)
@@ -83,7 +83,7 @@ struct PushAnchorTests {
         #expect(!anchor.isStillShowing)
     }
 
-    /// 添付ファイルのビューアのように、元の画面をウィンドウに残したまま上に重ねたときも、その裏に積まない。閉じれば、また積む。
+    /// 添付ファイルのビューアのように、元の画面をウィンドウに残したまま上に重ねたときも、その裏にプッシュしない。閉じれば、またプッシュする。
     @Test func notShowingWhileCoveredByPresentedScreen() async throws {
         let harness = try Harness()
         let anchor = PushAnchor(try harness.source(.home))
@@ -97,7 +97,7 @@ struct PushAnchorTests {
         #expect(anchor.isStillShowing)
     }
 
-    /// 重ねた画面を閉じている途中は、閉じるのと同時にその下に積めるよう、積む。
+    /// モーダルビューを閉じている途中は、閉じるのと同時にその下にプッシュできるよう、プッシュする。
     @Test func showingWhilePresentedScreenIsBeingDismissed() async throws {
         let harness = try Harness()
         let root = harness.arrangement.tabBarController
@@ -111,7 +111,7 @@ struct PushAnchorTests {
         try await waitUntil { root.presentedViewController == nil }
     }
 
-    /// アプリ内のSafariを下げている間は後ろの画面を触れるので、積む。全画面に広げたときと、シートの上にさらに画面を重ねたときは積まない。
+    /// アプリ内のSafariを下げている間は後ろの画面を触れるので、プッシュする。全画面に広げたときと、シートの上にさらにモーダルビューを出したときはプッシュしない。
     @Test func showingOnlyWhileBrowserSheetLeavesScreenBehindUsable() async throws {
         let harness = try Harness()
         let root = harness.arrangement.tabBarController

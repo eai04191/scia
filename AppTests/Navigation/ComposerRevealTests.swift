@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 共有で投稿欄に入れるときに、タイムラインの上に重ねた画面を閉じる。閉じると失うものがあると示した画面だけを残す。
+/// 共有で投稿欄に入れるときに、タイムラインの上に出したモーダルビューを閉じる。閉じると失うものがあると示した画面だけを残す。
 /// 外から送られた行き先でタブを見せるときは、残す画面も含めてすべて閉じる。
 @MainActor
 @Suite(.scratch, .serialized, .failureState)
@@ -55,7 +55,7 @@ struct ComposerRevealTests {
         #expect(root.presentedViewController == nil)
     }
 
-    /// ほかの画面の上に重ねたビューアも、ビューアの閉じ方で閉じる。下の画面からまとめて閉じると、閉じる動きを通らず、閉じ終えた知らせが届かない。
+    /// ほかの画面の上に重ねたビューアも、ビューアの閉じ方で閉じる。下の画面からまとめて閉じると、閉じる動きを通らず、閉じ終えたときのコールバックが呼ばれない。
     /// 投稿欄は、メディアを選ぶシートの上に開いたビューアの閉じ終わりで、ビューアを出している扱いを解く。
     @Test func closesViewerAboveAnotherScreenItsOwnWay() async throws {
         let harness = try TimelineHarness(notices: notices)
@@ -130,7 +130,7 @@ struct ComposerRevealTests {
         #expect(root.presentedViewController === navigation)
     }
 
-    /// 通報のシートは、コメントを書くとSwiftUIで下へのスワイプを止め、その印で残る。
+    /// 通報のシートは、コメントを書くとSwiftUIで下へのスワイプを止め、そのフラグで残る。
     @Test func keepsReportSheetWithComment() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -225,7 +225,7 @@ struct ComposerRevealTests {
         #expect(continued)
     }
 
-    /// 重ねた画面のどこかに確認のアラートがあれば、答えを待っている途中として見分ける。送られた行き先は、そのとき閉じずにやめる。
+    /// モーダルビューのどこかに確認のアラートがあれば、答えを待っている途中として見分ける。送られた行き先は、そのとき閉じずにやめる。
     @Test func tellsWhetherAlertIsShown() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }

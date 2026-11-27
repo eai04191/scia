@@ -188,7 +188,7 @@ struct NotificationsModelTests {
         try await waitUntil { display.entries.first?.id == .notification("34975865") }
     }
 
-    /// ストリーミングで届いた投稿の削除は、その投稿についての通知を除く。ホームやスレッドと同じく、読み込み直さなくても反映する。
+    /// ストリーミングで届いた投稿の削除は、その投稿についての通知を除く。ホームやスレッドと同じく、再読み込みしなくても反映する。
     /// 使う人の操作によらない変化なので、閉じる動きは付けない。
     @Test func streamedDeleteRemovesNotificationsOfStatus() async throws {
         let firstMessage = Gate()

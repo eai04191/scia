@@ -362,7 +362,7 @@ final class InlineComposeController: NSObject {
     /// iOSが高さの変わらないキーボードの枠を知らせてくる。隠れる前のこの通知を、キーボードが戻ったと受け取らないために使う。
     private var didKeyboardHideForContextMenu = false
     /// コンテキストメニューを出したときの、キーボードに沿う枠（`keyboardLayoutGuide`）の高さ。
-    /// メニューの間にキーボードが隠れても通知が届かないことがあり、通知から覚えた高さでは、閉じ始めたときにキーボードが戻っているか分からないため、枠でも比べる。
+    /// メニューの間にキーボードが隠れても通知が届かないことがあり、通知から記録した高さでは、閉じ始めたときにキーボードが戻っているか分からないため、枠でも比べる。
     private var keyboardGuideHeightBeforeContextMenu: CGFloat = 0
     /// 画面に出ているキーボードに沿う枠の高さを測る。テストのウィンドウでは枠がキーボードの通知に追従しないので、テストから差し替える。
     var measureKeyboardGuideHeight: (UIView) -> CGFloat = { $0.keyboardLayoutGuide.layoutFrame.height }
@@ -371,7 +371,7 @@ final class InlineComposeController: NSObject {
     private var pendingPastedMedia: [PastedMedia?] = []
     /// 指す先を調べているファイルのURLの項目。なくなるまで、添付に足すのも投稿を送るのも待つ。
     private var resolvingPastedFiles: [UUID: Task<Void, Never>] = [:]
-    /// URLを覚えるために読んでいる、ペーストした文字。
+    /// URLを記録するために読んでいる、ペーストした文字。
     private var readingPastedTexts: [UUID: Task<Void, Never>] = [:]
     /// 添付を開いているビューア。閉じたら（閉じる動きの途中でも）nilにする。
     private weak var mediaViewer: MediaViewerController?
@@ -921,11 +921,11 @@ final class InlineComposeController: NSObject {
         (toolPlacement?.menu ?? []).map { UIMenu.group($0.items.map(menuAction(for:)), row: $0.row) }
     }
 
-    /// 設定と同じ、投稿欄のボタンの並びを変える画面を重ねる。書いている途中なら、閉じたあとにキーボードを戻す。
+    /// 設定と同じ、投稿欄のボタンの並びを変える画面をモーダルビューで出す。書いている途中なら、閉じたあとにキーボードを戻す。
     /// 開いている間は、キーボードを閉じても書いている状態を解かない。添付のビューアと同じ扱い。
     private func presentToolLayoutSettings() {
         guard let host else { return }
-        // ほかの画面が閉じていく途中は、その画面を出していた画面にまだ次の画面を重ねられず、出そうとしても出ない。
+        // ほかの画面が閉じていく途中は、その画面を出していた画面にまだ次のモーダルビューを出せず、出そうとしても出ない。
         // 開いた扱いだけが残ると、以後キーボードを閉じても欄がカプセルに戻らなくなるため、閉じ終えてから、そのときの状態で出し直す。
         let presenter = topPresenter(from: host)
         guard canPresent(on: presenter, retrying: { $0.presentToolLayoutSettings() }) else { return }
@@ -1855,14 +1855,14 @@ final class InlineComposeController: NSObject {
     /// パレットを載せたシート。出している間だけある。
     private var emojiSheet: EmojiPaletteSheet?
     private var isObservingEmojiPalette = false
-    /// パレットを出したときの、最近使った絵文字。出している間に選んでも並びを変えない。押そうとしている絵文字が指の下から動かないようにするため。
+    /// パレットを出したときの、最近使った絵文字。出している間に選んでも並びを変えない。選択しようとしている絵文字が指の下から動かないようにするため。
     /// システムの絵文字キーボードも、閉じて開き直すまで最近使った絵文字を並べ替えない。
     private var paletteRecentKeys: [String] = []
     /// 片方のシートを出している間にもう片方のボタンを選択したとき、出しているシートが閉じ終わったら出すシート。
     /// UIKitは前のシートが閉じ終わるまで次のシートを出せないため、閉じ終わりを待つ。待つ間も、投稿欄のバーは留めたままにする。
     private enum PendingSheet { case media, emoji }
     private var pendingSheet: PendingSheet?
-    /// 出しているシート。メディアを選ぶシートか、絵文字のパレットのシート。どちらも出している間は、投稿欄のバーをシートの上端に留め、書いている状態を保つ。
+    /// 出しているシート。メディアを選ぶシートか、絵文字ピッカー。どちらも出している間は、投稿欄のバーをシートの上端に留め、書いている状態を保つ。
     /// 閉じる途中のシートと、次に出したシートが同時にあるときは、閉じていないほうにする。閉じる途中のほうにすると、出したシートのバーの留めを外してしまう。
     private var bottomSheet: (any TrackedSheet)? {
         if let mediaPicker, !mediaPicker.isClosing { return mediaPicker }
@@ -1933,7 +1933,7 @@ final class InlineComposeController: NSObject {
         bottomSheetDidClose(disappearedWithoutDismissCallback: disappearedWithoutDismissCallback)
     }
 
-    /// メディアを選ぶシートと絵文字のパレットのシートの閉じ終わりで、バーと入力欄をどうするかを決める。
+    /// メディアを選ぶシートと絵文字ピッカーの閉じ終わりで、バーと入力欄をどうするかを決める。
     /// キーボードに戻らずに閉じたとき（シートの上の投稿ボタンから送ったときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
     private func bottomSheetDidClose(disappearedWithoutDismissCallback: Bool) {
         defer { checkSheetInvariants() }
@@ -2056,7 +2056,7 @@ final class InlineComposeController: NSObject {
             mediaPicker.close(notifiesWillClose: true)
             return
         }
-        // 絵文字のパレットのシートを出している間は、閉じ終わってから出す。
+        // 絵文字ピッカーを出している間は、閉じ終わってから出す。
         if let emojiSheet {
             logger.info("media picker: closing emoji palette sheet first")
             pendingSheet = .media
@@ -2072,7 +2072,7 @@ final class InlineComposeController: NSObject {
         return window.bounds.maxY - view.convert(view.bounds, to: window).maxY
     }
 
-    /// メディアを選ぶシートと絵文字のパレットのシートの、低いときの画面の下端からの高さ。最後に出ていたキーボードの高さにそろえる。
+    /// メディアを選ぶシートと絵文字ピッカーの、低いときの画面の下端からの高さ。最後に出ていたキーボードの高さにそろえる。
     /// 2つのシートを入れ替えたり、キーボードと切り替えたりしても、投稿欄のバーが上下に動かないようにするため。
     private var bottomSheetHeight: CGFloat {
         let fixedHeight = tuning.value(of: TuningCatalog.composePickerHeight)
@@ -2205,8 +2205,8 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// シートをキーボードと同じ高さで出せるよう、キーボードの高さを覚えておく。
-    /// ハードウェアキーボードでは候補の段だけになるので、低すぎる高さは覚えない。
+    /// シートをキーボードと同じ高さで出せるよう、キーボードの高さを保持しておく。
+    /// ハードウェアキーボードでは候補の段だけになるので、低すぎる高さは保持しない。
     @objc private func keyboardWillChangeFrame(_ notification: Notification) {
         guard let host, let window = host.view.window,
               let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
@@ -2243,7 +2243,7 @@ final class InlineComposeController: NSObject {
                 releaseHoldAboveKeyboard()
             }
         }
-        // 絵文字のパレットのシートで検索している間は、シートの中の入力欄のキーボードなので、メディアを選ぶシートの高さに使わないよう覚えない。
+        // 絵文字ピッカーで検索している間は、シートの中の入力欄のキーボードなので、メディアを選ぶシートの高さに使わないよう保持しない。
         // シートが残っているかでは見分けない。閉じ始めに本文へ戻したキーボードは、シートが閉じ終わる前に上がるので、それまで捨てると、
         // 検索中にキーボードを切り替えて閉じたとき、本文のキーボードと違う高さでシートを出し直し、バーが上下に動いた。
         guard height > Self.softwareKeyboardMinimumHeight, !emojiPalette.searchField.isFirstResponder else { return }
@@ -3368,7 +3368,7 @@ final class InlineComposeController: NSObject {
             UIAlertAction(title: ComposeTexts.delete, style: .destructive) { [weak self] _ in self?.removeAttachment(id) },
         ]
         guard let failure else {
-            // 理由が残っていない（失敗を覚える前に消えた）ときは、操作だけを出す。
+            // 理由が残っていない（失敗を記録する前に消えた）ときは、操作だけを出す。
             let alert = UIAlertController(title: title, message: nil, preferredStyle: .alert)
             actions.forEach(alert.addAction)
             alert.addAction(UIAlertAction(title: ComposeTexts.cancel, style: .cancel))
@@ -3412,10 +3412,10 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// `presenter`（`topPresenter(from:)`で得た画面）に、今すぐ画面を重ねられるか。
+    /// `presenter`（`topPresenter(from:)`で得た画面）に、今すぐモーダルビューを出せるか。
     /// ほかの画面が閉じていく途中は、まだ重ねられない。選択した操作を失わないよう、閉じ終えてから`action`でやり直し、falseを返す。
     /// やり直すときは、出すかどうかと書いている状態の扱いを、そのときの状態で決め直す。
-    /// 待っている間にまた選択されたら、最後に選択された操作だけをやり直す。選択した数だけやり直すと、同じ画面を重ねて出すため。
+    /// 待っている間にまた選択されたら、最後に選択された操作だけをやり直す。選択した数だけやり直すと、同じモーダルビューを何度も出すため。
     /// ほかの画面を出している間と、閉じていく画面のない切り替えの最中（選択した画面が開く途中など）は、やり直さずにfalseを返す。
     private func canPresent(on presenter: UIViewController, retrying action: @escaping @MainActor (InlineComposeController) -> Void) -> Bool {
         guard let closing = presenter.presentedViewController else {
@@ -4069,7 +4069,7 @@ extension InlineComposeController: UITextViewDelegate {
         scrollView.contentOffset = .zero
     }
 
-    /// バーを下へ引いて離したときの速さを覚えておく。キーボードが下がりきって書き終えたときに、カプセルの写真を散らばらせる強さに使う。
+    /// バーを下へ引いて離したときの速さを記録しておく。キーボードが下がりきって書き終えたときに、カプセルの写真を散らばらせる強さに使う。
     func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
         guard scrollView === dragArea else { return }
         barFling = (velocity: scrollView.panGestureRecognizer.velocity(in: scrollView).y, time: mediaTime())
@@ -4212,7 +4212,7 @@ extension InlineComposeController: UITextPasteDelegate {
         }
         item.setNoResult()
         // サーバーの上限を読む前と投稿を送っている間は、メディアだけなら「ペースト」を出さない。文字と一緒にコピーしたメディアを
-        // ⌘Vやメニューでペーストしたときだけここに来て、文字だけが入る。ピッカーも開けない間で、数秒で終わるため知らせない。
+        // ⌘Vやメニューでペーストしたときだけここに来て、文字だけが入る。ピッカーも開けない間で、数秒で終わるため、無視したことを表示しない。
         guard model.canPasteMedia else {
             logger.info("paste: media ignored while attaching is unavailable")
             return
@@ -4221,10 +4221,10 @@ extension InlineComposeController: UITextPasteDelegate {
         addPendingPastedMediaLater()
     }
 
-    /// ペーストした文字のURLを覚える。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
+    /// ペーストした文字のURLを記録する。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
     /// 本文に入れるのは`setDefaultResult()`に任せ、ここでは同じ項目から文字を読むだけにする。読み終える前に投稿ボタンを選択したら、`submit()`が読み終えるのを待つ。
-    /// 読んでいる間に下書きを空に戻すか本文を入れ替えたら、読み終えても覚えない。
-    /// Safariの「リンクをコピー」のように、文字ではなくURLだけの項目は、URLを文字にして覚える。
+    /// 読んでいる間に下書きを空に戻すか本文を入れ替えたら、読み終えても記録しない。
+    /// Safariの「リンクをコピー」のように、文字ではなくURLだけの項目は、URLを文字にして記録する。
     private func noteInsertedText(of provider: NSItemProvider) {
         let token = model.insertedTextToken
         let id = UUID()

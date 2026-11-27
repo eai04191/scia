@@ -50,7 +50,7 @@ struct AccountSessionStoresTests {
         #expect(!transport.requests.isEmpty)
     }
 
-    /// 使い始めてサーバーの情報を読むと、サーバーの版を接続の状態に入れ、アカウントの設定を読んで、アニメーションを再生するかを設定に覚えさせる。
+    /// 使い始めてサーバーの情報を読むと、サーバーの版を接続の状態に入れ、アカウントの設定を読んで、アニメーションを再生するかを設定に保存する。
     @Test func startLoadsServerVersionAndRemembersServerAnimations() async throws {
         let defaults = TestScratch.defaults("AccountSessionStoresTests.start")
         let settings = AppSettings(defaults: defaults)
@@ -65,7 +65,7 @@ struct AccountSessionStoresTests {
 
         #expect(session.diagnostics.serverVersion == "4.7.3")
         #expect(loaded?.autoplaysAnimations == true)
-        // 次の起動では、再読み込みする前から、覚えた値で描く。
+        // 次の起動では、再読み込みする前から、保存した値で描く。
         let next = AppSettings(defaults: defaults)
         next.followServerPreferences(of: session.credential.handle)
         #expect(next.animatesAvatars == settings.animatesAvatars)
@@ -116,7 +116,7 @@ struct AccountSessionStoresTests {
         #expect(session.diagnostics.streamingSubscriptions.map(\.stream) == ["user"])
     }
 
-    /// 処理できなかった画像の形式は、読めたサーバーの版で覚え、同じ版の間は送らない形式として返す。
+    /// 処理できなかった画像の形式は、読めたサーバーの版で記録し、同じ版の間は送らない形式として返す。
     @Test func composeMediaServiceRemembersUnprocessableFormatForServerVersion() async throws {
         let session = AccountSession.testing(transport: transport())
         defer { session.close() }

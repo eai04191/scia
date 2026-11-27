@@ -96,7 +96,7 @@ struct AccountListStoreTests {
         #expect(store.accounts.map(\.id) == ["7"])
     }
 
-    /// 読み込み直すと、最初のページで置き換える。
+    /// 再読み込みすると、最初のページで置き換える。
     @Test func loadInitialReplacesTheList() async throws {
         let queue = PageQueue([
             AccountListPage(accounts: accounts(["5", "6"]), nextMaxID: "100"),

@@ -134,7 +134,7 @@ final class ProfileFeaturedTagsShelfView: ProfileShelfView {
     }
 }
 
-/// 紹介しているユーザーの棚。アイコンと表示名とハンドルを縦に積んだ小さなカードで並べる。続きがあれば、最後に「すべて見る」を置く。
+/// 紹介しているユーザーの棚。アイコンと表示名とハンドルを縦に並べた小さなカードで並べる。続きがあれば、最後に「すべて見る」を置く。
 final class ProfileEndorsementsShelfView: ProfileShelfView {
     struct Content: Equatable {
         let accounts: [Account]

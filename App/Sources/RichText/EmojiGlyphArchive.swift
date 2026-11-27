@@ -43,7 +43,7 @@ final class EmojiGlyphArchive: Sendable {
 
     /// 小さい画像の高さのピクセル数。カスタム絵文字のサムネイルと同じ。
     static let smallPixelHeight = 32
-    /// 描く大きさの画像を作り始める前と、作った量が増えるたびに、必須でない用途の空きを読み直す間隔（バイト）。カスタム絵文字のプリフェッチと同じ。
+    /// 描く大きさの画像を作り始める前と、作った量が増えるたびに、必須でない用途の空きを読み取る間隔（バイト）。カスタム絵文字のプリフェッチと同じ。
     static let capacityCheckInterval = 10 * 1_024 * 1_024
 
     let directory: URL

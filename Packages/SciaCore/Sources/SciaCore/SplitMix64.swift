@@ -1,4 +1,4 @@
-/// 同じ種からは、いつも同じ列を返す乱数。
+/// 同じseedからは、いつも同じ列を返す乱数。
 /// テストで試行ごとに同じ列を使うほか、タイムラインで重ねた写真のように、同じ投稿をいつも同じ形にばらつかせるのに使う。
 public struct SplitMix64: RandomNumberGenerator, Sendable {
     private var state: UInt64

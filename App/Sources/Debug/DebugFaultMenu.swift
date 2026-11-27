@@ -91,7 +91,7 @@ enum DebugFaultMenu {
         )
     }
 
-    /// サーバーやプロキシの障害。429と503は、自動の通信を止めて明けたら読み込み直すところを確かめられるよう`Retry-After`も返す。
+    /// サーバーやプロキシの障害。429と503は、自動の通信を止めて明けたら再読み込みするところを確かめられるよう`Retry-After`も返す。
     private static func statusMenu(handle: @escaping @MainActor (DebugURL) -> Void) -> UIMenu {
         let current = DebugFaults.failingStatus
         let choices: [(statusCode: Int, retryAfter: Int?)] = [(500, nil), (502, nil), (503, 30), (429, 30)]

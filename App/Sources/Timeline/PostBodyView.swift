@@ -94,14 +94,14 @@ struct PostBodyContent {
     var actionBarSpacing: CGFloat = 0
 }
 
-/// カードの押下と、カードの中の部品の押下で呼ぶ処理。引用とXの投稿で開く先が違うため、置く側が決める。
+/// カードの選択と、カードの中の部品の選択で呼ぶ処理。引用とXの投稿で開く先が違うため、置く側が決める。
 struct EmbedActions {
     /// カードが選択されたときに、カードを渡して呼ぶ。
     var open: ((EmbeddedPostView) -> Void)?
-    /// 囲みのタップと長押し。渡すと、タップは`open`の代わりにこれで行い、長押しでは囲みの対象のメニューか、選んだ操作を行う。
+    /// カードのタップと長押し。渡すと、タップは`open`の代わりにこれで行い、長押しではカードの対象のメニューか、選んだ操作を行う。
     /// 決まりはdocs/object-actions.mdにある。
     var target: (any ObjectActionTarget)?
-    /// 囲みの作者のアイコンのタップと長押し。
+    /// カードの作者のアイコンのタップと長押し。
     var accountTarget: (any ObjectActionTarget)?
     /// カードのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var selectMedia: ((Int, MediaGridView) -> Void)?
@@ -130,7 +130,7 @@ final class PostBodyView: UIView {
     var onExpandBody: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
-    /// 本文と囲みの本文のリンクのタップで、タップと長押しの設定によらず、いつも開く（`LinkLabel.opensLinksOnTapOnly`）。
+    /// 本文とカードの本文のリンクのタップで、タップと長押しの設定によらず、いつも開く（`LinkLabel.opensLinksOnTapOnly`）。
     var opensLinksOnTapOnly = false {
         didSet {
             textLabel.opensLinksOnTapOnly = opensLinksOnTapOnly
@@ -139,7 +139,7 @@ final class PostBodyView: UIView {
     }
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
-    /// カードの押下と、カードの中の部品の押下を受ける。
+    /// カードの選択と、カードの中の部品の選択を受ける。
     var embedActions = EmbedActions() {
         didSet {
             embedInteraction?.target = embedActions.target
@@ -194,7 +194,7 @@ final class PostBodyView: UIView {
     private var mediaView: MediaGridView?
     private var cardView: LinkCardView?
     private var embedView: EmbeddedPostView?
-    /// 投稿のカードに替わったリンクカードのスナップショット。投稿のカードを濃くする間、カードのあった位置に重ねて薄くする。
+    /// 投稿のカードに替わったリンクカードのスナップショット。投稿のカードの不透明度を上げる間、カードのあった位置に重ねて薄くする。
     private(set) var leavingCardSnapshot: UIView?
     /// 本文が編集で変わったら、変わらない文字を前の位置から動かす（`PostContentConfiguration.animatesTextEdit`）。
     var animatesTextEdit = false
@@ -703,7 +703,7 @@ final class PostBodyView: UIView {
     }
 
     /// 本文のラベルを、同じ文字列を同じ位置に並べる選べるテキストビューに差し替え、全体を選ぶ。決まりはdocs/menus.mdの「本文の文字を選ぶ」にある。
-    /// ラベルは並べ方の基準に使っているので外さず、透明にして残す。透明なラベルは押下も受けないため、リンクは開かない。
+    /// ラベルは並べ方の基準に使っているので外さず、透明にして残す。透明なラベルは選択も受けないため、リンクは開かない。
     /// サーバーが縮めて見せるURLは、先にラベルを元の文字に戻した本文にしてから差し替える。
     func beginTextSelection() {
         guard canSelectText, selectionTextView == nil, let content else { return }
@@ -1123,7 +1123,7 @@ final class PostBodyView: UIView {
         embedView.isHidden = false
         embedView.apply(embed)
         // 動きの中で再描画されても、その動きに乗せず、すぐ消す。乗せると、濃い状態から薄くなる途中で
-        // 濃くし始め、1コマでカードが出て見える。濃くしている途中の行が別の投稿に使い回されたときも、その動きを止める。
+        // 不透明度を上げ始め、1コマでカードが出て見える。不透明度を上げている途中の行が別の投稿に使い回されたときも、その動きを止める。
         if fadesIn {
             embedView.stopFading(at: 0)
         } else if !keepsFade {
@@ -1161,7 +1161,7 @@ final class PostBodyView: UIView {
         return snapshot
     }
 
-    /// リンクカードのスナップショットを先に薄くし、投稿のカードを少し遅れて濃くする。同時に入れ替えると、出だしで両方が濃いまま重なって読めないため（リンクカードの文字の入れ替えと同じ）。
+    /// リンクカードのスナップショットを先に薄くし、投稿のカードを少し遅れて不透明度を上げる。同時に入れ替えると、出だしで両方が濃いまま重なって読めないため（リンクカードの文字の入れ替えと同じ）。
     private func animateEmbedArrival(_ embedView: EmbeddedPostView, leavingCard: UIView?, duration: TimeInterval) {
         if let leavingCard {
             UIView.animateSpring(duration: duration * 0.4, in: leavingCard) {

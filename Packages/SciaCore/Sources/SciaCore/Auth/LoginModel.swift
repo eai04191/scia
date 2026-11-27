@@ -53,7 +53,7 @@ public final class LoginModel {
         errorMessage = message
     }
 
-    /// ログインを始める。やめられるよう、処理を覚えておく。
+    /// ログインを始める。やめられるよう、処理を保持しておく。
     /// - Parameter authenticate: 認可画面のURLを開き、使う人が許可したあとのコールバックのURLを返す。やめたら`CancellationError`を投げる。
     public func startLogin(authenticate: @escaping @Sendable (URL) async throws -> URL) {
         guard !isLoggingIn else { return }

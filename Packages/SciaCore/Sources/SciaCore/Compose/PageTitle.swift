@@ -4,7 +4,7 @@ public import Foundation
 /// og:titleを優先し、なければ最初の`<title>`を使う。YouTubeの`<title>`は「- YouTube」が付き、ページの初めには中身のない`<title>YouTube</title>`もあるため。
 ///
 /// HTMLは組み立てず、全体に正規表現もかけない。バイト列で`og:title`と`<title`の場所を探し、その近くの決まった幅だけを文字にして読む。
-/// 読む量は上限まで来るたびに確かめ直すため、全体を読み直したり、閉じのないタグのたびに末尾まで探したりすると、
+/// 読む量は上限まで来るたびに確かめ直すため、全体を頭から調べ直したり、閉じのないタグのたびに末尾まで探したりすると、
 /// `og:title`や`<title`を大量に並べたページで、手間が2乗で増えて端末が固まるため。
 /// 幅に収まらない長いタグや、調べる数を超えた先のog:titleは見つけられないが、そのようなページは実際には見かけない。
 public enum PageTitle {
@@ -30,7 +30,7 @@ public enum PageTitle {
 
     /// 空でないog:titleのmetaを、閉じの`>`まで読んだか。読み終えていれば、残りを読まずに止めてよい。
     /// scriptの中の`og:title`という文字列や、空のog:titleでは止めない。本物のog:titleがあとに出てくることがあるため。
-    /// - Parameter offset: ここより前は前回までに調べ済み。調べ済みの分を読み直さないよう、ここから探す。
+    /// - Parameter offset: ここより前は前回までに調べ済み。調べ済みの分をもう一度調べないよう、ここから探す。
     ///   前回の終わりで切れていたタグも見つけられるよう、渡す側はタグの幅の分だけ手前にずらして渡す。
     public static func hasOGTitle(in data: Data, contentType: String?, searchingFrom offset: Int = 0) -> Bool {
         var scanned = 0
@@ -170,7 +170,7 @@ public enum PageTitle {
     }
 
     /// 切り出した範囲を文字にする。範囲は`<`や`>`のようなASCIIの文字で区切るので、Shift_JISなどでも文字の途中では切れない。
-    /// 読む量の上限で、複数バイトの文字の途中で切れた`<title>`の中身のために、読めなければ末尾を数バイトずつ削って読み直す。
+    /// 読む量の上限で、複数バイトの文字の途中で切れた`<title>`の中身のために、読めなければ末尾を数バイトずつ削ってもう一度デコードする。
     private static func text(of data: Data, range: Range<Int>, encoding: String.Encoding) -> String {
         let slice = data[(data.startIndex + range.lowerBound)..<(data.startIndex + range.upperBound)]
         for dropped in 0...3 {

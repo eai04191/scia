@@ -110,7 +110,7 @@ struct EmojiGlyphArchiveTests {
         #expect(next.glyph(for: "😀", geometry: Self.geometry) == nil)
     }
 
-    /// アカウントのプリセットの絵の画像は、今の大きさと絵を変えずに作り、窓ごとに絵が違っても引ける。
+    /// アカウントのプリセットの絵の画像は、今の大きさと絵を変えずに作り、ウィンドウごとに絵が違っても引ける。
     /// どのプリセットも使わない絵なら、今の大きさと絵でない画像は引かない。
     @Test func buildsAndServesAccountStyleWithoutSwitching() async throws {
         let archive = makeArchive(capacity: Int.max)

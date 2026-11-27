@@ -1,7 +1,7 @@
 <title>Sciaメニューの既定値</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* 左に並べ替えるリスト、右にメニューのプレビュー。狭い画面では縦に積む */
+/* 左に並べ替えるリスト、右にメニューのプレビュー。狭い画面では縦に並べる */
 :root {
   --bg: #f4f5f8;
   --surface: #ffffff;
@@ -343,7 +343,7 @@ function button(text, label, disabled, action) {
   return b;
 }
 
-// ▲▼で動かしたときは、描き直したあとも動かした行の同じボタンにフォーカスを戻し、続けて押せるようにする。端に着いて押せなくなったら、逆向きのボタンに移す。
+// ▲▼で動かしたときは、再描画したあとも動かした行の同じボタンにフォーカスを戻し、続けて選択できるようにする。端に着いて無効になったら、逆向きのボタンに移す。
 function move(from, to, focusButton) {
   if (from === to) return;
   const next = [...state[selected]];
@@ -360,7 +360,7 @@ function move(from, to, focusButton) {
 // 横並びの区切り線。`row`はアイコンと名前、`row:small`はアイコンのみ。
 function isRowToken(token) { return token === "row" || token === "row:small"; }
 
-// SciaCoreのMenuLayout.groupsと同じく、区切り線でまとまりを分け、空のまとまりは捨てる。
+// SciaCoreのMenuLayout.groupsと同じく、区切り線でグループを分け、空のグループは捨てる。
 function groupsOf(tokens) {
   const groups = { main: [], more: [] };
   let current = [];

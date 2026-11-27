@@ -8,7 +8,7 @@ import UIKit
 final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEditMenuInteractionDelegate {
     /// 選択を解いたときと、ほかの部品にフォーカスが移ったときに呼ぶ。
     var onEnd: (() -> Void)?
-    /// 押下を受ける高さ。nilなら全体で受ける。文字に合わせて伸ばした最後の行の下の行間が、下の部品（サムネイル、投票など）に重なっても、
+    /// 選択を受ける高さ。nilなら全体で受ける。文字に合わせて伸ばした最後の行の下の行間が、下の部品（サムネイル、投票など）に重なっても、
     /// その部品へのタップを奪わないよう、差し替えたラベルの高さを返す。
     var touchableHeight: (() -> CGFloat?)?
     /// 最後に触れたタッチの種類。選択が空になったときに、やめるかを決めるのに使う。
@@ -32,7 +32,7 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         isEditable = false
         isSelectable = true
         isScrollEnabled = false
-        // 選んだ文字を持ち出すドラッグは、iPadとして動くMacでは既定で有効になる（iPhoneでは既定で無効）。全体を選んで始めるので、どこを押下しても選んだ文字の上になり、
+        // 選んだ文字を持ち出すドラッグは、iPadとして動くMacでは既定で有効になる（iPhoneでは既定で無効）。全体を選んで始めるので、どこを選択しても選んだ文字の上になり、
         // マウスでドラッグすると、範囲を選び直す代わりに文字を持ち出すドラッグが始まるため止める。
         textDragInteraction?.isEnabled = false
         backgroundColor = .clear
@@ -242,7 +242,7 @@ extension NSAttributedString {
     }
 }
 
-/// 選べるテキストビューの上に、場所取りに置き換えた字形を描くビュー。押下は受けない。
+/// 選べるテキストビューの上に、場所取りに置き換えた字形を描くビュー。選択は受けない。
 private final class OverlaidGlyphsView: UIView {
     /// 描く字形と位置、字形の上に引き直す取り消し線と下線の並び（`TextKitLabelLayout.overlaidGlyphDecorations(_:)`）。
     var content: (glyphs: [(glyph: OverlaidGlyph, origin: CGPoint)], decorations: TextLayout?) = ([], nil) {

@@ -107,7 +107,7 @@ struct SearchSuggestionsTests {
         #expect(SearchSuggestions.Content().entries.isEmpty)
     }
 
-    /// 覚えておくのは20件まで。
+    /// 保存しておくのは20件まで。
     @Test func recentsAreCapped() {
         let (_, recents) = make()
         for number in 0..<25 {

@@ -75,7 +75,7 @@ struct ConnectionStatusView: View {
         }
     }
 
-    /// 今の版のサーバーでは送らないと覚えている形式。
+    /// 今の版のサーバーでは送らないと記録している形式。
     private var unprocessableFormats: [UnprocessableMediaFormats.Entry] {
         let version = diagnostics.serverVersion ?? ""
         return diagnostics.mediaFormats.entries.filter { $0.serverVersion == version }

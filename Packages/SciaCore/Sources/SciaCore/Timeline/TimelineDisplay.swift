@@ -53,7 +53,7 @@ public protocol TimelineDisplay: AnyObject {
     func currentAnchorID() -> TimelineEntry.ID?
 }
 
-/// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態の表示への命令。
+/// タイムラインを最上部からpull to refreshしたときに見せる、ストリーミングの状態の表示への命令。
 @MainActor
 public protocol StreamingStatusDisplay: AnyObject {
     func setState(_ state: ConnectionDiagnostics.StreamingState?)

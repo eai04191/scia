@@ -44,7 +44,7 @@ struct URLSessionTransportTests {
         #expect(data == Data("busy".utf8))
     }
 
-    /// 長さを先に知らせない応答も、上限を超えた時点で読むのをやめる。
+    /// `Content-Length`のない応答も、上限を超えた時点で読むのをやめる。
     @Test func stopsReadingWhenBodyExceedsLimit() async throws {
         let server = try await LocalHTTPServer(response: Self.response(status: 200, body: String(repeating: "a", count: 64 * 1_024), length: false))
         defer { server.stop() }
@@ -81,7 +81,7 @@ struct URLSessionTransportTests {
         #expect(try Data(contentsOf: file) == Data("file".utf8))
     }
 
-    /// 上限を超えて止めたら、落としかけのファイルを残さない。長さを先に知らせる応答も、知らせない応答も。
+    /// 上限を超えて止めたら、落としかけのファイルを残さない。`Content-Length`のある応答も、ない応答も。
     @Test(arguments: [true, false])
     func stopsDownloadOverLimit(length: Bool) async throws {
         let server = try await LocalHTTPServer(response: Self.response(status: 200, body: String(repeating: "a", count: 64 * 1_024), length: length))

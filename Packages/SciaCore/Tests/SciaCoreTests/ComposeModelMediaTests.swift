@@ -23,7 +23,7 @@ struct ComposeModelMediaTests {
             attachment(id: "m-\(upload.filename)", processed: true)
         }
         var waitResult: (String) throws -> MediaAttachment = { id in attachment(id: id, processed: true) }
-        /// 処理できないと覚えた画像の形式。
+        /// 処理できないと記録した画像の形式。
         var unprocessableImageTypes: [String] = []
         var descriptionUpdates: [(id: String, description: String)] = []
         var descriptionResult: (String, String) throws -> MediaAttachment = { id, description in
@@ -157,7 +157,7 @@ struct ComposeModelMediaTests {
         #expect(CGImageDestinationFinalize(destination))
     }
 
-    /// 対応形式として返しながらHEICを処理できないサーバーでは、同じ写真のJPEGで1回だけ再送し、その形式を覚える。
+    /// 対応形式として返しながらHEICを処理できないサーバーでは、同じ写真のJPEGで1回だけ再送し、その形式を記録する。
     @Test func resendsUnprocessableHEICAsJPEGOnce() async throws {
         let server = FakeServer()
         server.uploadResult = { upload in
@@ -1070,7 +1070,7 @@ struct ComposeModelMediaTests {
 
         #expect(server.uploads.map(\.mimeType) == ["image/heic", "image/jpeg"])
         #expect(loads == 1)
-        // 大きさを変えずに形式だけを変えたので、縮めたとは知らせない。
+        // 大きさを変えずに形式だけを変えたので、`onMediaReduced`を呼ばない。
         #expect(reduced.isEmpty)
         #expect(model.attachmentStatus(of: try #require(model.attachments.first?.id)) == .ready)
     }

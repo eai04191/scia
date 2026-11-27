@@ -4,7 +4,7 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-/// スレッドを開くとき、押した投稿をタイムラインで見えていた画面上の位置に置き、会話を読んで前後に並べても、その位置から動かさないことを確かめる。
+/// スレッドを開くとき、選択した投稿をタイムラインで見えていた画面上の位置に置き、会話を読んで前後に並べても、その位置から動かさないことを確かめる。
 @MainActor
 @Suite(.scratch, .serialized, .failureState)
 struct ThreadOpeningTests {
@@ -14,7 +14,7 @@ struct ThreadOpeningTests {
     private let focus = StatusFactory.make(count: 1, startingAt: 1_000)[0]
     private var focusID: TimelineViewController.ItemID { .status(focus.id) }
 
-    /// `windowY`で押した投稿を開いたスレッド。押した投稿だけを並べ、画面に出す。
+    /// `windowY`で選択した投稿を開いたスレッド。選択した投稿だけを並べ、画面に出す。
     private func openThread(atWindowY windowY: CGFloat) throws -> TimelineHarness {
         try TimelineHarness { [focus] viewController in
             viewController.threadFocusID = focus.id
@@ -32,8 +32,8 @@ struct ThreadOpeningTests {
         harness.collectionView.layoutIfNeeded()
     }
 
-    /// 祖先が押した位置より上に収まらないときは、押した投稿は動かない。
-    /// 押した行の上端がバーの下に隠れていたとき（`windowY`が小さいとき）も、同じだけ隠れた位置に置く。
+    /// 祖先が選択した位置より上に収まらないときは、選択した投稿は動かない。
+    /// 選択した行の上端がバーの下に隠れていたとき（`windowY`が小さいとき）も、同じだけ隠れた位置に置く。
     @Test(arguments: [500.0, 300.0, 60.0])
     func focusStaysWhenAncestorsFillAbove(windowY: CGFloat) throws {
         let harness = try openThread(atWindowY: windowY)
@@ -47,8 +47,8 @@ struct ThreadOpeningTests {
         #expect(abs(loaded - windowY) <= tolerance, "読んだあとに押した投稿が\(loaded - windowY)pt動きました")
     }
 
-    /// ブーストの行から開いたときは、ブーストした人の行を除いた投稿の中身の上端を、スレッドの押した投稿の上端に合わせる。
-    /// スレッドの押した投稿にはブーストした人の行がないため、行の上端で合わせると、中身が1行分ずれて重なって見える。
+    /// ブーストの行から開いたときは、ブーストした人の行を除いた投稿の中身の上端を、スレッドの選択した投稿の上端に合わせる。
+    /// スレッドの選択した投稿にはブーストした人の行がないため、行の上端で合わせると、中身が1行分ずれて重なって見える。
     @Test func boostRowAlignsPostContentNotRowTop() throws {
         let list = try TimelineHarness()
         defer { list.tearDown() }
@@ -67,7 +67,7 @@ struct ThreadOpeningTests {
         #expect(abs(opened - content.minY) <= tolerance, "押した投稿の中身が\(opened - content.minY)pt ずれました")
     }
 
-    /// 祖先が押した位置より上に足りないときは、最上部まで動かして祖先を上端に置き、上の空きを詰める。
+    /// 祖先が選択した位置より上に足りないときは、最上部まで動かして祖先を上端に置き、上の空きを詰める。
     @Test func closesGapAboveAncestors() async throws {
         let harness = try openThread(atWindowY: 500)
         defer { harness.tearDown() }
@@ -79,8 +79,8 @@ struct ThreadOpeningTests {
         #expect(abs(harness.collectionView.contentOffset.y + inset) <= tolerance)
     }
 
-    /// 押した投稿が返信なら、開いた時点では返信先がまだ並んでおらずラベルを出している。返信先がすぐ上に並んでもラベルを残し、行の高さを変えない。
-    /// ラベルを消すと、読み終えた瞬間に名前と本文がラベルの1行分だけ上へ跳ねるため。押した投稿でない返信は、すぐ上が返信先ならラベルを出さない。
+    /// 選択した投稿が返信なら、開いた時点では返信先がまだ並んでおらずラベルを出している。返信先がすぐ上に並んでもラベルを残し、行の高さを変えない。
+    /// ラベルを消すと、読み終えた瞬間に名前と本文がラベルの1行分だけ上へ跳ねるため。選択した投稿でない返信は、すぐ上が返信先ならラベルを出さない。
     @Test func focusKeepsReplyLabelWhenParentLoadsAbove() throws {
         let parent = StatusFactory.make(count: 1, startingAt: 900)[0]
         let reply = Status(
@@ -124,7 +124,7 @@ struct ThreadOpeningTests {
         let other = try #require(harness.visibleCell(of: .status(replyToFocus.id)))
         #expect((other.contentConfiguration as? PostContentConfiguration)?.context == nil, "押した投稿でない返信にラベルが出ました")
     }
-    /// 押した投稿の下に返信がなく、押した投稿を上端まで上げられるだけの余白を足しているときに、押した投稿の高さが変わっても、上端まで上げられる。
+    /// 選択した投稿の下に返信がなく、選択した投稿を上端まで上げられるだけの余白を足しているときに、選択した投稿の高さが変わっても、上端まで上げられる。
     /// 余白を会話を読んだときにしか測り直していないと、アクションバーを開いたまま読み終えてから閉じたときに、閉じた分だけ余白が足りなくなる。
     @Test func focusReachesTopAfterHeightChanges() throws {
         let harness = try openThread(atWindowY: 500)

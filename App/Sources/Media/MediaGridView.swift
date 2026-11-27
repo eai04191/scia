@@ -28,7 +28,7 @@ final class MediaGridView: UIView {
         var widestAspectRatio = MediaGridView.widestAspectRatio
         /// 代替テキストやGIFなどを示すバッジを出す。
         var showsBadges = true
-        /// 重ねるときに、置き方を投稿ごとにばらつかせる種。投稿のID。nilならばらつかせない。
+        /// 重ねるときに、置き方を投稿ごとにばらつかせるseed。投稿のID。nilならばらつかせない。
         var stackSeed: String?
         /// 重ねるときに、写真を傾ける。falseなら、どの写真もまっすぐに置く。
         var tiltsStack = true

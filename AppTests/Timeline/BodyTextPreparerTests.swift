@@ -125,7 +125,7 @@ struct BodyTextPreparerTests {
         #expect(failed.text.string.contains(":blob:"))
     }
 
-    /// 本文の絵文字の画像を、ほかの画面（絵文字ピッカーのプレビューなど）が大きく読み直しても、前の画像で描く高さに足りていれば、作っておいた本文をそのまま使う。
+    /// 本文の絵文字の画像を、ほかの画面（絵文字ピッカーのプレビューなど）が大きく再読み込みしても、前の画像で描く高さに足りていれば、作っておいた本文をそのまま使う。
     /// 見た目の変わらないまま、すでに絵文字を描けている本文を作り直さないため。
     @Test func largerReloadByAnotherScreenKeepsPreparedText() async throws {
         let preparer = BodyTextPreparer()
@@ -229,7 +229,7 @@ struct BodyTextPreparerTests {
         #expect(!GuessedWritingDirection.isRightToLeft(description))
     }
 
-    /// 判定の結果はテストをまたいで覚えておくので、ほかのテストで判定済みにならないよう、文字を毎回変える。
+    /// 判定の結果はテストをまたいでキャッシュするので、ほかのテストで判定済みにならないよう、文字を毎回変える。
     /// UUIDの英数字をそのまま足すと、言語の判定がその英数字に引っぱられ、アラビア語の文がルーマニア語などと判定されることがある。
     /// 16進の各字を、判定したい言語の16字に置き換えて足す。
     private func unique(in digits: String) -> String {
@@ -237,7 +237,7 @@ struct BodyTextPreparerTests {
         return String(UUID().uuidString.compactMap { $0.hexDigitValue.map { digits[$0] } })
     }
 
-    /// 長い文字は先頭だけで判定し、覚えておく表のほかの結果を追い出さない。
+    /// 長い文字は先頭だけで判定し、キャッシュのほかの結果を追い出さない。
     @Test func longTextKeepsOtherGuesses() {
         let short = "こんにちは \(UUID().uuidString)"
         _ = GuessedWritingDirection.isRightToLeft(short)

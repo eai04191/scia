@@ -200,7 +200,7 @@ struct TextSelectionTests {
         #expect(view.isSelectingText == !ends)
     }
 
-    /// 同じ投稿の描き直しでは選んだままにし、別の投稿に替わったらやめてラベルに戻す。
+    /// 同じ投稿の再描画では選んだままにし、別の投稿に替わったらやめてラベルに戻す。
     @Test func selectionEndsOnlyWhenRowShowsAnotherStatus() throws {
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
         let window = try window(showing: view)
@@ -218,7 +218,7 @@ struct TextSelectionTests {
         #expect(view.selectionTextView == nil)
     }
 
-    /// 同じ投稿の描き直しで本文の属性だけが変わったら（絵文字の画像が届いたなど）、選んだ範囲を保ったまま、テキストビューの中身もそろえる。
+    /// 同じ投稿の再描画で本文の属性だけが変わったら（絵文字の画像が届いたなど）、選んだ範囲を保ったまま、テキストビューの中身もそろえる。
     @Test func redrawingSameStatusSyncsTextAndKeepsRange() throws {
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
         let window = try window(showing: view)
@@ -328,7 +328,7 @@ struct TextSelectionTests {
         #expect(fittingHeight(of: view) == shortHeight)
     }
 
-    /// 選んでいる間に同じ投稿を描き直しても、元のURLで出したまま選び続ける。
+    /// 選んでいる間に同じ投稿を再描画しても、元のURLで出したまま選び続ける。
     @Test func redrawingWhileSelectingKeepsURLsWhole() throws {
         let html = #"<p><a href="https://example.com/a/very/long/path/to/some/page"><span class="invisible">https://</span><span class="ellipsis">example.com/a/very/long/path/</span><span class="invisible">to/some/page</span></a></p>"#
         let text = renderer.render(RichText.html(html, emojis: []))
@@ -363,7 +363,7 @@ struct TextSelectionTests {
         #expect(view.expandedText == nil)
     }
 
-    /// 押下を受ける高さ（差し替えたラベルの高さ）より下では押下を受けず、文字に合わせて伸ばした最後の行の下の行間が、下の部品へのタップを奪わない。
+    /// ヒット領域（差し替えたラベルの高さ）より下では受けず、文字に合わせて伸ばした最後の行の下の行間が、下の部品へのタップを奪わない。
     @Test func spaceBelowTouchableHeightDoesNotTakeTouches() {
         let textView = SelectableTextView(text: NSAttributedString(string: "選ぶ本文"))
         textView.frame = CGRect(x: 0, y: 0, width: 300, height: 40)

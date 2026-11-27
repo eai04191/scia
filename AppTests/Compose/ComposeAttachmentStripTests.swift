@@ -92,7 +92,7 @@ final class ComposeAttachmentStripTests {
         #expect(removed == [items[1].attachment.id])
     }
 
-    /// 閲覧注意の項目は状態に合わせて付ける・外すを出し、注意書きがあって外せないときは押せる操作に入れない。
+    /// 閲覧注意の項目は状態に合わせて付ける・外すを出し、注意書きがあって外せないときは有効な操作に入れない。
     @Test func sensitivityActionFollowsToggle() throws {
         defer { window.isHidden = true }
         let items = items(1)
@@ -115,7 +115,7 @@ final class ComposeAttachmentStripTests {
         #expect(cells().first?.accessibilityCustomActions?.map(\.name) == ["削除"])
     }
 
-    /// 並べ替えた後に描き直すと、位置に合わせて操作も変わる。
+    /// 並べ替えた後に再描画すると、位置に合わせて操作も変わる。
     @Test func moveActionsFollowNewOrder() throws {
         defer { window.isHidden = true }
         let items = items(2)

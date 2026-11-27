@@ -34,7 +34,7 @@ enum FailureRecovery {
     }
 }
 
-/// 部品がのっているウインドウのシーンを覚える、見えないビュー。アラートのボタンが呼ばれるときには、アラートはもうウインドウから外れているため、出ている間に覚えておく。
+/// 部品がのっているウインドウのシーンを記録する、見えないビュー。アラートのボタンが呼ばれるときには、アラートはもうウインドウから外れているため、出ている間に記録しておく。
 private final class SceneTracker: UIView {
     private(set) weak var scene: UIWindowScene?
 
@@ -46,7 +46,7 @@ private final class SceneTracker: UIView {
     }
 }
 
-/// SwiftUIの部品がのっているウインドウのシーンを、`SceneTracker`で覚えるもの。
+/// SwiftUIの部品がのっているウインドウのシーンを、`SceneTracker`で記録するもの。
 @MainActor
 private final class SceneBox {
     let tracker = SceneTracker()
@@ -142,7 +142,7 @@ struct FailureReason: View {
 
     var body: some View {
         let shown = includesCode ? reason.text : reason.message
-        // ウインドウを覚えるビューは、理由の文字に付ける。ボタンに付けると、Formの行の幅いっぱいがヒット領域のボタンではなくなるため。
+        // ウインドウを記録するビューは、理由の文字に付ける。ボタンに付けると、Formの行の幅いっぱいがヒット領域のボタンではなくなるため。
         Text(lead.map { "\($0)\n\(shown)" } ?? shown)
             .background(SceneTrackerView(box: box))
         if let account = reason.loggedOutAccount {

@@ -110,7 +110,7 @@ public final class NotificationStore {
         gaps = []
         reachedEnd = page.isEmpty
         // 読んだ通知が全部フィルターで隠れて行が1つもないと、続きを読むきっかけがないため、並べる通知が出るまで古い方を読む。
-        // 続きの読み込みに失敗したら空に戻す。隠した通知だけが残ると空でない扱いになり、読み込み直しが最初の読み込みからやり直さなくなるため。
+        // 続きの読み込みに失敗したら空に戻す。隠した通知だけが残ると空でない扱いになり、再読み込みが最初の読み込みからやり直さなくなるため。
         if entries.isEmpty, !reachedEnd, let oldestID = itemIDs.last {
             do {
                 _ = try await fetchOlder(than: oldestID)
@@ -165,7 +165,7 @@ public final class NotificationStore {
     /// つながらなければ、読んだ中で最も古い通知と手元の間にギャップを置き、`loadGap(_:from:)`で読めるようにする。
     ///
     /// 失敗したときは何も反映せず、次の呼び出しも同じ基準から読む。補完の最中に呼ばれたら、
-    /// そのときの基準を覚えて、今の補完が終わった後に続けて読む。続けて読むときは、今の補完で読み終えた範囲より新しいところから読む。
+    /// そのときの基準を保持して、今の補完が終わった後に続けて読む。続けて読むときは、今の補完で読み終えた範囲より新しいところから読む。
     /// 読み終えた範囲を再読み込みすると、つながらなかったときに、同じ範囲にギャップがもう1つできるため。
     ///
     /// - Parameter progress: 1ページ読むたびに、この補完で読んだ通知の数を渡す。手元の通知と重なる分も数える。
@@ -382,7 +382,7 @@ public final class NotificationStore {
     }
 
     /// ミュートしたハッシュタグの付いた投稿の通知を出さないようにする。あとから届いても出さない。表示に関わる変化があればtrueを返す。
-    /// ミュートの前に始まった読み込みの結果には、サーバーがフィルターの結果を付けていないため、出さないタグを覚えておく。
+    /// ミュートの前に始まった読み込みの結果には、サーバーがフィルターの結果を付けていないため、出さないタグを保持しておく。
     /// 捨てずにフィルターで出さない通知と同じく手元に残し、続きを読む位置には数える。1ページの全部がそのタグの通知でも、その先を読めるようにするため。
     @discardableResult
     public func excludeTag(_ name: String) -> Bool {
@@ -413,13 +413,13 @@ public final class NotificationStore {
         return true
     }
 
-    /// ミュートやブロックを解除した相手からの通知を、また足すようにする。除いた通知は戻さず、読み込み直したときに戻る。
+    /// ミュートやブロックを解除した相手からの通知を、また足すようにする。除いた通知は戻さず、再読み込みしたときに戻る。
     public func includeAccount(_ id: String) {
         excludedAccountIDs.remove(id)
     }
 
     /// 承認か却下で片づけたフォローリクエストの通知と、同じユーザーからのほかのフォローリクエストの通知を除く。表示に関わる変化があればtrueを返す。
-    /// 片づけた通知は、応答を待つ間に補完でタイムラインから外れていても、IDを覚えて戻さない。
+    /// 片づけた通知は、応答を待つ間に補完でタイムラインから外れていても、IDを記録して戻さない。
     @discardableResult
     public func removeFollowRequests(answering request: MastodonNotification) -> Bool {
         let isResolved = { (notification: MastodonNotification) in notification.type == .followRequest && notification.account.id == request.account.id }
@@ -433,7 +433,7 @@ public final class NotificationStore {
     }
 
     /// 使う人が削除した通知を除く。表示に関わる変化があればtrueを返す。
-    /// 削除した通知は、応答を待つ間に補完でタイムラインから外れていても、IDを覚えて戻さない。
+    /// 削除した通知は、応答を待つ間に補完でタイムラインから外れていても、IDを記録して戻さない。
     /// 応答を待つ間に読んだページで、同じ通知が読めなかった行として入っていれば、それも除く。
     /// - Parameter groupKey: 削除したグループのキー。メニューを開いてから応答が届くまでに新着が足されて、グループのIDが変わっていても、キーで除く。
     @discardableResult
@@ -584,7 +584,7 @@ public final class NotificationStore {
 
     /// ページで読んだグループのうち、手元のほうが新しいもの（応答を待つ間にストリーミングで新着を足した）に、応答より後に届いた通知を足し直す。
     /// 足し直したグループは手元の行の位置（最も新しい通知）と投稿を引き継ぐので、行は動かない。足し直したグループのキーも返す。
-    /// 応答より新しい通知が手元に届いていないキーは、覚えておく必要がないので捨てる。
+    /// 応答より新しい通知が手元に届いていないキーは、保持しておく必要がないので捨てる。
     private func replayingArrivals(onto incoming: [MastodonNotification]) -> ([MastodonNotification], Set<String>) {
         let local = Dictionary(notifications.map { ($0.groupKey, $0) }, uniquingKeysWith: { first, _ in first })
         var replayedKeys: Set<String> = []

@@ -9,7 +9,7 @@ import UIKit
 @MainActor
 final class TextInputCompletion {
     let completion: CompletionModel
-    /// 最近使ったカスタム絵文字。パレットの先頭に出す。なければ出さず、覚えない。
+    /// 最近使ったカスタム絵文字。パレットの先頭に出す。なければ出さず、記録しない。
     private let recentEmojis: RecentEmojis?
     private let tuning: TuningStore
     private let settings: AppSettings
@@ -143,7 +143,7 @@ final class TextInputCompletion {
     /// ハードウェアキーボードで候補を選ぶ操作。
     /// - Parameters:
     ///   - isShown: 候補のリストを出しているか。
-    ///   - growsUpward: 候補のリストを下から積んでいるか。↑↓は見た目の向きに動かすので、下から積んでいるときは↑で優先度の低い候補へ移る。
+    ///   - growsUpward: 候補のリストを下から並べているか。↑↓は見た目の向きに動かすので、下から並べているときは↑で優先度の低い候補へ移る。
     func keys(isShown: @escaping () -> Bool, growsUpward: @escaping () -> Bool) -> CompletionKeys {
         CompletionKeys(
             hasCandidate: { [weak self] in isShown() && self?.completion.selectedCandidate != nil },
@@ -167,14 +167,14 @@ final class TextInputCompletion {
 
     // MARK: - 絵文字のパレット
 
-    /// パレットを出すときの、最近使った絵文字。出している間に選んでも並びを変えない。押そうとしている絵文字が指の下から動かないようにするため。
+    /// パレットを出すときの、最近使った絵文字。出している間に選んでも並びを変えない。選択しようとしている絵文字が指の下から動かないようにするため。
     /// システムの絵文字キーボードも、閉じて開き直すまで最近使った絵文字を並べ替えない。
     var recentKeys: [String] {
         recentEmojis?.keys ?? []
     }
 
     /// パレットを出した時点のカスタム絵文字のリストと、そのときの探すサーバー。出している間は、再読み込みしたリストが届いても、
-    /// 画像から横長の絵文字の縦横比が分かっても並べ直さない。押そうとしている絵文字が指の下から動かないようにするため。
+    /// 画像から横長の絵文字の縦横比が分かっても並べ直さない。選択しようとしている絵文字が指の下から動かないようにするため。
     /// 出した時点でリストがなければ、最初に届いたリストにする。投稿するアカウントを替えて探すサーバーが変わったら、替えた先のリストに並べ直す。
     private var paletteEmojis: (emojis: [ServerEmoji], sourceGeneration: Int)?
 
@@ -215,7 +215,7 @@ final class TextInputCompletion {
         // カスタム絵文字のリストがまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
         let emojis = paletteEmojis?.emojis ?? []
         // 個人セットは、カスタム絵文字のリストと違い、出している間に再読み込みしたものが届いたら並べ直す。使う人が自分で変えた並びなので、
-        // 押そうとしている絵文字が動かないことより、変えたとおりに並ぶことを優先する（docs/personal-emoji-set.md）。
+        // 選択しようとしている絵文字が動かないことより、変えたとおりに並ぶことを優先する（docs/personal-emoji-set.md）。
         let personal = completion.personalEmojiSet
         let customStatus: EmojiPaletteView.CustomEmojiStatus? = if paletteEmojis != nil {
             nil
@@ -250,7 +250,7 @@ final class TextInputCompletion {
         recentEmojis?.record(emoji.recentKey)
     }
 
-    /// 入力欄に入れずに選んだ絵文字（お知らせのリアクション）を、最近使った絵文字として覚える。
+    /// 入力欄に入れずに選んだ絵文字（お知らせのリアクション）を、最近使った絵文字として記録する。
     func recordRecent(_ emoji: PaletteEmoji) {
         recentEmojis?.record(emoji.recentKey)
     }

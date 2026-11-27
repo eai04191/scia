@@ -132,12 +132,12 @@ final class ProfileHeaderView: UIView {
             applyBannerLayout()
         }
     }
-    /// ヘッダーの上端から画面の上端までの長さから、引っぱった分を除いたもの。ヘッダー画像の上を、この分だけぼかして伸ばす。
+    /// ヘッダーの上端から画面の上端までの長さから、オーバースクロールの量を除いたもの。ヘッダー画像の上を、この分だけぼかして伸ばす。
     /// スクロールに合わせて設定し直す。
     var topExtension: CGFloat = 0 {
         didSet { applyTopExtension() }
     }
-    /// タイムラインの一番上からさらに引っぱっている長さ。ヘッダー画像はその分だけ上へずらして画面に止め、下の内容だけを下げる。
+    /// タイムラインの一番上からさらにオーバースクロールしている長さ。ヘッダー画像はその分だけ上へずらして画面に止め、下の内容だけを下げる。
     /// 画像を拡大してgapを埋めることはしない。
     var pulledDistance: CGFloat = 0 {
         didSet {
@@ -177,7 +177,7 @@ final class ProfileHeaderView: UIView {
     /// ヘッダー画像を持ち上げている間、ヘッダー画像を隠している取り分。
     private var liftConcealment: ViewerConcealment?
     /// ヘッダー画像の上を、画面の上端までぼかして伸ばす部分。画像はナビゲーションバーのボタンの奥まで上げて置き（`ProfileBannerLayout`）、
-    /// 届かないステータスバーの帯と、引っぱった分だけを埋める。中の画像の下端を画像の上端に合わせ、見える高さで切り抜く。
+    /// 届かないステータスバーの帯と、オーバースクロールの量だけを埋める。中の画像の下端を画像の上端に合わせ、見える高さで切り抜く。
     private let bannerReflectionClip = UIView()
     private let bannerReflection = UIImageView()
     private var bannerReflectionTop: NSLayoutConstraint?
@@ -334,7 +334,7 @@ final class ProfileHeaderView: UIView {
             textMenuInteraction(on: nameLabel, for: .displayName),
             textMenuInteraction(on: noteView, for: .note),
         ]
-        // メモの欄は角の丸い面なので、余白を足さず、欄の形のまま持ち上げる。
+        // メモの欄は角の丸い四角なので、余白を足さず、欄の形のまま持ち上げる。
         privateNoteMenuInteraction = ProfileTextMenuInteraction(
             on: privateNoteView,
             menu: { [weak self] in self?.menuForPrivateNote?() },

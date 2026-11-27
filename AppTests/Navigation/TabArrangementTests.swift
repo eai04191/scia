@@ -198,7 +198,7 @@ struct TabArrangementTests {
         #expect(harness.arrangement.selectedNavigation === navigation)
     }
 
-    /// 選んでいるタブをもう一度押すと、奥に開いた画面から最初の画面へ戻す。タブの中身は入れ物に入れているので、UIKitに任せず戻す。
+    /// 選んでいるタブをもう一度選択すると、奥に開いた画面から最初の画面へ戻す。タブの中身は入れ物に入れているので、UIKitに任せず戻す。
     /// タブに並べた項目も、切り替えタブの中の項目も同じ。
     @Test func reselectingTabPopsToRoot() throws {
         let harness = try Harness(Self.layout(tabs: [.home], switchable: [.local]))
@@ -251,7 +251,7 @@ struct TabArrangementTests {
     }
 
     /// 横幅の広いタブバーでは、境目より下の項目も直接並べて切り替えタブを出さない。
-    /// 切り替えタブで最後に選んだ項目は、出していない間も覚えておき、狭くなって切り替えタブに戻ったらその項目で開く。
+    /// 切り替えタブで最後に選んだ項目は、出していない間も保持しておき、狭くなって切り替えタブに戻ったらその項目で開く。
     @Test func regularWidthPadPlacesSwitchableDirectlyAndKeepsSwitchSelection() throws {
         let harness = try Harness(Self.layout(tabs: [.home, .notifications, .local, .federated], switchable: [.bookmarks, .favourites], disabled: [.local, .federated]))
         var saved: [TabItem] = []
@@ -343,7 +343,7 @@ struct TabArrangementTests {
         }
         let root = try #require(harness.navigations[Self.carol]?.viewControllers.first)
         let menu = try #require(root.navigationItem.titleMenuProvider?([]))
-        // 「カスタマイズ」を出す設定（端末の設定で、既定は出す）では、見出しのメニューのタイムラインの項目は最初のまとまりに入る。
+        // 「カスタマイズ」を出す設定（端末の設定で、既定は出す）では、見出しのメニューのタイムラインの項目は最初のグループに入る。
         let timelines = (menu.children.first as? UIMenu)?.children ?? menu.children
         let images = timelines.compactMap { ($0 as? UIAction)?.image }
         #expect(images.first === icons[Self.carol]?.menu)
@@ -369,7 +369,7 @@ struct TabArrangementTests {
         try await waitUntil { tabs.allSatisfy { $0.image?.renderingMode != .alwaysOriginal } }
     }
 
-    /// アクセントカラーを選び直したら、プロフィールのアイコンを読み直して、選んでいるときの縁を新しい色で描かせる。
+    /// アクセントカラーを選び直したら、プロフィールのアイコンを再読み込みして、選んでいるときの縁を新しい色で描かせる。
     @Test func accentColorChangeRequestsIconsAgain() async throws {
         let settings = AppSettings.isolated()
         let harness = try Harness(Self.layout(tabs: [.home, Self.bob], switchable: [.local]), settings: settings)

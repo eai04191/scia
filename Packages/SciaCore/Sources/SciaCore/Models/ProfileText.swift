@@ -1,6 +1,6 @@
 import Foundation
 
-/// プロフィール画面で長押ししてメニューを出す文章のまとまり。決まりはdocs/menus.mdの「プロフィールの文章のメニュー」にある。
+/// プロフィール画面で長押ししてメニューを出す文章の部分。決まりはdocs/menus.mdの「プロフィールの文章のメニュー」にある。
 public enum ProfileTextPart: Hashable, Sendable {
     case displayName
     case note

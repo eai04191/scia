@@ -16,7 +16,7 @@
 #     アプリの中で、アニメーションとスクロールの慣性が止まるのを待ってから書き出すので、操作の直後に呼んでよい。
 #   Tools/sim.sh reset '<端末>'
 #     アプリを終了し、アプリの設定（設定、チューニング、デバッグ用の値）を既定に戻す。端末を割り当てられたときに走らせ、
-#     前に使ったスレッドが確かめのために変えた値を持ち込まない。アカウントの並びと使うアカウント、アカウントやサーバーごとに覚えた値は残す。
+#     前に使ったスレッドが確かめのために変えた値を持ち込まない。アカウントの並びと使うアカウント、アカウントやサーバーごとに保存した値は残す。
 #   Tools/sim.sh busy '<端末>'
 #     その端末の名前かUDIDをコマンドラインに含む処理（make test、xcodebuild、simctl、録画など）を探し、どのworktreeのスレッドが起動したかを出す。
 #     ターンを返したあともバックグラウンドの処理は走り続けるので、止まっているスレッドの端末を取る前に、使っている処理が残っていないかを確かめる。
@@ -279,7 +279,7 @@ command_dump() {
     cat "$file"
 }
 
-# 既定に戻す設定のキーの頭。アカウントの並び（accounts.）や、アカウントとサーバーごとに覚えた値（account.、server.）は、確かめのために変える設定ではないので残す。
+# 既定に戻す設定のキーの頭。アカウントの並び（accounts.）や、アカウントとサーバーごとに保存した値（account.、server.）は、確かめのために変える設定ではないので残す。
 RESET_KEY_PREFIXES='settings. tuning. tuningPanel. debug.'
 
 command_reset() {
@@ -287,14 +287,14 @@ command_reset() {
     local sim=$1 container domain keys key
     require_lease "$sim"
     container=$(xcrun simctl get_app_container "$sim" "$BUNDLE_ID" data 2>/dev/null) || fail "アプリが入っていない: $sim"
-    # 動いているアプリは、覚えている値を書き戻すことがあるので、先に終了する。
+    # 動いているアプリは、保持している値を書き戻すことがあるので、先に終了する。
     xcrun simctl terminate "$sim" "$BUNDLE_ID" >/dev/null 2>&1 || true
     domain="$container/Library/Preferences/$BUNDLE_ID"
     if [ ! -f "$domain.plist" ]; then
         echo "設定はまだない: $sim"
         return
     fi
-    # JSONに直さずにplistのまま読む。アカウントごとに覚えた値にはData型があり、`plutil -convert json`はそれで失敗する。
+    # JSONに直さずにplistのまま読む。アカウントごとに保存した値にはData型があり、`plutil -convert json`はそれで失敗する。
     keys=$(/usr/bin/python3 -I -c '
 import plistlib, sys
 prefixes = tuple(sys.argv[2].split())
@@ -303,7 +303,7 @@ with open(sys.argv[1], "rb") as f:
         if key.startswith(prefixes):
             print(key)
 ' "$domain.plist" "$RESET_KEY_PREFIXES")
-    # plistのファイルを直接書き換えると、端末のcfprefsdが覚えている値で書き戻されるので、端末の中のdefaultsで消す。
+    # plistのファイルを直接書き換えると、端末のcfprefsdがキャッシュしている値で書き戻されるので、端末の中のdefaultsで消す。
     # ドメインはアプリのコンテナの中のパスで渡す。`net.mizle.scia`で渡すと、コンテナの外の設定を指してアプリに届かない。
     while IFS= read -r key; do
         [ -n "$key" ] || continue
@@ -410,7 +410,7 @@ command_drag() {
     /usr/bin/python3 -I -c '
 import json, math, sys
 x1, y1, x2, y2 = map(float, sys.argv[1:5])
-# 1歩20pt、32ms間隔（約600pt/s）。速すぎると、揺らす前に速さが積み上がる。
+# 1歩20pt、32ms間隔（約600pt/s）。速すぎると、揺らす前に速さが溜まる。
 steps = max(1, math.ceil(math.hypot(x2 - x1, y2 - y1) / 20))
 points = [{"x": x1, "y": y1, "dt_ms": 0}]
 for i in range(1, steps + 1):

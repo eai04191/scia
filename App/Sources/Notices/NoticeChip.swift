@@ -117,7 +117,7 @@ final class NoticeChip: UIControl {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        // ガラスのカプセルと同じ丸みで切り抜く。大きさを変える動きの中で呼ばれれば、丸みも一緒に動く。
+        // ガラスのカプセルと同じ角の丸さで切り抜く。大きさを変える動きの中で呼ばれれば、角の丸さも一緒に動く。
         effectView.contentView.layer.cornerRadius = bounds.height / 2
     }
 

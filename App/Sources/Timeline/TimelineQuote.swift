@@ -2,8 +2,8 @@ import SciaCore
 import UIKit
 
 extension TimelineViewController {
-    /// 投稿の中の引用のカードと、その押下の処理。引用がなければnil。決まりは`docs/quote.md`。
-    /// 引用元の注意書き、フィルターの警告、ぼかしは、引用元の投稿のIDで覚えている状態を当てる。
+    /// 投稿の中の引用のカードと、その選択の処理。引用がなければnil。決まりは`docs/quote.md`。
+    /// 引用元の注意書き、フィルターの警告、ぼかしは、引用元の投稿のIDで保持している状態を当てる。
     /// - Parameter itemID: この中身を置く行。注意書きを開閉したり、ブロックした人の引用元を開いたりしたときに、この行の画面上の位置を保つ。
     /// - Parameter translatesBody: 引用元の本文を自動翻訳の訳文で出してよい。
     func quoteEmbed(for status: Status, itemID: ItemID?, translatesBody: Bool = true, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, actions: EmbedActions)? {

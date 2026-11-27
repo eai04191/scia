@@ -31,7 +31,7 @@ public final class PrefetchQueue<Item: Hashable & Sendable> {
     public init(scope: TaskScope, load: @escaping @MainActor (Item) async -> Void) {
         self.scope = scope
         self.load = load
-        // 走り出す前に閉じた処理は中身を動かさず、読み終えたことを知らせないため、閉じたときに空にする。
+        // 走り出す前に閉じた処理は中身を動かさず、読み終えたことを通知しないため、閉じたときに空にする。
         scope.onClose { [weak self] in
             self?.current = nil
             self?.pending = []

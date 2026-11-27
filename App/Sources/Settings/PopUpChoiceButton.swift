@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 
 /// 選択肢をメニューで選ぶ、UIKit標準のポップアップボタン。メニューを開いたことを`onOpen`で知らせる。
-/// SwiftUIのPickerのメニューは中のボタンが押下を受けるため、開いたことを外から拾えない。
+/// SwiftUIのPickerのメニューは中のボタンが選択を受けるため、開いたことを外から拾えない。
 struct PopUpChoiceButton<Value: Hashable>: UIViewRepresentable {
     @Binding var selection: Value
     let options: [(value: Value, title: String, subtitle: String?)]
@@ -92,7 +92,7 @@ private struct ModifiedTitle: View {
     let isModified: Bool
 
     var body: some View {
-        // インジケーターの幅は変えていなくても取っておく。変えてインジケーターが出たときに名前が折り返すと、行が高くなり、押下中の部品が指の下から動くため。
+        // インジケーターの幅は変えていなくても取っておく。変えてインジケーターが出たときに名前が折り返すと、行が高くなり、押されている状態の部品が指の下から動くため。
         HStack(spacing: 6) {
             // 名前は部品が読み上げるので、VoiceOverで同じ名前を2回たどらせない。
             Text(title)

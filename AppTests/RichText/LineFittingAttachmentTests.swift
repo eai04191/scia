@@ -50,7 +50,7 @@ struct LineFittingAttachmentTests {
         return frames
     }
 
-    /// 引用やリストで字下げした段落でも、行より広い絵文字は、字下げを引いた行の幅に収まる。TextKitが渡す行の幅は字下げを引かないため。
+    /// 引用やリストでインデントした段落でも、行より広い絵文字は、インデントを引いた行の幅に収まる。TextKitが渡す行の幅はインデントを引かないため。
     @Test(arguments: [false, true])
     func wideEmojiFitsTheIndentedLine(drawsWithTextKit: Bool) async throws {
         let text = try await render(aspect: 80) { emoji in

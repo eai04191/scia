@@ -821,7 +821,7 @@ struct ProfileStoreTests {
     }
 }
 
-/// プロフィールの状態は、関係を覚えて読み出すだけで、キャッシュから再読み込みしない。再読み込みしたらテストを失敗させる。
+/// プロフィールの状態は、関係を保持して読み出すだけで、キャッシュから再読み込みしない。再読み込みしたらテストを失敗させる。
 @MainActor
 private func localRelationships() -> RelationshipCache {
     RelationshipCache { _ in

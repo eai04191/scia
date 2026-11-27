@@ -1,11 +1,11 @@
 #!/bin/bash
 # 人が読む文書（FEATURES.mdとREADME.md）を、人が読んで承認した中身でなければmainに入れさせない。Tools/git-hooks/reference-transactionとTools/merge-queue.shがこれで調べる。
-# 覚えるのはcommitではなくファイルの中身（blob）。rebaseで中身が変わらなければ、承認は引き継がれる。
-# 覚えた中身は、worktreeどうしで共有する.gitの共通ディレクトリのscia-check/human-review/に、「パス-blobのハッシュ」を名前にした空のファイルで置く。消したファイルはハッシュの代わりにdeletedと書く。
+# 記録するのはcommitではなくファイルの中身（blob）。rebaseで中身が変わらなければ、承認は引き継がれる。
+# 記録した中身は、worktreeどうしで共有する.gitの共通ディレクトリのscia-check/human-review/に、「パス-blobのハッシュ」を名前にした空のファイルで置く。消したファイルはハッシュの代わりにdeletedと書く。
 # approveは、承認の入力を/dev/ttyから読む。端末を持たないagentのBashでは/dev/ttyを開けないので、承認できない。
 # scriptコマンドで疑似端末を作って入力を流し込めば、agentでも承認できてしまう。仕組みでは防げないので、AGENTS.mdの決まりで止めている。
 # 使い方:
-#   Tools/human-review.sh approve <commit> [<base>]  <base>（省略時はmain）との差分を見せ、承認したら<commit>の中身を覚える。ユーザーが自分の端末で走らせる
+#   Tools/human-review.sh approve <commit> [<base>]  <base>（省略時はmain）との差分を見せ、承認したら<commit>の中身を記録する。ユーザーが自分の端末で走らせる
 #   Tools/human-review.sh missing <commit> [<base>]  <base>（省略時はmain）と中身が違い、まだ承認していないファイルを1行ずつ出す
 set -euo pipefail
 

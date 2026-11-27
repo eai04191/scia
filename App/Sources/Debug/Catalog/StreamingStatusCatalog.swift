@@ -1,8 +1,8 @@
 import SciaCore
 import UIKit
 
-/// タイムラインを最上部からさらに引っぱったときに見せる、ストリーミングとRESTの状態（`StreamingStatusPullView`）。
-/// 本物は引っぱった分だけ薄く出るため、カタログでは不透明度を変えずに置く。
+/// タイムラインを最上部からさらにオーバースクロールしたときに見せる、ストリーミングとRESTの状態（`StreamingStatusPullView`）。
+/// 本物はオーバースクロールの量に応じて薄く出るため、カタログでは不透明度を変えずに置く。
 enum StreamingStatusCatalog {
     @MainActor
     static func states() -> [CatalogState] {

@@ -31,7 +31,7 @@ struct ProfileTimelineTests {
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
     }
 
-    /// ヘッダーを読み終えて下の投稿を読んでいる間に、プロフィールを読み直してヘッダーの高さが変わっても、読んでいる投稿は動かさない。
+    /// ヘッダーを読み終えて下の投稿を読んでいる間に、プロフィールを再読み込みしてヘッダーの高さが変わっても、読んでいる投稿は動かさない。
     @Test func headerGrowingBelowScrollKeepsAnchorPosition() throws {
         let header = UIView()
         let height = header.heightAnchor.constraint(equalToConstant: 300)
@@ -128,7 +128,7 @@ struct ProfileTimelineTests {
     }
 
     /// ヘッダーが画面の途中にあるときにタブを切り替えると、両方のタイムラインにある投稿を基準に位置を保ってしまい、
-    /// 上に足された固定された投稿の分だけヘッダーとタブが押し上げられていた。タブは押した場所に残し、中身だけを差し替える。
+    /// 上に足された固定された投稿の分だけヘッダーとタブが押し上げられていた。タブは選択した場所に残し、中身だけを差し替える。
     @Test func switchingTabKeepsHeaderPosition() throws {
         let header = UIView()
         header.heightAnchor.constraint(equalToConstant: 600).isActive = true
@@ -151,7 +151,7 @@ struct ProfileTimelineTests {
         #expect(abs(after - before) <= tolerance, "ヘッダーが\(after - before)pt動きました")
     }
 
-    /// 固定された投稿の棚はタブの下にあり、「投稿」のタイムラインでだけ出す。タブを切り替えて棚が出たり消えたりしても、ヘッダーとタブは押した場所に残す。
+    /// 固定された投稿の棚はタブの下にあり、「投稿」のタイムラインでだけ出す。タブを切り替えて棚が出たり消えたりしても、ヘッダーとタブは選択した場所に残す。
     @Test(arguments: [200.0, -200.0])
     func pinnedShelfChangingWithTabKeepsHeaderPosition(heightChange: CGFloat) throws {
         let header = UIView()
@@ -182,7 +182,7 @@ struct ProfileTimelineTests {
         #expect(abs((attributes?.frame.height ?? 0) - height.constant) <= tolerance, "タイムラインのヘッダーの高さが\(attributes?.frame.height ?? 0)ptでした")
     }
 
-    /// 一番上から引っぱっている間に、画像やアカウントが届いてヘッダーの高さが変わっても、引っぱった分を保つ。上端に詰めると、指を離す前にヘッダーが跳ぶ。
+    /// 一番上からpull to refreshで下げている間に、画像やアカウントが届いてヘッダーの高さが変わっても、オーバースクロールの量を保つ。上端に詰めると、指を離す前にヘッダーが跳ぶ。
     @Test func headerChangingWhilePulledKeepsPull() throws {
         let header = UIView()
         let height = header.heightAnchor.constraint(equalToConstant: 600)

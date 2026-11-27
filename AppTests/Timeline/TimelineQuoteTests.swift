@@ -4,7 +4,7 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-/// 投稿の中の引用の囲みを確かめる。決まりは`docs/quote.md`。
+/// 投稿の中の引用のカードを確かめる。決まりは`docs/quote.md`。
 @MainActor
 @Suite(.scratch, .serialized, .failureState)
 struct TimelineQuoteTests {
@@ -34,7 +34,7 @@ struct TimelineQuoteTests {
         post(in: harness, of: id)?.configuration as? PostContentConfiguration
     }
 
-    /// 引用元を囲みで出し、本文からは互換のための`RE: <リンク>`を除く。
+    /// 引用元をカードで出し、本文からは互換のための`RE: <リンク>`を除く。
     @Test func showsQuotedStatusAndDropsQuoteInline() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -51,7 +51,7 @@ struct TimelineQuoteTests {
         #expect(post(in: harness, of: status.id)?.embed != nil)
     }
 
-    /// 出せない引用元は、作者の行を出さずに理由だけを出し、押下を受けずに行へ渡す。
+    /// 出せない引用元は、作者の行を出さずに理由だけを出し、選択を受けずに行へ渡す。
     @Test func unavailableQuoteIsPlaceholderPassingTouchesToRow() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -68,7 +68,7 @@ struct TimelineQuoteTests {
         #expect(view.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY), with: nil) == nil)
     }
 
-    /// ミュートしている人の引用元は、押して開くまで出さない。開いても、押した行の画面上の位置は動かない。
+    /// ミュートしている人の引用元は、選択して開くまで出さない。開いても、選択した行の画面上の位置は動かない。
     @Test func revealingMutedQuoteKeepsRowPosition() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -85,7 +85,7 @@ struct TimelineQuoteTests {
         #expect(harness.windowMinY(of: .status(status.id)) == y)
     }
 
-    /// 引用元の注意書きは、引用元の投稿ごとに開閉し、囲みの中で本文を出し入れする。開閉しても、押した行の画面上の位置は動かない。
+    /// 引用元の注意書きは、引用元の投稿ごとに開閉し、カードの中で本文を出し入れする。開閉しても、選択した行の画面上の位置は動かない。
     @Test func togglingQuotedSpoilerExpandsInsideEmbed() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -103,7 +103,7 @@ struct TimelineQuoteTests {
         #expect(harness.windowMinY(of: .status(status.id)) == y)
     }
 
-    /// 引用元の閲覧注意の画像は、引用元の投稿のぼかしとして外し、引用している行を描き直す。
+    /// 引用元の閲覧注意の画像は、引用元の投稿のぼかしとして外し、引用している行を再描画する。
     @Test func revealingQuotedMediaRedrawsQuotingRow() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -148,7 +148,7 @@ struct TimelineQuoteTests {
         #expect(configuration(in: harness, of: status.id)?.embed?.media?.arrangement == .stack(side: side))
     }
 
-    /// 投稿と同じ並べ方の既定で、投稿を本文の右にしていれば、引用元の添付ファイルも囲みの本文の右に重ね、本文はその分をあけて折り返す。囲みはサムネイルの分だけ伸びる。
+    /// 投稿と同じ並べ方の既定で、投稿を本文の右にしていれば、引用元の添付ファイルもカードの本文の右に重ね、本文はその分をあけて折り返す。カードはサムネイルの分だけ伸びる。
     @Test func quotedMediaFollowsPostBesideBodyByDefault() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -170,7 +170,7 @@ struct TimelineQuoteTests {
         #expect(embed.bounds.height >= grid.frame.maxY + content.padding - 0.5, "囲みがサムネイルの分だけ伸びていません")
     }
 
-    /// 右に並べる大きさと本文とのあいだを上限にしても、囲みの中のサムネイルとすき間は囲みの内側の半分までに縮め、本文の幅を残す。
+    /// 右に並べる大きさと本文とのあいだを上限にしても、カードの中のサムネイルと間隔はカードの内側の半分までに縮め、本文の幅を残す。
     @Test func quotedBesideMediaLeavesRoomForBody() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -205,7 +205,7 @@ struct TimelineQuoteTests {
         return status
     }
 
-    /// 引用元がさらに引用していると、その引用はIDだけで届く。囲みを押したら、引用元を読み直す経路で開き、スレッドで入れ子の引用を出せるようにする。
+    /// 引用元がさらに引用していると、その引用はIDだけで届く。カードを選択したら、引用元を再読み込みする経路で開き、スレッドで入れ子の引用を出せるようにする。
     @Test func openingQuotedStatusWithNestedQuoteFetchesItFirst() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -226,7 +226,7 @@ struct TimelineQuoteTests {
         #expect(fetchedIDs == ["q2"])
     }
 
-    /// 引用元にだけある絵文字の画像が届いたときも、引用している行を描き直す。
+    /// 引用元にだけある絵文字の画像が届いたときも、引用している行を再描画する。
     @Test func emojiDependenciesFollowSharedAuthorUpdates() throws {
         let settings = AppSettings(store: SettingsStore(defaults: TestScratch.defaults("author-emoji")), target: .scope(.app))
         let status = StatusFactory.make(count: 1, startingAt: 1_000)[0]
@@ -253,7 +253,7 @@ struct TimelineQuoteTests {
         #expect(TimelineViewController.emojiURLs(of: status, quoteSources: changes, accountEmojis: { $0.emojis }).contains(added.staticUrl))
     }
 
-    /// 承認待ちだった引用を取り直して、承認された引用元の囲みに替わるときは、docs/vision.mdの「タイムラインの動き」のとおり伸ばす。
+    /// 承認待ちだった引用を取り直して、承認された引用元のカードに替わるときは、docs/vision.mdの「タイムラインの動き」のとおり伸ばす。
     /// 見えている行は画面上の位置を保ち、下の行は元の位置から新しい位置へ動かす。
     @Test func refreshedQuoteGrowsRowWithMotion() throws {
         let harness = try TimelineHarness()
@@ -278,7 +278,7 @@ struct TimelineQuoteTests {
         #expect(belowCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true, "下の行を動かしていません")
     }
 
-    /// 引用元の編集と削除、読み込んだあとのミュートを受け取ると、引用している行の囲みを描き直す。
+    /// 引用元の編集と削除、読み込んだあとのミュートを受け取ると、引用している行のカードを再描画する。
     @Test func sourceChangesRedrawQuotingRows() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

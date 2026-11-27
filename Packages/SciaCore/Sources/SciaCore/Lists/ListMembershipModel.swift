@@ -120,7 +120,7 @@ public final class ListMembershipModel {
         }
     }
 
-    /// 足す、外す、フォローに失敗したときに呼ぶ。知らせ方は作る側が決める。
+    /// 足す、外す、フォローに失敗したときに呼ぶ。どう表示するかは作る側が決める。
     @ObservationIgnored public var onFailure: (Operation, ErrorPresentation) -> Void = { _, _ in }
     /// フォローできたときに呼ぶ。セッションがキャッシュしている関係を新しくする。
     @ObservationIgnored public var onFollowed: (Relationship) -> Void = { _ in }

@@ -210,7 +210,7 @@ struct ShownImageRetryTests {
         #expect(fetcher.count(of: image) == 2)
     }
 
-    /// 同じ画像を待ち合わせた行も、再読み込みをやめずに待つ。待ち合わせた側が、失敗を覚える前に結果を受け取らないため。
+    /// 同じ画像を待ち合わせた行も、再読み込みをやめずに待つ。待ち合わせた側が、失敗を記録する前に結果を受け取らないため。
     @Test func coalescedLoadsAllRetry() async throws {
         let store = makeMediaStore()
         let image = try url("https://example.social/media_proxy/1/small")

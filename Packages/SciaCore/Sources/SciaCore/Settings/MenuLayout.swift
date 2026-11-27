@@ -13,7 +13,7 @@ extension MenuItemKind {
 
 /// 横並びのグループの大きさ。`rawValue`は設定に保存するため、一度使った値は変えない。
 public enum MenuRowSize: String, CaseIterable, Hashable, Sendable {
-    /// アイコンと名前を縦に積んで並べる。
+    /// アイコンと名前を縦に並べる。
     case medium
     /// アイコンだけを並べる。
     case small

@@ -56,7 +56,7 @@ struct LinkCardViewTests {
         #expect(compact.view.intrinsicContentSize.height < full.view.intrinsicContentSize.height)
     }
 
-    /// 画像を読み込む前（blurhashのぼかしのうち）も、添付ファイルと同じく画像を押すとビューアで開き、閉じるときはそのサムネイルへ戻す。
+    /// 画像を読み込む前（blurhashのぼかしのうち）も、添付ファイルと同じく画像を選択するとビューアで開き、閉じるときはそのサムネイルへ戻す。
     @Test func opensImageBeforeLoading() throws {
         let url = try #require(URL(string: "https://example.com/article"))
         let image = try #require(URL(string: "https://example.com/image.png"))

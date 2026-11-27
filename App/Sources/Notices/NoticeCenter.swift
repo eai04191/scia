@@ -77,7 +77,7 @@ final class NoticeCenter {
     var showOperationStatus: (@MainActor (UIViewController) -> Void)?
     /// 隔離した投稿について、開発者に送る内容の画面を開く。ウィンドウごとに、その行のセッションで開くため、ここに持つ。
     var openCrashReport: (@MainActor (Status.ID) -> Void)?
-    /// 隠した投稿のページ。報告の内容を読み込めなかったときも、ブラウザで開けるように覚える。IDはサーバーごとなので、セッションごとに持つ。
+    /// 隠した投稿のページ。報告の内容を読み込めなかったときも、ブラウザで開けるように保持する。IDはサーバーごとなので、セッションごとに持つ。
     var quarantinedPageURLs: [Status.ID: URL] = [:]
     private var persistent: [PersistentNotices.Slot: Content] = [:]
     private let overlays = NSHashTable<NoticeOverlay>.weakObjects()

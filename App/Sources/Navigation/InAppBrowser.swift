@@ -260,7 +260,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         /// 合わせた位置と、同じ位置のまま続いたコマの数。
         var lastPlacement: (top: CGFloat, frame: CGRect)?
         var stillFrames = 0
-        /// 読み込み終えたが、シートの上に別の画面を重ねていたので、広げるのを待っている。
+        /// 読み込み終えたが、シートの上にモーダルビューを出していたので、広げるのを待っている。
         var expandsWhenUncovered = false
         /// まだ一度も広げていない。読み込み終えたときに広げるのはこの間だけにし、広げたあとに手で伏せた形を、あとから届いた読み込みの終わりで広げない。
         var awaitsFirstExpansion = true
@@ -286,7 +286,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         return sheetLayout(in: window, traits: traits).collapsed != nil
     }
 
-    /// 重ねたウインドウを、伏せたシートのSafariを出す場所に合わせる。シートの上に別の画面を重ねている間は、Safariのバーがその画面の上に出ないよう、見えなくする。
+    /// 重ねたウインドウを、伏せたシートのSafariを出す場所に合わせる。シートの上にモーダルビューを出している間は、Safariのバーがその画面の上に出ないよう、見えなくする。
     /// シートがなくなったら、続けないのでfalseを返す。
     private func follow(_ session: FullScreenSession) -> Bool {
         guard let sheet = session.collapsedSheet, !session.window.isHidden else {
@@ -333,7 +333,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
     }
 
     /// 伏せたシートで待つのをやめ、全画面に広げる。広げ終えたら、裏に隠れたシートを片付ける。
-    /// シートの上に別の画面を重ねている間は広げず、その画面が閉じてから広げる（`follow`）。重ねたまま広げると、伏せたシートを片付けるときに、上の画面まで閉じてしまう。
+    /// シートの上にモーダルビューを出している間は広げず、その画面が閉じてから広げる（`follow`）。重ねたまま広げると、伏せたシートを片付けるときに、上の画面まで閉じてしまう。
     private func expand(_ session: FullScreenSession) {
         guard fullScreen === session, let sheet = session.collapsedSheet else { return }
         // 広げている途中なら、始め直さない。始め直すと、広げ終える前に伏せたシートを片付けてしまう。
@@ -355,7 +355,7 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
             self?.logger.info("in-app browser full screen expanded \(session.window.geometryLog, privacy: .public)")
             // 広げ終えるまでに、別の伏せたシートに替わっていたら、そちらは片付けない。
             guard let self, let sheet, session.collapsedSheet === sheet else { return }
-            // 広げる途中にシートの上に画面を重ねたら（行き先を開いたなど）、その画面を閉じない。読み込みの間に重ねたときと同じく、Safariを隠し、その画面を閉じてから広げる（`follow`）。
+            // 広げる途中にシートの上にモーダルビューを出したら（行き先を開いたなど）、その画面を閉じない。読み込みの間に重ねたときと同じく、Safariを隠し、その画面を閉じてから広げる（`follow`）。
             guard sheet.presentedViewController == nil else {
                 session.expandsWhenUncovered = true
                 self.onCoverageChange?(false)

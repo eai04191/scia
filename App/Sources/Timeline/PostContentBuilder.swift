@@ -360,9 +360,9 @@ struct PostContentBuilder {
 
     /// 引用元の投稿のカード。作者の行は名前だけを太くし、本文は引用元の投稿の言語で描く。
     /// - Parameters:
-    ///   - filterWarning: 引用元のフィルターの警告。開いているかはタイムラインが覚えているため、置く側が決めて渡す。
-    ///   - spoiler: 引用元の注意書き。開いているかはタイムラインが覚えているため、置く側が決めて渡す。
-    ///   - media: 引用元の添付ファイル。ぼかすかはタイムラインが覚えているため、置く側が決めて渡す。
+    ///   - filterWarning: 引用元のフィルターの警告。開いているかはタイムラインが保持しているため、置く側が決めて渡す。
+    ///   - spoiler: 引用元の注意書き。開いているかはタイムラインが保持しているため、置く側が決めて渡す。
+    ///   - media: 引用元の添付ファイル。ぼかすかはタイムラインが保持しているため、置く側が決めて渡す。
     ///   - translation: 本文の自動翻訳の状態。訳さない投稿ではnil。
     func quote(_ quoted: Status, translation: EmbedTranslation? = nil, filterWarning: PostBodyContent.Spoiler? = nil, spoiler: PostBodyContent.Spoiler?, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let font = values.typography.font(.xPostBody)
@@ -514,7 +514,7 @@ struct PostContentBuilder {
         return text
     }
 
-    /// 投稿の注意書き。注意書きがなければnil。開いているかはタイムラインが覚えているため、ここでは折りたたんだ形で返す。
+    /// 投稿の注意書き。注意書きがなければnil。開いているかはタイムラインが保持しているため、ここでは折りたたんだ形で返す。
     /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> PostBodyContent.Spoiler? {
         let values = values

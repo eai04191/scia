@@ -47,7 +47,7 @@ final class TabArrangement {
     /// 無効にしている間に変えたら、有効に戻してタブを作るまで残す。
     private var retitled: Set<TabItem> = []
     /// 切り替えタブを出していないときに、次に出したら開く項目。最初の`apply`では、起動し直す前に開いていた項目。
-    /// 横幅の広いタブバーで切り替えタブを出していない間も、最後に選んだ項目を覚えておき、狭くなって出し直したらそこから開くため。
+    /// 横幅の広いタブバーで切り替えタブを出していない間も、最後に選んだ項目を保持しておき、狭くなって出し直したらそこから開くため。
     private var restoredSwitchSelection: TabItem?
     /// 切り替えタブの長押しで出すメニュー。iOS 27以降だけ付ける。
     private(set) var switchTabMenu: SwitchTabMenuInteraction?

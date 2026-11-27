@@ -29,7 +29,7 @@ struct UnprocessableMediaFormatsTests {
         #expect(formats.mimeTypes(serverVersion: "4.7.4").isEmpty)
     }
 
-    /// 新しい版でまた失敗したら、版を改めて覚え直し、古い版の記録は残さない。
+    /// 新しい版でまた失敗したら、版を改めて記録し直し、古い版の記録は残さない。
     @Test func replacesTheEntryOfAnOlderVersion() throws {
         let formats = UnprocessableMediaFormats(defaults: try makeDefaults(), instance: try instance())
         formats.record("image/heic", serverVersion: "4.7.3")

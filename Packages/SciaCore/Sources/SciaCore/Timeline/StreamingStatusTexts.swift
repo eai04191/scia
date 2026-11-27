@@ -1,4 +1,4 @@
-/// タイムラインを最上部からさらに引っぱると見える、ストリーミングとRESTでの補完の状態の表示の文言。
+/// タイムラインを最上部からpull to refreshすると見える、ストリーミングとRESTでの補完の状態の表示の文言。
 public enum StreamingStatusTexts {
     /// 列の見出し。
     public static let streamingColumn = "ストリーミング"

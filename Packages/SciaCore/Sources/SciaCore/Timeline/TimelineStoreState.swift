@@ -18,7 +18,7 @@ extension TimelineStore {
         /// 見た中で最も新しい投稿のID。サーバーに保存する既読位置に使う。
         var lastReadID: String?
         /// 見た中でタイムラインの最も上にある位置。これより上の投稿を未読として数える。
-        /// 遅れて届いて一番上に積んだ投稿は、IDが`lastReadID`より古くても上にあるため、IDとは別に持つ。
+        /// 遅れて届いて一番上に挿入した投稿は、IDが`lastReadID`より古くても上にあるため、IDとは別に持つ。
         var lastReadPosition: DisplayPosition?
         #if DEBUG
         /// サーバーに保存できる投稿のうち、見た中で最も新しいもののID。
@@ -63,7 +63,7 @@ extension TimelineStore {
         var hiddenStatuses: [Status] = [] {
             didSet { derived = DerivedIDs() }
         }
-        /// 遅れて届いて一番上に積んだ投稿の位置。ここにない投稿は、IDの位置に並べる。
+        /// 遅れて届いて一番上に挿入した投稿の位置。ここにない投稿は、IDの位置に並べる。
         var lateArrivalPositions: [String: DisplayPosition] = [:] {
             didSet { derived = DerivedIDs() }
         }
@@ -87,7 +87,7 @@ extension TimelineStore {
         var customMirror: Mirror { Mirror(self, children: [:]) }
     }
 
-    /// タイムラインの中の位置。IDの位置に並べる投稿は、自分のIDと0。遅れて届いて積んだ投稿は、積んだときに一番上だった投稿のIDと、届いた順の番号。
+    /// タイムラインの中の位置。IDの位置に並べる投稿は、自分のIDと0。遅れて届いて挿入した投稿は、挿入したときに一番上だった投稿のIDと、届いた順の番号。
     /// 同じIDの上では、番号の大きいものほど上に並ぶ。
     struct DisplayPosition: Equatable {
         let anchorID: String

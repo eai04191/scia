@@ -3,7 +3,7 @@ import os
 /// 一覧の既読位置をサーバーに保存する決まり。`FeedTimelineModel`と`NotificationsModel`が持つ。
 ///
 /// 保存するのは次のとき。どれも、保存済みより進んでいるときだけ送る。
-/// - 読み進めたあと、`TuningCatalog.readPositionSaveDelay`の間進まず、操作もしていないとき。呼ぶ側が操作の終わりを知らせなくても保存するため
+/// - 読み進めたあと、`TuningCatalog.readPositionSaveDelay`の間進まず、操作もしていないとき。呼ぶ側が操作の終わりに`saveNow`を呼ばなくても保存するため
 /// - 操作が止まったとき（`saveNow`）。待たずに保存する
 /// - バックグラウンドに入るとき（`saveNow(inBackground: true)`）。保存し終えるまでアプリを止めないよう頼む
 /// - 保存し終えるまで待ちたいとき（`saveAndWait()`）
@@ -21,7 +21,7 @@ final class ReadPositionSaver {
     private let readIDToSave: @MainActor () -> String?
     /// 既読位置をサーバーに送る。
     private let save: @MainActor (String) async throws -> Void
-    /// 送れた既読位置を、保存済みとして覚える。
+    /// 送れた既読位置を、保存済みとして記録する。
     private let markSaved: @MainActor (String) -> Void
     /// 使う人が一覧を操作している最中か。最中なら、待って保存するのを操作が止まるまで延ばす。
     private let isUserInteracting: @MainActor () -> Bool

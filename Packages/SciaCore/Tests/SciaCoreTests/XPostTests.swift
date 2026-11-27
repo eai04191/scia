@@ -375,7 +375,7 @@ struct XPostTests {
         #expect(await counter.count("2") == 1)
     }
 
-    /// 取り消しのように失敗として覚えないものは、再読み込みしてよくなったコールバックを呼ばない。呼ぶと、再描画した行がすぐ読み、また取り消されて、待たずに繰り返すため。
+    /// 取り消しのように失敗として記録しないものは、再読み込みしてよくなったコールバックを呼ばない。呼ぶと、再描画した行がすぐ読み、また取り消されて、待たずに繰り返すため。
     @MainActor @Test func storeDoesNotAskToRedrawAfterCancellation() async throws {
         let counter = FetchCounter()
         let clock = TestClock()

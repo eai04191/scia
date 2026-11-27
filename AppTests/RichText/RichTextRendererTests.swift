@@ -38,7 +38,7 @@ struct RichTextRendererTests {
         #expect(languages(renderer.render(text)) == ["ja", "zh-Hans", "zh-Hans", "ja", "ja", "ja"])
     }
 
-    /// 本文の絵文字が通信の失敗で読めなかったら文字で描き、間隔が過ぎてから描き直すと、描くことで読み直しが始まり、読めたら画像で描く。
+    /// 本文の絵文字が通信の失敗で読めなかったら文字で描き、間隔が過ぎてから再描画すると、描くことで再読み込みが始まり、読めたら画像で描く。
     @Test func failedEmojiIsRetriedWhenTheTextIsDrawnAgain() async throws {
         let clock = TestClock()
         let reads = Mutex(0)
@@ -79,7 +79,7 @@ struct RichTextRendererTests {
         glyphRuns(of: string).mapValues(\.family)
     }
 
-    /// 文字列を並べたときの、書体ごとのまとまりの書体のファミリー名と字形の数。
+    /// 文字列を並べたときの、書体ごとのグループの書体のファミリー名と字形の数。
     private func glyphRuns(of string: NSAttributedString) -> [String: (family: String, glyphs: Int)] {
         let line = CTLineCreateWithAttributedString(string)
         var result: [String: (family: String, glyphs: Int)] = [:]

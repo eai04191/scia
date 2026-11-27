@@ -18,7 +18,7 @@ public final class NotificationPolicyModel {
     /// サーバーが止める人数。これと同じなら、実際はもっと多いことがある。
     public static let pendingRequestsCap = 100
 
-    /// 設定を送れなかったときに呼ぶ。知らせ方は作る側が決める。
+    /// 設定を送れなかったときに呼ぶ。どう表示するかは作る側が決める。
     @ObservationIgnored public var onFailure: (ErrorPresentation) -> Void = { _ in }
     /// サーバーが返した最後の設定。送れなかった項目は、この値に戻す。
     @ObservationIgnored private var confirmed: NotificationPolicy?

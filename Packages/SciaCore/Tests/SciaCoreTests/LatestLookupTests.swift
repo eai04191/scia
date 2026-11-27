@@ -158,7 +158,7 @@ struct LatestLookupTests {
         #expect(changes == [true, false])
     }
 
-    /// 遅いと知らせない入口は、時計を使わない。
+    /// 遅いことを伝えない入口は、時計を使わない。
     @Test func withoutSlowDelayNeverSleeps() async throws {
         let clock = TestClock()
         let lookup = LatestLookup(clock: clock, slowAfter: { nil })

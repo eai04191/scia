@@ -104,7 +104,7 @@ final class EmojiGlyphImageStore {
     nonisolated static func drawNow(_ request: Request) -> UIImage {
         let color = UIColor.label.resolvedColor(with: UITraitCollection(userInterfaceStyle: request.userInterfaceStyle))
         func string(scaledBy factor: CGFloat) -> NSAttributedString {
-            // 枠の大きさで決めた大きさを受け取るので、端末の文字の大きさには合わせない。
+            // 枠の大きさで決めた大きさを受け取るので、Dynamic Typeには合わせない。
             // scialint:disable:next fixed_font_size
             let font = EmojiFont.font(.systemFont(ofSize: request.pointSize * factor), style: request.style)
             return NSAttributedString(string: request.text, attributes: [.font: font, .foregroundColor: color])

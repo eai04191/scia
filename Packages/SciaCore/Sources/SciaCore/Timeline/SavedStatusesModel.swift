@@ -72,7 +72,7 @@ public final class SavedStatusesModel {
     }
 
     #if DEBUG
-    /// 始めているタイムラインだけ読み込み直す。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
+    /// 始めているタイムラインだけ再読み込みする。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
     public func reloadIfStarted() {
         guard hasStarted else { return }
         start(purpose: .action)
@@ -251,7 +251,7 @@ public final class SavedStatusesModel {
     }
 
     /// `quotingID`の投稿による引用が取り消された。その投稿を引用した投稿のタイムラインから、使う人の操作の結果なので、閉じる動きで除く。
-    /// まだ読んでいない投稿でも覚えておき、取り消す前に読み始めたページが遅れて届いても出さない。取り消しは戻せないので、ブックマークのように行を残さない。
+    /// まだ読んでいない投稿でも記録しておき、取り消す前に読み始めたページが遅れて届いても出さない。取り消しは戻せないので、ブックマークのように行を残さない。
     public func quoteWasRevoked(by quotingID: Status.ID) {
         guard !isStopped, case .quotes = kind else { return }
         guard store.removeStatus(quotingID) else { return }

@@ -29,7 +29,7 @@ struct CropOverlayViewTests {
         #expect(handles(of: overlay).map(\.frame.size) == unscaled)
     }
 
-    /// 枠の外を暗くする覆いは、自分の外まで広がる。回している途中にキャンバスごと縮めても、画面の中の画像を暗くしたまま回すため。
+    /// 枠の外を暗くするオーバーレイは、自分の外まで広がる。回している途中にキャンバスごと縮めても、画面の中の画像を暗くしたまま回すため。
     @Test func dimmingReachesBeyondBounds() {
         let overlay = CropOverlayView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
         overlay.box = CGRect(x: 20, y: 200, width: 360, height: 200)

@@ -12,7 +12,7 @@ struct FirstEntriesRevealTests {
         harness.collectionView.visibleCells.filter { $0.layer.animation(forKey: "opacity") != nil }
     }
 
-    /// 読み込み中の表示から最初の行を出したら、見えている行を1コマで出さず、透明から浮かび上がらせる。
+    /// 読み込み中の表示から最初の行を出したら、見えている行を1コマで出さず、透明からフェードインさせる。
     @Test func firstEntriesFadeInFromLoading() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -25,7 +25,7 @@ struct FirstEntriesRevealTests {
         #expect(fadingCells(in: harness).count == harness.collectionView.visibleCells.count)
     }
 
-    /// 読み込み終えたあとの新着や描き直しでは、行を浮かび上がらせない。
+    /// 読み込み終えたあとの新着や再描画では、行をフェードインさせない。
     @Test func laterEntriesAreNotFaded() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

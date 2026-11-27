@@ -245,7 +245,7 @@ struct AppearanceSheets {
             UIColor.systemBackground.setFill()
             context.fill(row.bounds)
             row.layer.render(in: context.cgContext)
-            // 部品は中を隠さないよう外側に枠を引き、すき間や余白のような場所は塗る。
+            // 部品は中を隠さないよう外側に枠を引き、間隔や余白のような場所は塗る。
             for rect in found.rects {
                 var band = rect.insetBy(dx: min((rect.width - 2) / 2, 0), dy: min((rect.height - 2) / 2, 0))
                 let encloses = found.style == .enclose

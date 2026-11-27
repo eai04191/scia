@@ -73,12 +73,12 @@ extension UIViewController {
 extension UIViewController {
     /// デバッグ版のメニューだけに並べる、画面ごとの検証用の操作と、アプリ全体で起こす操作。
     /// - Parameter screenActions: 画面ごとの検証用の操作。「この画面」の見出しの下に並べる。
-    /// - Parameter faults: 障害を起こす項目。セッションの読み込み直しにつながる画面でだけ渡す。
+    /// - Parameter faults: 障害を起こす項目。セッションの再読み込みにつながる画面でだけ渡す。
     /// - Parameter handle: `scia-debug://`と同じ操作をセッションに頼む。渡した画面でだけ、処理中のチップを出す項目を並べる。
     func makeDebugOnlyMenuSections(screenActions: [UIMenuElement] = [], faults: UIMenu? = nil, handle: (@MainActor (DebugURL) -> Void)? = nil) -> [UIMenuElement] {
         let appWide: [UIMenuElement] = (handle.map { handle in
             [
-                // チップの列の動き（画面を移る途中、引っぱる途中）を、実機でもダウンロードを用意せずに確かめるため。
+                // チップの列の動き（画面遷移の途中、オーバースクロールの途中）を、実機でもダウンロードを用意せずに確かめるため。
                 UIAction(title: "処理中のチップを1分出す", image: UIImage(systemName: "hourglass")) { _ in
                     handle(.progressNotice(seconds: 60, title: nil))
                 },

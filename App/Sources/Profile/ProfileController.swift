@@ -417,7 +417,7 @@ final class ProfileController {
     }
 
     /// 固定を変えたあとに、固定された投稿を再読み込みする。外した投稿は、使う人の操作の結果なので、閉じて詰める動きで消す。
-    /// 読めなかったときは、前の固定された投稿のまま残す。固定の操作はできているので、知らせない。
+    /// 読めなかったときは、前の固定された投稿のまま残す。固定の操作はできているので、失敗を表示しない。
     func reloadPinned() {
         run(.action) { controller in
             do {
@@ -433,7 +433,7 @@ final class ProfileController {
         ProfileStore.FeaturedShelves(tags: settings.showsProfileFeaturedTags, endorsements: settings.showsProfileEndorsements)
     }
 
-    /// 設定で出すようにした棚を、開いているプロフィールでも読む。読めなかったときは、開いたときと同じく棚を出さず、知らせない。
+    /// 設定で出すようにした棚を、開いているプロフィールでも読む。読めなかったときは、開いたときと同じく棚を出さず、失敗を表示しない。
     private func applyFeaturedShelvesSetting() {
         let shelves = Self.featuredShelves(in: settings)
         guard shelves != store.featuredShelves else { return }
@@ -447,7 +447,7 @@ final class ProfileController {
     }
 
     /// 載せるものを変えたあとに、注目のハッシュタグと紹介しているユーザーを再読み込みする。外したものは、使う人の操作の結果なので、閉じて詰める動きで消す。
-    /// 読めなかったときは、前の棚のまま残す。載せる操作はできているので、知らせない。
+    /// 読めなかったときは、前の棚のまま残す。載せる操作はできているので、失敗を表示しない。
     func reloadFeatured() {
         run(.action) { controller in
             do {

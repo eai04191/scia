@@ -15,7 +15,7 @@ final class TimelineCell: UICollectionViewListCell, SizingMeasurable {
     /// 押されている状態の色の強さを読むのに使う。
     var tuning = AppDependencies.tuning
 
-    /// 押されている状態で中身の手前へ重ねるビュー。UIKitの押下の色は背景に付くので、不透明な画像は元の色のまま残って目立つ。
+    /// 押されている状態で中身の手前へ重ねるビュー。UIKitの押されている状態の色は背景に付くので、不透明な画像は元の色のまま残って目立つ。
     private(set) var highlightOverlay: UIView?
 
     var isShowingHighlightOverlay: Bool {

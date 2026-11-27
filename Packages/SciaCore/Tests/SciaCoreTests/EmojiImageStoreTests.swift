@@ -32,7 +32,7 @@ struct EmojiImageStoreTests {
         }
     }
 
-    /// プリフェッチで読めなかった画像は、表示の読み込みと同じく覚え、続けてプリフェッチしない。通信の失敗でなければ覚えない。
+    /// プリフェッチで読めなかった画像は、表示の読み込みと同じく記録し、続けてプリフェッチしない。通信の失敗でなければ記録しない。
     @Test func remembersPrefetchFailures() {
         let store = makeStore(Data())
         let other = URL(string: "https://example.com/other.png")!
@@ -131,7 +131,7 @@ struct EmojiImageStoreTests {
         #expect(fetches.count.withLock { $0 } == 2)
     }
 
-    /// 取り消しのように失敗として覚えないものは、再読み込みしてよくなった通知を送らない。送ると、再描画した画面がすぐ読み、また取り消されて、待たずに繰り返すため。
+    /// 取り消しのように失敗として記録しないものは、再読み込みしてよくなった通知を送らない。送ると、再描画した画面がすぐ読み、また取り消されて、待たずに繰り返すため。
     @Test func doesNotAskToRedrawAnimationAfterCancellation() async throws {
         let clock = TestClock()
         let other = URL(string: "https://example.com/other.gif")!

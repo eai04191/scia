@@ -104,7 +104,7 @@ struct EmojiPaletteTests {
 
     // MARK: - 最近使った絵文字
 
-    /// 使い直したものは先頭へ移し、起動し直しても覚えている。
+    /// 使い直したものは先頭へ移し、起動し直しても保存されている。
     @Test func recordsMostRecentFirst() throws {
         let defaults = try makeDefaults()
         let instance = try #require(URL(string: "https://example.social"))

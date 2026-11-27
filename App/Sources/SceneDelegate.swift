@@ -264,7 +264,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let hadDraft = draft != nil
         self.session = session
         draft = session.composer.model
-        // 前の画面一式を止めてからつなぎ直す。前の画面一式が、つなぎ直した下書きの変化を受けないようにするため。
+        // 前の画面一式を止めてから下書きを付け替える。前の画面一式が、付け替えた下書きの変化を受けないようにするため。
         if hadDraft {
             session.rebindDraft()
         }
@@ -449,7 +449,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         } catch is CancellationError {
             logger.info("reauthentication cancelled")
         } catch where Task.isCancelled {
-            // 別のウィンドウでの切り替えなどで、ログインし直していたセッションを止めた。通信はURLErrorの取り消しで戻るので、失敗として知らせない。
+            // 別のウィンドウでの切り替えなどで、ログインし直していたセッションを止めた。通信はURLErrorの取り消しで戻るので、失敗として表示しない。
             logger.info("reauthentication cancelled with session")
         } catch {
             logger.error("reauthentication failed: \(SciaLog.describe(error), privacy: .public)")
@@ -542,7 +542,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // ログイン画面に替えたら、出していたアカウントの処理を止める。
         session = nil
         // ログアウトしたアカウントの投稿の編集や書き直しは、ほかのアカウントでは続けられないので捨てる（docs/compose.mdの「アカウントを変えるとき」）。
-        // 開けるアカウントがなく、新しい画面一式へのつなぎ直しを通らないため、ここで捨てる。同じアカウントにログインし直しても戻さない。
+        // 開けるアカウントがなく、新しい画面一式への再接続を通らないため、ここで捨てる。同じアカウントにログインし直しても戻さない。
         if let draft, let accounts, draft.pointsToServerPost, !accounts.accounts.contains(where: { $0.id == draft.writingAccountID }) {
             draft.reset()
         }

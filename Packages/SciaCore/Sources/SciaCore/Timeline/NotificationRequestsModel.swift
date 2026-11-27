@@ -272,7 +272,7 @@ public final class AccountNotificationsModel {
         display?.show(store.entries, animatesRemoval: true)
     }
 
-    /// ミュートしたハッシュタグの付いた投稿の通知を除く。通知のタイムラインと同じく、解除しても読み込み直すまで戻さない。
+    /// ミュートしたハッシュタグの付いた投稿の通知を除く。通知のタイムラインと同じく、解除しても再読み込みするまで戻さない。
     public func setTag(_ name: String, excluded: Bool) {
         guard excluded else {
             store.includeTag(name)
@@ -282,7 +282,7 @@ public final class AccountNotificationsModel {
         display?.show(store.entries, animatesRemoval: true)
     }
 
-    /// 通知を隠すミュートか、ブロックをした相手からの通知を除く。通知のタイムラインと同じく、解除しても読み込み直すまで戻さない。
+    /// 通知を隠すミュートか、ブロックをした相手からの通知を除く。通知のタイムラインと同じく、解除しても再読み込みするまで戻さない。
     public func setAccount(_ id: String, excluded: Bool) {
         guard excluded else {
             store.includeAccount(id)

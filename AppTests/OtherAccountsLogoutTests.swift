@@ -8,7 +8,7 @@ import Testing
 @Suite(.scratch, .failureState)
 @MainActor
 struct OtherAccountsLogoutTests {
-    /// 投稿欄で投稿先を替えている途中にほかの窓でログアウトしても、メニューを開き直すまで古い一覧から見つけてしまうと、ログアウトしたアカウントで送れてしまう。
+    /// 投稿欄で投稿先を替えている途中にほかのウィンドウでログアウトしても、メニューを開き直すまで古い一覧から見つけてしまうと、ログアウトしたアカウントで送れてしまう。
     @Test func loggedOutAccountIsNotFoundBeforeTheListIsReadAgain() throws {
         let me = try Self.credential("me")
         let other = try Self.credential("other")

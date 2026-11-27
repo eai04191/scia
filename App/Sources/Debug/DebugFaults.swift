@@ -234,7 +234,7 @@ enum DebugFaults {
         cut.forEach { $0.close() }
     }
 
-    /// 開いている間だけ覚え、下ろしたときに切れるようにする。閉じたら外す。
+    /// 開いている間だけ保持し、下ろしたときに切れるようにする。閉じたら外す。
     static func track(_ connection: any WebSocketConnection) -> any WebSocketConnection {
         let id = streaming.withLock { state in
             defer { state.nextID += 1 }

@@ -13,7 +13,7 @@ final class AvatarView: UIView {
         let url: URL?
         let shape: AvatarShape
         let animates: Bool
-        /// 角丸の四角の、radiusの一辺に対する割合。
+        /// 四角の、radiusの一辺に対する割合。
         var cornerRatio: CGFloat = 0.2
         /// 縁に細い線を引く。
         var showsBorder = true

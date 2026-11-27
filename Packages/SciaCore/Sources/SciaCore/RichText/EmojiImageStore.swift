@@ -117,7 +117,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     private var stills = MemoryCache<URL, Image>(totalCostLimit: 32 * 1024 * 1024)
     /// `stills`に持つ静止画の高さ。`stills`が返さなくなったものは、求めたときと`removeReleasedStillResolutions`で消す。
     private var stillResolutions: [URL: Resolution] = [:]
-    /// 高さを覚えている静止画の数。解放された静止画の高さを溜めないことを、テストで確かめる。
+    /// 高さを保持している静止画の数。解放された静止画の高さを溜めないことを、テストで確かめる。
     var stillResolutionCount: Int { stillResolutions.count }
     /// `stillResolutions`がこの数を超えたら、`stills`が返さなくなったものを消す。消したあとに残った数の倍にする。
     private var stillResolutionCleanupThreshold = 64
@@ -142,7 +142,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
     /// macOSでテストを走らせたとき、`NSCache`に持っていて、読み終えても取り出せないまま60秒の間に9万回あまり再読み込みしたことがある。
     private var animations = MemoryCache<URL, EmojiAnimation>(totalCostLimit: 64 * 1024 * 1024)
     private var listeners: [Listener] = []
-    /// 元の画像を読んで動かさないと分かったときに知らせる先。描く側は静止画のまま描けているので、`listeners`には知らせない。
+    /// 元の画像を読んで動かさないと分かったときに通知する先。描く側は静止画のまま描けているので、`listeners`には通知しない。
     /// 動きの選択肢を出すかを決める画面（`isKnownStill`）だけが使う。
     private var stillListeners: [Listener] = []
     /// 画像を読めたときに、元の画像の、描く向きに直した幅と高さを渡す。サーバーが縦横比を返さないカスタム絵文字の縦横比を、リストに残すために使う（`CustomEmojiCaches.learn`）。
@@ -208,7 +208,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 } else {
                     reloadStillFromStorage(url, pixelHeight: loadHeight)
                 }
-                // 再読み込みを始めなかったときは、知らせることもないので覚えない。
+                // 再読み込みを始めなかったときは、通知することもないので保持しない。
                 if isUpgradingStill(url) {
                     upgradeWaiters[UpgradeKey(url: url, isAnimation: false), default: UpgradeWaiters()].add(requester)
                 }
@@ -313,8 +313,8 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         retry.allowsAutomaticLoad(of: url) && !retry.hasFailed(url)
     }
 
-    /// プリフェッチで読めなかったことを、表示のための読み込みと同じく覚える。表示の側が、間隔を待たずに再読み込みしないため。
-    /// 通信の失敗でなければ（止めた、など）覚えない。
+    /// プリフェッチで読めなかったことを、表示のための読み込みと同じく記録する。表示の側が、間隔を待たずに再読み込みしないため。
+    /// 通信の失敗でなければ（止めた、など）記録しない。
     public func recordPrefetchFailure(_ error: any Error, for url: URL) {
         guard HTTPFailure(error) != nil else { return }
         retry.recordFailure(error, for: url)
@@ -325,7 +325,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         listeners.append(Listener(owner: owner, onLoad: onLoad))
     }
 
-    /// 元の画像を読んで動かさないと分かったとき（`isKnownStill`がtrueになったとき）に、そのURLを知らせる。`owner`が解放されたら知らせない。
+    /// 元の画像を読んで動かさないと分かったとき（`isKnownStill`がtrueになったとき）に、そのURLを通知する。`owner`が解放されたら通知しない。
     public func addStillListener(owner: AnyObject, onStill: @escaping @MainActor (Set<URL>) -> Void) {
         stillListeners.append(Listener(owner: owner, onLoad: onStill))
     }
@@ -424,7 +424,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                   let (image, isLargest, _) = await Task.detached(priority: .utility, operation: { await Self.decodeAnimation(data, pixelHeight: pixelHeight) }).value
             else {
                 storageMisses[url] = writeCount
-                // 作り直せなかったので知らせない。通信でも再読み込みしていなければ、待っている描く側も覚えておかない。
+                // 作り直せなかったので通知しない。通信でも再読み込みしていなければ、待っている描く側も保持しておかない。
                 if !upgradingAnimations.contains(url) {
                     upgradeWaiters[UpgradeKey(url: url, isAnimation: true)] = nil
                 }
@@ -449,7 +449,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
 
     public struct DecodeError: Error {}
 
-    /// 読み、応答を通信で受け取ったかキャッシュから読んだかも返す。通信の層が知らせなければnil。
+    /// 読み、応答を通信で受け取ったかキャッシュから読んだかも返す。通信の層が返さなければnil。
     /// 同じURLを同じ目的で読んでいる途中なら、その通信を待って同じデータを受け取る。動かす場所は、同じ元の画像から静止画とアニメーションを作るため。
     /// - Returns: データと、応答の出どころ。読んでいる途中の通信を分け合ったときは`isShared`がtrue。
     private func fetchRecordingSource(_ url: URL) async throws -> (data: Data, source: ResponseSource?, isShared: Bool) {
@@ -484,12 +484,12 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         return (data, source, false)
     }
 
-    /// 分け合った通信の失敗。通信を始めた側が失敗を覚えるので、分け合った側は覚えない。両方で覚えると、1回の失敗を2回と数える。
+    /// 分け合った通信の失敗。通信を始めた側が失敗を記録するので、分け合った側は記録しない。両方で記録すると、1回の失敗を2回と数える。
     private struct SharedFetchFailure: Error {
         let underlying: any Error
     }
 
-    /// `error`を失敗として覚える。分け合った通信の失敗なら、覚えずに元の失敗を返す。
+    /// `error`を失敗として記録する。分け合った通信の失敗なら、記録せずに元の失敗を返す。
     private func recordFailure(_ error: any Error, for url: URL) -> any Error {
         if let shared = error as? SharedFetchFailure { return shared.underlying }
         retry.recordFailure(error, for: url)
@@ -719,7 +719,7 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
                 } else if let current {
                     state = .animated(Resolution(pixelHeight: current.pixelHeight, isLargest: true))
                 } else if oversized?.contains(url) == true {
-                    // 動かせないことは記録が覚えている。ここで覚えると、記録を消したあとに再読み込みせず、残し直せない。
+                    // 動かせないことは記録が保持している。ここで保持すると、記録を消したあとに再読み込みせず、残し直せない。
                     state = nil
                 } else {
                     state = size == nil ? .unreadable : .still
@@ -749,12 +749,12 @@ public final class EmojiImageStore<Image: AnyObject & Sendable> {
         } }
     }
 
-    /// 読めなかった画像を、再読み込みしてよくなった時刻に、まだ読めていなければ知らせる。待っても直らない失敗なら知らせない。
+    /// 読めなかった画像を、再読み込みしてよくなった時刻に、まだ読めていなければ通知する。待っても直らない失敗なら通知しない。
     /// ストアは描いている画面を知らないので、自分では再読み込みせず、通知を受けて再描画した画面が求めたら読む。
     /// 再描画を待つと、再描画されない画面は、間隔が過ぎても`:shortcode:`の文字のまま残るため（docs/network.md）。
     /// 再描画する画面がなければ読まないので、画面から外れた絵文字は読まない。隠れている画面に読ませないのは、再描画する側が受け持つ。
-    /// 高さを上げて再読み込みするのに失敗したものは、持っている画像で描けているので知らせない。
-    /// 取り消しのように失敗として覚えないものも知らせない。すぐ読んでよいことになるので、知らせると、再描画した画面が読み、待たずに繰り返すため。
+    /// 高さを上げて再読み込みするのに失敗したものは、持っている画像で描けているので通知しない。
+    /// 取り消しのように失敗として記録しないものも通知しない。すぐ読んでよいことになるので、通知すると、再描画した画面が読み、待たずに繰り返すため。
     private func scheduleRetry(_ url: URL) {
         guard retryWakes[url] == nil, retry.hasFailed(url) else { return }
         let clock = clock

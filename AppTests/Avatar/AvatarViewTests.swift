@@ -17,7 +17,7 @@ struct AvatarViewTests {
         #expect(!AvatarView.key(url: url, animates: false, side: 40, scale: 2, playsAnimatedImages: true).animates)
     }
 
-    /// 表示している間に端末の設定が変わったら、動かすかどうかを決め直して読み直す。
+    /// 表示している間に端末の設定が変わったら、動かすかどうかを決め直して再読み込みする。
     @Test func displayedAvatarFollowsTheDeviceSettingWhenItChanges() throws {
         var plays = true
         let view = AvatarView(store: AvatarImageStore { _ in Data() }, playsAnimatedImages: { plays })

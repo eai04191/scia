@@ -14,7 +14,7 @@ struct PrivateNoteMenuTests {
         return TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
     }
 
-    /// まとまりごとの項目の名前。
+    /// グループごとの項目の名前。
     private func outline(_ menu: UIMenu) -> [[String]] {
         menu.children.map { element in
             guard let group = element as? UIMenu, group.options.contains(.displayInline) else { return [element.title] }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# ローカルのmainを、`make check`と`make test`の両方が通った中身（Tools/check-stamp.shが覚えたtree）のcommitにしか動かさない。`make hooks`で入れる。
+# ローカルのmainを、`make check`と`make test`の両方が通った中身（Tools/check-stamp.shが記録したtree）のcommitにしか動かさない。`make hooks`で入れる。
 # FEATURES.mdとREADME.mdが今のmainと違うcommitは、その中身を人が承認していなければ（Tools/human-review.sh）動かさない。
 # mainにあったcommitへ戻すのと、mainを消すのは止めない。
 # fast-forwardのmergeは、作業ツリーとindexを書き換えてからmainを動かすので、mainを動かす時点で止めると、入れようとした中身が作業ツリーに残る。

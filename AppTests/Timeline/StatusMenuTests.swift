@@ -32,7 +32,7 @@ struct StatusMenuTests {
         return Account(id: id, username: acct, acct: acct, displayName: acct, avatar: avatar)
     }
 
-    /// まとまりごとの項目の名前。サブメニューは`名前[中身]`、サブタイトルのあるサブメニューは`名前(サブタイトル)[中身]`で表す。
+    /// グループごとの項目の名前。サブメニューは`名前[中身]`、サブタイトルのあるサブメニューは`名前(サブタイトル)[中身]`で表す。
     private func outline(_ menu: UIMenu?) -> [[String]] {
         (menu?.children ?? []).map { element in
             guard let group = element as? UIMenu, group.options.contains(.displayInline) else { return [describe(element)] }
@@ -41,8 +41,8 @@ struct StatusMenuTests {
     }
 
     /// - Parameters:
-    ///   - known: 手元で分かっている相手との関係。渡さなければ、どの相手の関係も覚えていない。
-    ///   - reload: メニューを開いたときに関係を読み直す相手を受け取る。
+    ///   - known: 手元で分かっている相手との関係。渡さなければ、どの相手の関係も保持していない。
+    ///   - reload: メニューを開いたときに関係を再読み込みする相手を受け取る。
     private func userMenuActions(
         known: @escaping @MainActor (UserMenuTarget) -> KnownRelation? = { _ in nil },
         reload: @escaping @MainActor ([String]) -> Void = { _ in },
@@ -55,7 +55,7 @@ struct StatusMenuTests {
         )
     }
 
-    /// 関係を覚えていない相手の関係の項目は、読んでから中身を決めるため、`…`で表す。
+    /// 関係を保持していない相手の関係の項目は、読んでから中身を決めるため、`…`で表す。
     private func describe(_ element: UIMenuElement) -> String {
         if element is UIDeferredMenuElement { return "…" }
         guard let menu = element as? UIMenu else { return element.title }
@@ -64,7 +64,7 @@ struct StatusMenuTests {
         return "\(menu.title)\(subtitle)[\(children.map(describe).joined(separator: ","))]"
     }
 
-    /// 並びの区切り線で分けたまとまりを、そのまとまりごとに出す。
+    /// 並びの区切り線で分けたグループを、そのグループごとに出す。
     /// 自分のアカウントが分からないタイムラインでは、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuGroupsItemsByPurpose() throws {
         let post = try status(url: URL(string: "https://example.social/@alice/100"))
@@ -79,8 +79,8 @@ struct StatusMenuTests {
         ])
     }
 
-    /// ユーザーのメニューは、投稿のメニューの中でも、並びのまとまりと「その他」のとおりに出す。
-    /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
+    /// ユーザーのメニューは、投稿のメニューの中でも、並びのグループと「その他」のとおりに出す。
+    /// 関係を保持していない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
         let actions = userMenuActions()
 
@@ -97,7 +97,7 @@ struct StatusMenuTests {
         #expect(outline(menu).flatMap(\.self).contains("プロフィール"))
     }
 
-    /// メニューを開いたら、メニューに出る人全員の関係を1回でまとめて読み直す。
+    /// メニューを開いたら、メニューに出る人全員の関係を1回でまとめて再読み込みする。
     /// 関係で中身が変わる項目を出していない設定では読まない。
     @Test func openingMenuReloadsRelationsOfShownUsersAtOnce() throws {
         let author = try account("2", "alice")
@@ -115,7 +115,7 @@ struct StatusMenuTests {
         #expect(reloads.requests.count == 1)
     }
 
-    /// プロフィール画面のメニューも、開くたびにその人の関係を読み直す。
+    /// プロフィール画面のメニューも、開くたびにその人の関係を再読み込みする。
     @Test func profileUserMenuReloadsRelation() throws {
         let viewController = TimelineViewController(settings: try makeSettings(), refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         let reloads = ReloadRecorder()
@@ -126,7 +126,7 @@ struct StatusMenuTests {
         #expect(reloads.requests == [["2"]])
     }
 
-    /// 関係を読み直すよう頼まれた相手の組を記録する。
+    /// 関係を再読み込みするよう頼まれた相手の組を記録する。
     @MainActor
     private final class ReloadRecorder {
         var requests: [[String]] = []
@@ -203,8 +203,8 @@ struct StatusMenuTests {
         #expect(describe(emoji) == ":blobcat:[:blobcat:,表示(表示する)[表示する,遅く再生,アニメーションしない,ショートコードで表示,表示しない],開く,リンクをコピー,ブラウザで開く,その他[メディアの情報[PNG],カスタマイズ]]")
     }
 
-    /// ハッシュタグの「ミュート」は、自分のフィルターを覚えていれば、その場でミュートしているかを決め、読み込み中の行を出さない。
-    /// まだ読めていなければ、読んでから中身を決める。どちらでも、メニューを組むたびにフィルターを読み直す。
+    /// ハッシュタグの「ミュート」は、自分のフィルターを保持していれば、その場でミュートしているかを決め、読み込み中の行を出さない。
+    /// まだ読めていなければ、読んでから中身を決める。どちらでも、メニューを組むたびにフィルターを再読み込みする。
     @Test func hashtagMuteUsesKnownFiltersAndRefreshes() throws {
         let base = try status(url: nil)
         let post = Status(
@@ -240,7 +240,7 @@ struct StatusMenuTests {
         #expect(!refreshes.requests.isEmpty)
     }
 
-    /// 横並びの区切り線の下のまとまりは、中くらいの大きさで横に並べる。既定では返信・お気に入り・ブーストのまとまりだけが横並びになる。
+    /// 横並びの区切り線の下のグループは、中くらいの大きさで横に並べる。既定では返信・お気に入り・ブーストのグループだけが横並びになる。
     @Test func rowSeparatorMakesFollowingGroupMediumSized() throws {
         let post = try status(url: nil)
         let groups = try menu(for: .status(post))?.children.compactMap { $0 as? UIMenu } ?? []

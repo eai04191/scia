@@ -9,7 +9,7 @@ import UIKit
 struct MenuLayoutImageTests {
     private static let bob = TabItem.profile(accountID: "2", acct: "bob")
 
-    /// 画像が変わったと知らされたら、出している行を描き直す。
+    /// 画像が変わったと知らされたら、出している行を再描画する。
     @Test func redrawsRowsWhenImageChanges() throws {
         let avatar = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in
             UIColor.red.setFill()

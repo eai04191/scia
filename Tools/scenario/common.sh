@@ -89,12 +89,12 @@ app_logged_in() {
     return 1
 }
 
-# ハードウェアキーボードがつながっていると、画面にキーボードが出ず、ログインで押すキーボードの上の「次へ」もない。毎回外す
+# ハードウェアキーボードがつながっていると、画面にキーボードが出ず、ログインで選択するキーボードの上の「次へ」もない。毎回外す
 use_software_keyboard() {
     swift "$SCENARIO_DIR/../sim-keyboard.swift" "$1" software >/dev/null
 }
 
-# 画面に、AXLabelと種類が一致する要素が出るまで待つ。Sciaの外の画面（サインインのダイアログやログインのページ）は全体の木に出ないので、wait_pointで待つ
+# 画面に、AXLabelと種類が一致する要素が出るまで待つ。Sciaの外の画面（サインインのダイアログやログインのページ）は全体のツリーに出ないので、wait_pointで待つ
 wait_label() {
     local udid="$1" label="$2" kind="${3:-}" deadline=$((SECONDS + 30))
     until axe describe-ui --udid "$udid" 2>/dev/null | python3 -I "$SCENARIO_DIR/ui.py" has "$label" $kind; do
@@ -111,8 +111,8 @@ wait_point() {
     done
 }
 
-# 要素が出るまで待って押し、消えなければ2秒おいて押し直す。30秒たっても消えなければ止める
-# 画面の木を読めなかったときは、消えたとみなさずに読み直す。読めた木に要素がないときだけ抜ける
+# 要素が出るまで待って選択し、消えなければ2秒おいて選択し直す。30秒たっても消えなければ止める
+# 画面のツリーを読めなかったときは、消えたとみなさずにもう一度読む。読めたツリーに要素がないときだけ抜ける
 tap_label_until_gone() {
     local udid="$1" label="$2" kind="$3" deadline=$((SECONDS + 30)) tree
     wait_label "$udid" "$label" "$kind"

@@ -5,13 +5,13 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 投稿のアクションバーと、その引き出しの開閉。決まりはdocs/post-action-bar.mdにある。
+/// 投稿のアクションバーと、その開閉。決まりはdocs/post-action-bar.mdにある。
 @MainActor
 @Suite(.scratch, .failureState)
 struct PostActionBarTests {
     private func harness() throws -> (harness: TimelineHarness, statuses: [Status]) {
         let harness = try TimelineHarness()
-        // 引き出しの開閉を確かめるため、いつも出す設定を外す。
+        // アクションバーの開閉を確かめるため、いつも出す設定を外す。
         harness.settings.appearance.showsActionBar = false
         let statuses = StatusFactory.make(count: 30, startingAt: 1_000)
         harness.setStatuses(statuses)
@@ -52,7 +52,7 @@ struct PostActionBarTests {
         #expect(bar(in: harness, of: statuses[11].id) != nil)
     }
 
-    /// 開くと、押した投稿の位置を保って投稿が伸び、下のアイテムを元の位置から動かしてつなぐ。上のアイテムは動かさない。
+    /// 開くと、選択した投稿の位置を保って投稿が伸び、下のアイテムを元の位置から動かしてつなぐ。上のアイテムは動かさない。
     @Test func openingKeepsRowAndShiftsRowsBelow() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -71,7 +71,7 @@ struct PostActionBarTests {
     }
 
     /// メニューを出している間も、閉じるアニメーションの途中も、開いたらすぐ出し、下のアイテムを動かしてつなぐ。
-    /// 閉じ終えるまで描き直しを待つと、閉じた直後に開いたアクションバーが、閉じ終えたコマに動かずに出る。
+    /// 閉じ終えるまで再描画を待つと、閉じた直後に開いたアクションバーが、閉じ終えたコマに動かずに出る。
     @Test func openingWhileMenuIsShownShiftsRowsBelow() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -104,12 +104,12 @@ struct PostActionBarTests {
         #expect(abs((grow.fromValue as? CGFloat ?? 0) - contentBottom) < 0.01)
     }
 
-    /// 表示領域の外へ出た行の像のうち、外へ送っている途中のもの。
+    /// 表示領域の外へ出た行のスナップショットのうち、外へ送っている途中のもの。
     private func leavingSnapshots(in harness: TimelineHarness) -> [UIView] {
         harness.collectionView.subviews.filter { $0.layer.animation(forKey: "rowShiftEnd") != nil }
     }
 
-    /// 下の端の近くで開くと、表示領域の外へ押し出されるアイテムを、像で外へ送る。閉じるだけなら、下のアイテムは上がってくるだけなので像を取らない。
+    /// 下の端の近くで開くと、表示領域の外へ押し出されるアイテムを、スナップショットで外へ送る。閉じるだけなら、下のアイテムは上がってくるだけなのでスナップショットを取らない。
     @Test func openingNearBottomSendsOutPushedItems() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -130,7 +130,7 @@ struct PostActionBarTests {
         let target = try #require(posts.dropLast().last?.id)
         let id = TimelineViewController.ItemID.status(target)
         #expect(statuses.contains { $0.id == target })
-        // 像は、画面に描いたあとの中身から作るので、描いておく。
+        // スナップショットは、画面に描いたあとの中身から作るので、描いておく。
         CATransaction.flush()
 
         harness.viewController.toggleActionBar(for: id)
@@ -142,7 +142,7 @@ struct PostActionBarTests {
         #expect(leavingSnapshots(in: harness).count == sentBefore, "閉じるときに、外へ出ないアイテムを外へ送りました")
     }
 
-    /// 開いた投稿の下の端だけが上の端に残る位置で閉じると、その下のアイテムが縮んだ分だけ上がり、上の端から外へ出ることがある。外へ出るアイテムも、像で外へ送る。
+    /// 開いた投稿の下の端だけが上の端に残る位置で閉じると、その下のアイテムが縮んだ分だけ上がり、上の端から外へ出ることがある。外へ出るアイテムも、スナップショットで外へ送る。
     @Test func closingNearTopSendsOutRisingItems() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -159,7 +159,7 @@ struct PostActionBarTests {
         let visibleTop = harness.collectionView.convert(harness.collectionView.bounds, to: nil).minY + harness.collectionView.adjustedContentInset.top
         harness.collectionView.contentOffset.y += opened.convert(opened.bounds, to: nil).maxY - (visibleTop + 5)
         harness.collectionView.layoutIfNeeded()
-        // 像は、画面に描いたあとの中身から作るので、描いておく。
+        // スナップショットは、画面に描いたあとの中身から作るので、描いておく。
         CATransaction.flush()
 
         harness.viewController.toggleActionBar(for: id)
@@ -175,7 +175,7 @@ struct PostActionBarTests {
         let first = TimelineViewController.ItemID.status(statuses[10].id)
         let second = TimelineViewController.ItemID.status(statuses[12].id)
 
-        // 触覚は、返した時間が過ぎて動きが着いたときに鳴らす。
+        // ハプティクスは、返した時間が過ぎて動きが着いたときに鳴らす。
         #expect(harness.viewController.toggleActionBar(for: first) == harness.tuning.value(of: TuningCatalog.actionBarDrawerDuration), "動きが着くまでの時間を返していません")
         harness.viewController.toggleActionBar(for: second)
         #expect(bar(in: harness, of: statuses[10].id) == nil)
@@ -186,7 +186,7 @@ struct PostActionBarTests {
         #expect(harness.viewController.openActionBarItemID == nil)
     }
 
-    /// 上の投稿のアクションバーを閉じて下の投稿で開いても、押した投稿の画面上の位置は動かない。
+    /// 上の投稿のアクションバーを閉じて下の投稿で開いても、選択した投稿の画面上の位置は動かない。
     @Test func closingRowAboveKeepsPressedRow() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -200,7 +200,7 @@ struct PostActionBarTests {
         #expect(abs(try #require(harness.windowMinY(of: pressed)) - y) < 0.01)
     }
 
-    /// いつも出す設定では、開く操作は何もせず、開閉しなかったことを返す。返した値で、タップの触覚を鳴らすかを決める。
+    /// いつも出す設定では、開く操作は何もせず、開閉しなかったことを返す。返した値で、タップのハプティクスを鳴らすかを決める。
     @Test func toggleDoesNothingWhenAlwaysShown() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -209,7 +209,7 @@ struct PostActionBarTests {
         #expect(harness.viewController.openActionBarItemID == nil)
     }
 
-    /// 開閉の時間が0で動かさないときは、待たずに触覚を鳴らせるよう、0を返す。
+    /// 開閉の時間が0で動かさないときは、待たずにハプティクスを鳴らせるよう、0を返す。
     @Test func toggleWithoutMotionReturnsZero() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -218,7 +218,7 @@ struct PostActionBarTests {
         #expect(harness.viewController.toggleActionBar(for: .status(statuses[10].id)) == 0)
     }
 
-    /// スレッドの中心の投稿ですべての部品を見せる設定では、その投稿にはいつも出ているので、開く操作は何もせず、ほかの投稿の引き出しも閉じない。
+    /// スレッドの中心の投稿ですべての部品を見せる設定では、その投稿にはいつも出ているので、開く操作は何もせず、ほかの投稿のアクションバーも閉じない。
     @Test func toggleDoesNothingOnThreadFocusRevealingAllParts() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -288,7 +288,7 @@ struct PostActionBarTests {
         try await waitUntil { buttons(in: harness, of: statuses[10].id).map(\.item) == [.menu] }
     }
 
-    /// カスタム絵文字のある投稿では、「カスタム絵文字」のボタンを押せる色で描く。押したときと同じく、絵文字のメニューを組めるため。
+    /// カスタム絵文字のある投稿では、「カスタム絵文字」のボタンを有効な色で描く。選択したときと同じく、絵文字のメニューを組めるため。
     @Test func customEmojiButtonIsAvailableWhenPostHasEmoji() throws {
         let url = try #require(URL(string: "https://example.social/emoji/blob.png"))
         let emoji = CustomEmoji(shortcode: "blob", url: url, staticUrl: url)
@@ -299,14 +299,14 @@ struct PostActionBarTests {
         #expect(buttons(in: harness, of: statuses[10].id).map(\.isAvailable) == [true])
     }
 
-    /// 本文を選べる投稿では、初めて組むときから「テキストを選択」のボタンを押せる色で描く。
+    /// 本文を選べる投稿では、初めて組むときから「テキストを選択」のボタンを有効な色で描く。
     @Test func selectTextButtonIsAvailableOnFirstConfiguration() throws {
         let (harness, statuses) = try harness(replacing: 10, with: { $0 }, items: [.status(.selectText)])
         defer { harness.tearDown() }
         #expect(buttons(in: harness, of: statuses[10].id).map(\.isAvailable) == [true])
     }
 
-    /// 投稿のメニューの1段目の項目の名前。まとまりは開いて並べる。
+    /// 投稿のメニューの1段目の項目の名前。グループは開いて並べる。
     private func menuTitles(in harness: TimelineHarness, of status: Status, groups: MenuLayout<StatusMenuItem>.Groups? = nil) -> [String] {
         let root = harness.viewController.statusMenu(for: .status(status), id: .status(status.id), groups: groups)?.root
         return (root?.flattenedChildren ?? []).map(\.title)
@@ -320,7 +320,7 @@ struct PostActionBarTests {
         return titles(harness.viewController.statusMenu(for: .status(status), id: .status(status.id))?.root.children ?? [])
     }
 
-    /// アクションバーを出している投稿のメニューからは、アクションバーに並べた項目を除く。押せない項目も除く。
+    /// アクションバーを出している投稿のメニューからは、アクションバーに並べた項目を除く。無効な項目も除く。
     @Test func menuOmitsActionBarItemsWhileShown() throws {
         let (harness, statuses) = try harness(replacing: 10, with: { $0 }, items: [.status(.reply), .status(.bookmark), .status(.edit), .menu])
         defer { harness.tearDown() }
@@ -354,7 +354,7 @@ struct PostActionBarTests {
         #expect(titles.contains("ブーストした人"))
     }
 
-    /// アクションバーのボタンを押せるかを決めるときは、ハッシュタグの状態を読み直さない。メニューを開かなくても、スクロールで投稿を組むたびに通信するため。ボタンを押してメニューを開いたときは読み直す。
+    /// アクションバーのボタンを有効にするかを決めるときは、ハッシュタグの状態を再読み込みしない。メニューを開かなくても、スクロールで投稿を組むたびに通信するため。ボタンを選択してメニューを開いたときは再読み込みする。
     @Test func actionBarDoesNotRefreshHashtagsUntilMenuOpens() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -376,12 +376,12 @@ struct PostActionBarTests {
         #expect(buttons(in: harness, of: statuses[10].id).map(\.isAvailable) == [true])
         #expect(refreshes == 0)
 
-        // アクションバーのボタンを押したときと同じく、1項目のメニューで開く。
+        // アクションバーのボタンを選択したときと同じく、1項目のメニューで開く。
         _ = harness.viewController.statusMenu(for: .status(statuses[10]), id: .status(statuses[10].id), groups: .single(.hashtags))
         #expect(refreshes > 0)
     }
 
-    /// 引き出しを閉じている投稿のメニューには、アクションバーに並べた項目も出す。開くと除く。
+    /// アクションバーを閉じている投稿のメニューには、アクションバーに並べた項目も出す。開くと除く。
     @Test func menuKeepsActionBarItemsWhileClosed() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -390,7 +390,7 @@ struct PostActionBarTests {
         #expect(!menuTitles(in: harness, of: statuses[10]).contains("返信"))
     }
 
-    /// アクションバーを出している投稿の中の、引用の囲みのメニューからは除かない。アクションバーは引用元への操作ではないため。
+    /// アクションバーを出している投稿の中の、引用のカードのメニューからは除かない。アクションバーは引用元への操作ではないため。
     @Test func quotedPostMenuKeepsActionBarItems() throws {
         let (harness, statuses) = try harness(replacing: 10, with: { $0 }, items: [.status(.reply), .menu])
         defer { harness.tearDown() }
@@ -399,7 +399,7 @@ struct PostActionBarTests {
         #expect(titles.contains("返信"))
     }
 
-    /// 投稿のタップに「アクションバーを開く」を選んでいても、引用の囲みは引用の投稿の操作に従い、タップで引用元のスレッドを開く。
+    /// 投稿のタップに「アクションバーを開く」を選んでいても、引用のカードは引用の投稿の操作に従い、タップで引用元のスレッドを開く。
     @Test func quotedPostTapFollowsItsOwnActions() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -436,14 +436,14 @@ struct PostActionBarTests {
         #expect(menuTitles(in: harness, of: statuses[10], groups: groups).contains("返信"))
     }
 
-    /// 閉じると、縮む前の像を投稿に重ねて下から縮め、下のアイテムを元の位置から動かしてつなぐ。
+    /// 閉じると、縮む前のスナップショットを投稿に重ねて下から縮め、下のアイテムを元の位置から動かしてつなぐ。
     @Test func closingConcealsActionBarFromBelow() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
         let id = TimelineViewController.ItemID.status(statuses[10].id)
         harness.viewController.toggleActionBar(for: id)
         let cell = try #require(harness.visibleCell(of: id) as? TimelineCell)
-        // 閉じる前の像は、画面に描いたあとの中身から作るので、開いた中身を描いておく。
+        // 閉じる前のスナップショットは、画面に描いたあとの中身から作るので、開いた中身を描いておく。
         CATransaction.flush()
 
         harness.viewController.toggleActionBar(for: id)
@@ -467,12 +467,12 @@ struct PostActionBarTests {
         return (harness, content, button)
     }
 
-    /// `content`の座標で、ボタンの中央の列の高さ`y`を押すと受けるビュー。
+    /// `content`の座標で、ボタンの中央の列の高さ`y`を選択すると受けるビュー。
     private func hit(_ content: PostContentView, button: PostActionBarButtonView, y: CGFloat) -> UIView? {
         content.hitTest(CGPoint(x: button.convert(button.bounds, to: content).midX, y: y), with: nil)
     }
 
-    /// バーの上の「本文とのあいだ」と、下の「下の余白」も押せる。本文より上とアイテムの外は押せない。
+    /// バーの上の「本文とのあいだ」と、下の「下の余白」もヒット領域に入る。本文より上とアイテムの外はヒット領域に入らない。
     @Test func blankAroundBarReachesButton() throws {
         let (harness, content, button) = try laidOutBar(spacing: 8, bottom: 15)
         defer { harness.tearDown() }
@@ -485,7 +485,7 @@ struct PostActionBarTests {
         #expect(button.point(inside: button.convert(CGPoint(x: frame.midX, y: frame.midY + 21), from: content), with: nil), "指を離す位置をボタンの外と扱うと、押したことになりません")
     }
 
-    /// ボタンの上で指を止めてから動かしても、スクロールに切り替わる。押せる範囲を空きまで広げたので、切り替わらないと、空きから始めたスクロールが効かない。
+    /// ボタンの上で指を止めてから動かしても、スクロールに切り替わる。ヒット領域を空きまで広げたので、切り替わらないと、空きから始めたスクロールが効かない。
     @Test func draggingFromButtonScrolls() throws {
         let (harness, _, button) = try laidOutBar(spacing: 8, bottom: 15)
         defer { harness.tearDown() }
@@ -493,7 +493,7 @@ struct PostActionBarTests {
         #expect(harness.viewController.collectionView.touchesShouldCancel(in: button))
     }
 
-    /// 余白が広くても、押せる高さはアイコンの中心から上下22ptまでにする。
+    /// 余白が広くても、ヒット領域の高さはアイコンの中心から上下22ptまでにする。
     @Test func reachStopsAtMinimumTapTarget() throws {
         let (harness, content, button) = try laidOutBar(spacing: 40, bottom: 40)
         defer { harness.tearDown() }
@@ -505,7 +505,7 @@ struct PostActionBarTests {
         #expect(hit(content, button: button, y: frame.midY + 23) !== button)
     }
 
-    /// ボタンは、アイコンの左も押せる。境目をアイコンの左端から左へずらし、アイコンの少し左を押して左隣の操作にならないようにする。
+    /// ボタンは、アイコンの左もヒット領域に入る。境目をアイコンの左端から左へずらし、アイコンの少し左を選択して左隣の操作にならないようにする。
     @Test func buttonReachesLeftOfIcon() throws {
         let (harness, content, first) = try laidOutBar(spacing: 8, bottom: 15)
         defer { harness.tearDown() }
@@ -566,13 +566,13 @@ struct PostActionBarTests {
         #expect(bar.hitTest(CGPoint(x: icon.maxX + blank / 2 - 0.5, y: 13), with: nil) === shown[1])
     }
 
-    /// 「投稿の見た目」のプレビューの見本のボタンは、押しても何もしない。
+    /// 「投稿の見た目」のプレビューの見本のボタンは、選択しても何もしない。
     @Test func previewButtonsDoNothing() throws {
         let configuration = PostContentConfiguration.withActionBarPress()
         #expect(TimelineViewController.keepingOnlyLinks(configuration).onActionBarPress == nil)
     }
 
-    /// 閉じる途中に同じ投稿を描き直したら、閉じる前の像を外す。残すと、新しい中身の手前に古い中身が見える。
+    /// 閉じる途中に同じ投稿を再描画したら、閉じる前のスナップショットを外す。残すと、新しい中身の手前に古い中身が見える。
     @Test func redrawWhileClosingRemovesSnapshot() throws {
         let (harness, statuses) = try harness()
         defer { harness.tearDown() }
@@ -603,7 +603,7 @@ struct PostActionBarTests {
 }
 
 private extension PostContentConfiguration {
-    /// ボタンを押したときの処理を付けた、見本の投稿の中身。
+    /// ボタンを選択したときの処理を付けた、見本の投稿の中身。
     @MainActor
     static func withActionBarPress() -> PostContentConfiguration {
         let timeline = TimelineViewController(texts: .home, settings: AppDependencies.settings, refresh: {})

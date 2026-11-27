@@ -1,10 +1,10 @@
 public import Foundation
 public import Observation
 
-/// 対応形式として返しているのに、サーバーが処理できなかった画像の形式を、サーバーとその版ごとに覚える。
+/// 対応形式として返しているのに、サーバーが処理できなかった画像の形式を、サーバーとその版ごとに記録する。
 ///
 /// `supported_mime_types`に載せた形式でも、送ると`POST /api/v2/media`が500を返すサーバーがある。
-/// 一度失敗したら、同じ版の間はその形式を送らず、起動し直しても覚えておく。版が変われば、サーバーが直ったかもしれないので、もう一度試す。
+/// 一度失敗したら、同じ版の間はその形式を送らず、起動し直しても保存しておく。版が変われば、サーバーが直ったかもしれないので、もう一度試す。
 @MainActor
 @Observable
 public final class UnprocessableMediaFormats {
@@ -15,7 +15,7 @@ public final class UnprocessableMediaFormats {
         public let date: Date
     }
 
-    /// 処理できないと覚えた形式。覚えた順。
+    /// 処理できないと記録した形式。記録した順。
     public private(set) var entries: [Entry]
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let key: String
@@ -34,7 +34,7 @@ public final class UnprocessableMediaFormats {
         Set(entries.filter { $0.serverVersion == (serverVersion ?? "") }.map(\.mimeType))
     }
 
-    /// 形式を、今の版のサーバーでは使わないと覚える。前の版で覚えていたものは、版を改めて覚え直す。
+    /// 形式を、今の版のサーバーでは使わないと記録する。前の版で記録していたものは、版を改めて記録し直す。
     public func record(_ mimeType: String, serverVersion: String?, date: Date = SystemTime.now()) {
         let version = serverVersion ?? ""
         guard !entries.contains(where: { $0.mimeType == mimeType && $0.serverVersion == version }) else { return }

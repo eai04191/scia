@@ -194,8 +194,8 @@ final class InlineComposeControllerTests {
         #expect(composer.isBarHeld, "キーボードが隠れる前に、バーを外しました\n\(composer.stateDump())")
     }
 
-    /// メニューの間にキーボードが隠れても、知らせが届かないことがある。閉じ始めたときにキーボードがまだ隠れていれば、バーを外さない。
-    /// 外すと、バーがキーボードに沿う枠について一度下がり、押した画像が上から下りてくるように戻る。
+    /// メニューの間にキーボードが隠れても、通知が届かないことがある。閉じ始めたときにキーボードがまだ隠れていれば、バーを外さない。
+    /// 外すと、バーがキーボードに沿う枠について一度下がり、選択した画像が上から下りてくるように戻る。
     @Test func contextMenuKeepsBarHeldWhenKeyboardHidWithoutNotification() async throws {
         defer { window.isHidden = true }
         var guideHeight: CGFloat = 336
@@ -246,7 +246,7 @@ final class InlineComposeControllerTests {
         #expect(composer.stateDump().contains("lastKeyboardHeight: 336.0"), "\(composer.stateDump())")
     }
 
-    /// ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ない。メディアを選ぶシートを閉じて入力欄に戻ったら、
+    /// ハードウェアキーボードではキーボードが上がらず、上がりきった通知も来ない。メディアを選ぶシートを閉じて入力欄に戻ったら、
     /// その時点でバーをシートの上端から外し、入力欄に付ける。
     @Test func closingMediaPickerWithoutSoftwareKeyboardReleasesBar() async throws {
         defer {
@@ -273,7 +273,7 @@ final class InlineComposeControllerTests {
         #expect(!composer.isBarHeld, "キーボードが上がらないのに、バーをシートの上端に留めたままです\n\(composer.stateDump())")
     }
 
-    /// メディアを選ぶシートを出したまま投稿ボタンを押したら、添付の準備を待つ前にシートを閉じる。待つ間にシートで選び直せないようにするため。
+    /// メディアを選ぶシートを出したまま投稿ボタンを選択したら、添付の準備を待つ前にシートを閉じる。待つ間にシートで選び直せないようにするため。
     @Test func submittingWhileMediaPickerIsShownClosesIt() async throws {
         defer {
             window.rootViewController?.dismiss(animated: false)
@@ -332,7 +332,7 @@ final class InlineComposeControllerTests {
     }
 
     /// メディアを選ぶシートを出したまま投稿ボタンで送ったら、シートが閉じたときに書き終えたことを知らせる。
-    /// 知らせないと、書き始めたときに伏せたアプリ内のSafariが、次に書き終えるまで戻らない。
+    /// 伝えないと、書き始めたときに伏せたアプリ内のSafariが、次に書き終えるまで戻らない。
     @Test func postingFromAboveSheetReportsEndOfEditing() async throws {
         defer {
             window.rootViewController?.dismiss(animated: false)
@@ -442,7 +442,7 @@ final class InlineComposeControllerTests {
     }
 
     /// 投票の欄を出して本文を書いているとき、欄を全部出すと本文に最低の行数も残らないなら、選択肢の欄を1行に折りたたむ。
-    /// 1行を押すと開いて選択肢に書き始め、本文に戻るとまた折りたたむ。場所が足りていれば、本文を書いていても開いたままにする。
+    /// 1行を選択すると開いて選択肢に書き始め、本文に戻るとまた折りたたむ。場所が足りていれば、本文を書いていても開いたままにする。
     @Test func pollFoldsWhileWritingTextOnlyWhenItDoesNotFit() async throws {
         defer { window.isHidden = true }
         composer.beginEditing()
@@ -470,14 +470,14 @@ final class InlineComposeControllerTests {
 
         textView.becomeFirstResponder()
         try await waitUntilSettled()
-        // キーボードの枠の知らせが続いても、開き直さない。
+        // キーボードの枠の通知が続いても、開き直さない。
         postKeyboardFrame(height: 500)
         try await waitUntilSettled()
         #expect(composer.stateDump().contains("folded=true"), "本文に戻っても折りたたんでいません\n\(composer.stateDump())")
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
     }
 
-    /// 本文を書いたまま文字を大きくすると、キーボードの知らせが来なくても、折りたたむかを決め直す。
+    /// 本文を書いたまま文字を大きくすると、キーボードの通知が来なくても、折りたたむかを決め直す。
     @Test func pollFoldingFollowsContentSizeChange() async throws {
         defer {
             window.traitOverrides.preferredContentSizeCategory = .large
@@ -745,7 +745,7 @@ final class InlineComposeControllerTests {
         #expect(events == ["confirm", "close"])
     }
 
-    /// ほかの画面が閉じていく途中にカスタマイズを押すと、その瞬間は画面を重ねられないので、閉じ終えてから出す。押した操作を失わないため。
+    /// ほかの画面が閉じていく途中にカスタマイズを選択すると、その瞬間はモーダルビューを出せないので、閉じ終えてから出す。選択した操作を失わないため。
     /// 出せないまま開いた扱いだけが残ると、以後キーボードを閉じても欄がカプセルに戻らなくなるので、出した画面を閉じたあとに戻ることも確かめる。
     @Test func customizeWhileAnotherSheetClosingOpensAfterItCloses() async throws {
         defer { window.isHidden = true }
@@ -758,7 +758,7 @@ final class InlineComposeControllerTests {
         host.dismiss(animated: true)
 
         let customize = try #require(buttons(in: window).first { $0.accessibilityLabel == "カスタマイズ" })
-        // 待っている間にもう一度押しても、同じ画面を2枚重ねない。
+        // 待っている間にもう一度選択しても、同じ画面を2枚重ねない。
         customize.sendActions(for: .primaryActionTriggered)
         customize.sendActions(for: .primaryActionTriggered)
         #expect(!(host.presentedViewController is ComposeToolLayoutSheet))
@@ -792,7 +792,7 @@ final class InlineComposeControllerTests {
         try await waitUntilSettled()
         #expect(composer.model.text.hasPrefix("本文"))
         // ハードウェアキーボードの日本語入力は、キーボードを閉じると変換中の文字を取り消して、本文が変わったと知らせる。
-        // テストの入力欄はキーボードを閉じても変換中の文字を扱わないので、閉じたときに知らせを送って同じ順にする。
+        // テストの入力欄はキーボードを閉じても変換中の文字を扱わないので、閉じたときに通知を送って同じ順にする。
         let observer = NotificationCenter.default.addObserver(forName: UITextView.textDidEndEditingNotification, object: textView, queue: nil) { _ in
             MainActor.assumeIsolated {
                 textView.delegate?.textViewDidChange?(textView)
@@ -823,7 +823,7 @@ final class InlineComposeControllerTests {
         field.setMarkedText("へんかん", selectedRange: NSRange(location: 4, length: 0))
         try await waitUntilSettled()
         #expect(composer.model.spoilerText.hasPrefix("注意"))
-        // `postingWithMarkedTextClearsDraft`と同じく、閉じたときに本文が変わった知らせを送って、日本語入力と同じ順にする。
+        // `postingWithMarkedTextClearsDraft`と同じく、閉じたときに本文が変わった通知を送って、日本語入力と同じ順にする。
         let observer = NotificationCenter.default.addObserver(forName: UITextField.textDidEndEditingNotification, object: field, queue: nil) { _ in
             MainActor.assumeIsolated {
                 field.sendActions(for: .editingChanged)
@@ -884,7 +884,7 @@ final class InlineComposeControllerTests {
         #expect(composer.stateDump().contains("editing: true"), "送っている間に書き終えたことになりました\n\(composer.stateDump())")
         #expect(textView.delegate?.textView?(textView, shouldChangeTextIn: NSRange(location: 0, length: 0), replacementText: "あ") == false)
         #expect(field.delegate?.textField?(field, shouldChangeCharactersIn: NSRange(location: 0, length: 0), replacementString: "あ") == false)
-        // 注意書きの欄の×でも外さない。外すと、押した時点で付いていた閲覧注意が外れて送られるため。
+        // 注意書きの欄の×でも外さない。外すと、選択した時点で付いていた閲覧注意が外れて送られるため。
         let clear = try #require(buttons(in: window).first { $0.accessibilityLabel == "注意書きを外す" })
         clear.sendActions(for: .primaryActionTriggered)
         #expect(composer.model.showsSpoiler)
@@ -896,7 +896,7 @@ final class InlineComposeControllerTests {
         #expect(composer.stateDump().contains("editing: false"), "投稿したのに書いている状態のままです\n\(composer.stateDump())")
     }
 
-    /// 投稿して畳むときは、空にした下書きの「いまどうしてる？」のカプセルへ戻す。送った本文をカプセルの行に描いて、そこへ畳まない。
+    /// 投稿して折りたたむときは、空にした下書きの「いまどうしてる？」のカプセルへ戻す。送った本文をカプセルの行に描いて、そこへ折りたたまない。
     @Test func postingCollapsesToEmptyCapsule() async throws {
         defer { window.isHidden = true }
         let composer = try installComposer { _ in }
@@ -921,12 +921,12 @@ final class InlineComposeControllerTests {
         #expect(rest.label.concealedRanges.isEmpty, "畳んだあとも、カプセルの文字を隠しています")
     }
 
-    /// 送信に失敗して知らせを出している間も、書き終えたことにせず、バーをキーボードの高さに留めて広げた欄を保つ。
-    /// 知らせを閉じたあとにキーボードが戻ることは、知らせのボタンを押せないためシミュレーターで確かめる。
+    /// 送信に失敗してアラートを出している間も、書き終えたことにせず、バーをキーボードの高さに留めて広げた欄を保つ。
+    /// アラートを閉じたあとにキーボードが戻ることは、アラートのボタンを選択できないためシミュレーターで確かめる。
     @Test func failedPostKeepsEditingWhileShowingError() async throws {
         defer { window.isHidden = true }
         struct Failure: Error {}
-        // 書き始めたときに届く端末の本物のキーボードの知らせは、負荷が高いと送った知らせより後に届き、ソフトウェアキーボードが上がっていないことになるので、送った知らせだけを受けさせる。
+        // 書き始めたときに届く端末の本物のキーボードの通知は、負荷が高いと送った通知より後に届き、ソフトウェアキーボードが上がっていないことになるので、送った通知だけを受けさせる。
         let keyboard = NotificationCenter()
         let composer = try installComposer(keyboardNotifications: keyboard) { _ in throw Failure() }
         composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
@@ -936,12 +936,12 @@ final class InlineComposeControllerTests {
 
         await composer.model.submit()
         // ウィンドウ全体の動きが止まるのを待つと、アラートの中の多数の部品の動きとバーの動きの合計を待つことになり、負荷が高いと時間切れになる。
-        // 確かめる状態は知らせを出し終えるまでに決まるので、出し終えるのを待つ。
+        // 確かめる状態はアラートを出し終えるまでに決まるので、出し終えるのを待つ。
         try await clock.advance {
             guard let alert = window.rootViewController?.presentedViewController as? UIAlertController else { return false }
             return !alert.isBeingPresented
         }
-        // 知らせが最初の応答者になり、ソフトウェアキーボードが下がった知らせ。
+        // アラートがファーストレスポンダーになり、ソフトウェアキーボードが下がった通知。
         postKeyboardFrame(height: 0, to: keyboard)
         #expect(composer.stateDump().contains("editing: true"), "失敗の知らせを出すと書き終えたことになりました\n\(composer.stateDump())")
         #expect(composer.isBarHeld, "失敗の知らせを出すとバーがキーボードの高さから外れました\n\(composer.stateDump())")
@@ -1062,9 +1062,9 @@ final class InlineComposeControllerTests {
         #expect(viewer.presentedViewController is UIAlertController, "ビューアを開いている間に、投稿の失敗を知らせません\n\(composer.stateDump())")
     }
 
-    /// ソフトウェアキーボードで開いたビューアを閉じるまでにハードウェアキーボードに替わると、キーボードは上がらず、上がりきった知らせも来ない。
+    /// ソフトウェアキーボードで開いたビューアを閉じるまでにハードウェアキーボードに替わると、キーボードは上がらず、上がりきった通知も来ない。
     /// 閉じて入力欄に戻したあとに届いたキーボードの高さがソフトウェアキーボードのものでなければ、その時点でバーをキーボードの高さから外す。
-    /// ソフトウェアキーボードが上がってくるなら、上がりきるまで留めたままにする。知らせが届く前に別の添付を開き直したら、開き直したビューアの間は留めたままにする。
+    /// ソフトウェアキーボードが上がってくるなら、上がりきるまで留めたままにする。通知が届く前に別の添付を開き直したら、開き直したビューアの間は留めたままにする。
     @Test(arguments: [ViewerCloseFollowUp.softwareKeyboard, .hardwareKeyboard, .reopenBeforeKeyboard])
     func closingViewerReleasesBarOnlyWithoutSoftwareKeyboard(followUp: ViewerCloseFollowUp) async throws {
         defer {
@@ -1080,7 +1080,7 @@ final class InlineComposeControllerTests {
             recordUnprocessableImageType: { _ in },
             preparation: { .keepsOriginal }
         )
-        // 入力欄に戻したときに届く端末の本物のキーボードの知らせが混ざると、どちらの場合かが端末の設定と間合いで変わるので、送った知らせだけを受けさせる。
+        // 入力欄に戻したときに届く端末の本物のキーボードの通知が混ざると、どちらの場合かが端末の設定と間合いで変わるので、送った通知だけを受けさせる。
         let keyboard = NotificationCenter()
         let composer = try installComposer(media: media, keyboardNotifications: keyboard) { _ in }
         composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
@@ -1103,7 +1103,7 @@ final class InlineComposeControllerTests {
         #expect(composer.stateDump().contains("editing: true"), "ビューアを閉じると書き終えたことになりました\n\(composer.stateDump())")
         #expect(composer.isBarHeld, "キーボードの知らせが届く前に、バーを外しました\n\(composer.stateDump())")
 
-        // 入力欄に戻したあとに、どちらのキーボードかが分かる高さの知らせが届く。
+        // 入力欄に戻したあとに、どちらのキーボードかが分かる高さの通知が届く。
         switch followUp {
         case .softwareKeyboard:
             postKeyboardFrame(height: 300, to: keyboard)
@@ -1115,20 +1115,20 @@ final class InlineComposeControllerTests {
             strip.onSelect(id)
             try await waitUntilSettled()
             #expect(window.rootViewController?.presentedViewController is MediaViewerController, "添付のビューアを開き直せませんでした")
-            // 開き直すときに入力欄を閉じた知らせ。
+            // 開き直すときに入力欄を閉じた通知。
             postKeyboardFrame(height: 0, to: keyboard)
             #expect(composer.isBarHeld, "開き直したビューアを出している間に、バーを外しました\n\(composer.stateDump())")
         }
     }
 
-    /// 絵文字のシートが閉じた知らせなしに消えても、投稿欄はシートを閉じたものとして扱い、写真のボタンでメディアを選ぶシートを開ける。
-    /// 閉じた知らせを待つだけだと、シートを出しているつもりのまま、写真のボタンは絵文字のシートが閉じ終わるのを待ち続けた（実機で起きた）。
+    /// 絵文字ピッカーが閉じたコールバックなしに消えても、投稿欄はシートを閉じたものとして扱い、写真のボタンでメディアを選ぶシートを開ける。
+    /// 閉じたコールバックを待つだけだと、シートを出しているつもりのまま、写真のボタンは絵文字ピッカーが閉じ終わるのを待ち続けた（実機で起きた）。
     @Test func emojiSheetDisappearingWithoutCallbackLetsMediaPickerOpen() async throws {
         defer {
             window.rootViewController?.dismiss(animated: false)
             window.isHidden = true
         }
-        // 端末の本物のキーボードの知らせが混ざらないよう、送った知らせだけを受けさせる。
+        // 端末の本物のキーボードの通知が混ざらないよう、送った通知だけを受けさせる。
         let keyboard = NotificationCenter()
         let composer = try installComposer(keyboardNotifications: keyboard) { _ in }
         composer.model.apply(configuration: InstanceConfiguration(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: .public, defaultSensitive: nil)
@@ -1142,7 +1142,7 @@ final class InlineComposeControllerTests {
         try await clock.advance { window.rootViewController?.presentedViewController?.isBeingPresented == false }
         let emojiSheet = try #require(window.rootViewController?.presentedViewController)
 
-        // プログラムから閉じると、UIKitは閉じた知らせを出さない。知らせなしに消える場合を、これで作る。
+        // プログラムから閉じると、UIKitは閉じたコールバックを呼ばない。コールバックなしに消える場合を、これで作る。
         emojiSheet.dismiss(animated: false)
         try await clock.advance { window.rootViewController?.presentedViewController == nil }
         try await waitUntilSettled()
@@ -1153,14 +1153,14 @@ final class InlineComposeControllerTests {
         #expect(composer.isBarHeld, "メディアを選ぶシートを出しても、バーを留めていません\n\(composer.stateDump())")
     }
 
-    /// 絵文字のシートが閉じた知らせなしに消えると、入力欄にキーボードを戻した直後に閉じ終わるので、まだどちらのキーボードかの知らせが届いていない。
+    /// 絵文字ピッカーが閉じたコールバックなしに消えると、入力欄にキーボードを戻した直後に閉じ終わるので、まだどちらのキーボードかの通知が届いていない。
     /// 届く前にハードウェアキーボードとみなしてバーを外さず、届いた高さで決める。外すと、ソフトウェアキーボードが上がってくるまでの間、バーが下へ落ちてから上がり直す。
     @Test func emojiSheetDisappearingWithoutCallbackWaitsForKeyboard() async throws {
         defer {
             window.rootViewController?.dismiss(animated: false)
             window.isHidden = true
         }
-        // 端末の本物のキーボードの知らせが混ざらないよう、送った知らせだけを受けさせる。
+        // 端末の本物のキーボードの通知が混ざらないよう、送った通知だけを受けさせる。
         let keyboard = NotificationCenter()
         let composer = try installComposer(keyboardNotifications: keyboard) { _ in }
         composer.beginEditing()
@@ -1171,10 +1171,10 @@ final class InlineComposeControllerTests {
         emojiButton.sendActions(for: .primaryActionTriggered)
         try await clock.advance { window.rootViewController?.presentedViewController?.isBeingPresented == false }
         let emojiSheet = try #require(window.rootViewController?.presentedViewController)
-        // シートを出すときに入力欄を閉じた知らせ。
+        // シートを出すときに入力欄を閉じた通知。
         postKeyboardFrame(height: 0, to: keyboard)
 
-        // プログラムから閉じると、UIKitは閉じた知らせを出さない。知らせなしに消える場合を、これで作る。
+        // プログラムから閉じると、UIKitは閉じたコールバックを呼ばない。コールバックなしに消える場合を、これで作る。
         emojiSheet.dismiss(animated: false)
         try await clock.advance { window.rootViewController?.presentedViewController == nil }
         try await waitUntilSettled()
@@ -1192,7 +1192,7 @@ final class InlineComposeControllerTests {
         case softwareKeyboard
         /// 開いている間にハードウェアキーボードに替わり、キーボードが上がらない。
         case hardwareKeyboard
-        /// キーボードの知らせが届く前に、別の添付を開き直す。
+        /// キーボードの通知が届く前に、別の添付を開き直す。
         case reopenBeforeKeyboard
 
         var testDescription: String {
@@ -1279,7 +1279,7 @@ final class InlineComposeControllerTests {
         progress.note("動き始めのコマを比べた")
 
         // 本物を隠している間は、複製が動いている。隠すのをやめる直前のコマを着地のコマとして残し、本物に替えた最初のコマと比べる。
-        // カプセルの写真同士の影のように、本物に替えてから浮かび上がらせるものがあるので、止まったあとの画面とは比べない。
+        // カプセルの写真同士の影のように、本物に替えてからフェードインさせるものがあるので、止まったあとの画面とは比べない。
         var landing: (image: CGImage, at: TimeInterval)?
         var target: UIView?
         var revealed: CGImage?
@@ -1326,7 +1326,7 @@ final class InlineComposeControllerTests {
     /// `rect`（ウィンドウの中の座標）の中で、2枚の画像が同じに見えるかを確かめる。
     /// 傾けた写真の縁や記号の輪郭は、複製と本物で画素の境目への載り方が1画素に満たない幅だけ違い、縁の画素の色の混ざり方が変わる。目で見て分からないこの違いは許すため、
     /// `actual`の画素の色が、`expected`の同じ位置のまわり3×3の画素の色の範囲（成分ごと）に入っていれば、同じとみなす。
-    /// 縁の混ざった色は両側の色のあいだに入る。再生アイコンやバッジの有無、角の丸みの違いは、一様な色の中に別の色として現れるので、範囲に入らない。
+    /// 縁の混ざった色は両側の色のあいだに入る。再生アイコンやバッジの有無、角の丸さの違いは、一様な色の中に別の色として現れるので、範囲に入らない。
     private func expectSameDrawing(_ actual: CGImage, _ expected: CGImage, in rect: CGRect, _ message: String, sourceLocation: SourceLocation = #_sourceLocation) throws {
         let scale = window.screen.scale
         let pixelRect = CGRect(x: rect.minX * scale, y: rect.minY * scale, width: rect.width * scale, height: rect.height * scale).integral
@@ -1473,7 +1473,7 @@ final class InlineComposeControllerTests {
         composer.attachmentStrip.collectionView(collectionView, willEndContextMenuInteraction: UIContextMenuConfiguration(), animator: nil)
     }
 
-    /// 画面の下端から`height`だけキーボードが上がった、という知らせを送る。0なら隠れた。
+    /// 画面の下端から`height`だけキーボードが上がった、という通知を送る。0なら隠れた。
     private func postKeyboardFrame(height: CGFloat, to center: NotificationCenter = .default) {
         let frame = CGRect(x: 0, y: window.bounds.maxY - height, width: window.bounds.width, height: height)
         center.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: frame])
@@ -1521,8 +1521,8 @@ final class InlineComposeControllerTests {
         #expect(!composer.isBarHidden, "設定を戻しても、投稿欄が隠れたままです\n\(composer.stateDump())")
     }
 
-    /// 畳まない設定では、書いていないときも入力欄とツールバーを出しておき、書き始めても書き終えても、ボタンの位置を動かさない。
-    /// 押した投稿欄が広がると、押した位置にボタンが来て、続けて押したときにボタンを押してしまうため。
+    /// 折りたたまない設定では、書いていないときも入力欄とツールバーを出しておき、書き始めても書き終えても、ボタンの位置を動かさない。
+    /// 選択した投稿欄が広がると、選択した位置にボタンが来て、続けて選択したときにボタンを選択してしまうため。
     @Test func keepsBarOpenWhileNotEditing() async throws {
         defer { window.isHidden = true }
         settings.keepsComposeBarOpen = true
@@ -1553,7 +1553,7 @@ final class InlineComposeControllerTests {
         #expect(bar.frame.height < resting.height, "設定を戻しても、投稿欄が細くなりません: \(bar.frame)")
     }
 
-    /// 畳まない設定をオンにしたら、書き始める前から押せるボタン（メディアの添付など）のために、既定の値を読ませる。
+    /// 折りたたまない設定をオンにしたら、書き始める前から有効なボタン（メディアの添付など）のために、既定の値を読ませる。
     @Test func loadsDefaultsWhenOpeningWithoutEditing() async throws {
         defer { window.isHidden = true }
         var loads = 0
@@ -1563,7 +1563,7 @@ final class InlineComposeControllerTests {
         #expect(loads == 1, "畳まない設定にしても、既定の値を読ませていません")
     }
 
-    /// 空の投稿欄を隠している間に畳まない設定をオンにしても、隠すのをやめて出したときは、カプセルではなく書いているときの形で出す。
+    /// 空の投稿欄を隠している間に折りたたまない設定をオンにしても、隠すのをやめて出したときは、カプセルではなく書いているときの形で出す。
     @Test func showsOpenBarAfterKeepingOpenWhileHidden() async throws {
         defer { window.isHidden = true }
         settings.hidesEmptyComposeBar = true
@@ -1629,7 +1629,7 @@ final class InlineComposeControllerTests {
         try await waitUntilSettled()
         window.layoutIfNeeded()
         let bar = try composerBar()
-        // テストで送るキーボードの知らせでは`keyboardLayoutGuide`が動かないので、キーボードの上にあるかではなく、画面の中にあるかを見る。
+        // テストで送るキーボードの通知では`keyboardLayoutGuide`が動かないので、キーボードの上にあるかではなく、画面の中にあるかを見る。
         #expect(bar.frame.maxY <= window.bounds.maxY, "書き始めても、投稿欄が画面の中にありません: \(bar.frame)")
 
         postKeyboardFrame(height: 0)
@@ -1759,7 +1759,7 @@ final class InlineComposeControllerTests {
         #expect(textView.layer.mask == nil, "動き終えても、入力欄の文字を隠しています")
     }
 
-    /// 返信の宛先だけを書いた下書きを開くと、宛先は入力欄の本物の文字と同じ位置で浮かび上がる。
+    /// 返信の宛先だけを書いた下書きを開くと、宛先は入力欄の本物の文字と同じ位置でフェードインする。
     /// カプセルでは隠している入力欄の枠の高さが0なので、その場で出し入れするかたまりの入れ物は高さ0から伸びる。入れ物の中身をその大きさに合わせて伸び縮みさせていたため、
     /// 動いている途中に向かい直すと中身の高さがずれ、宛先が欄の高さの分だけ下（ツールバーの上）に描かれ、動き終えてから本文の行へ飛んだ。
     @Test func openingReplyDraftShowsMentionOnTextLine() async throws {
@@ -1947,7 +1947,7 @@ final class InlineComposeControllerTests {
     }
 
     /// 広げた投稿欄を閉じる途中に、5行に収まらない本文を共有で入れても、本文の文字を動かすかたまりは、広げた欄の本物の文字の位置に着地する。
-    /// 開く動きの中で広げるときに、戻す途中の印を消していなかったため、開く間は本文の高さを5行の上限のまま決め、かたまりはその欄の行に着地した。
+    /// 開く動きの中で広げるときに、戻す途中のフラグを消していなかったため、開く間は本文の高さを5行の上限のまま決め、かたまりはその欄の行に着地した。
     @Test func sharedTextPastFiveLinesWhileCollapsingLandsOnExpandedField() async throws {
         defer { window.isHidden = true }
         settings.appearance.glyphLanguage = .japanese
@@ -2130,7 +2130,7 @@ final class InlineComposeControllerTests {
         let format = UIGraphicsImageRendererFormat()
         format.scale = window.screen.scale
         format.opaque = false
-        // かたまりは、濃さを変えている途中でもモデルの濃さ（行き先の値）で描かれないよう、中身を直接描く。
+        // かたまりは、不透明度を変えている途中でもモデルの不透明度（行き先の値）で描かれないよう、中身を直接描く。
         let image = UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { context in
             if let line = view as? TextLineView {
                 line.drawText(in: context.cgContext)

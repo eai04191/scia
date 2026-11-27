@@ -69,7 +69,7 @@ struct ReactionGlow: Equatable {
 
 extension ReactionGlow.Style {
     /// ライトでHDRを使わずに描くときの、光の高さと不透明度の、HDRで描くときに対する割合。
-    /// 白い背景に光の色を薄く重ねるだけなので、高く濃くすると汚れのように見える。設定ではHDRのときの値だけを選ばせ、これを掛ける。
+    /// 白い背景に光の色を薄く重ねるだけなので、高く、不透明度を上げると汚れのように見える。設定ではHDRのときの値だけを選ばせ、これを掛ける。
     /// 割合は、設定に移す前にチューニングで決めていた値（高さは64ptに対して38pt、不透明度は0.95に対して0.3）から求めた。
     static let lightSDRHeightRatio: CGFloat = 38.0 / 64.0
     static let lightSDROpacityRatio: CGFloat = 0.3 / 0.95
@@ -227,7 +227,7 @@ final class ReactionGlowView: UIView {
         glow.mask = falloff
         bloomFalloff.startPoint = CGPoint(x: 0.5, y: 0)
         bloomFalloff.endPoint = CGPoint(x: 0.5, y: 1)
-        // 下の端を濃くし、上へすばやく薄くする。
+        // 下の端の不透明度を上げ、上へすばやく薄くする。
         bloomFalloff.locations = [0, 0.35, 0.7, 1]
         bloomFalloff.colors = [0, 0.3, 0.8, 1].map { UIColor(white: 0, alpha: $0).cgColor }
         bloom.mask = bloomFalloff
@@ -374,8 +374,8 @@ final class ReactionGlowView: UIView {
         // ダークでは照らされた側はSDRのまま。黒い背景の上ではSDRの色でも十分に明るく見えるため。
         // HDRで描けない画面（白より明るくできる余地が1倍）では、SDRで描く。白より明るい色は白に丸められ、ライトでは光が白い背景に溶けて見えなくなるため。
         let exposure = canDrawHDR && style.allowsHDR ? style.hdrExposure : 1
-        // ライトでHDRを使うときは、照らされた面を「背景の白＋光」の色で描く。光の色を明るくして白に重ねるだけでは、
-        // 光の色にない成分（橙なら青）が白より暗くなり、面が明るくならずに色が付いて見えるだけになるため。
+        // ライトでHDRを使うときは、照らされた背景を「背景の白＋光」の色で描く。光の色を明るくして白に重ねるだけでは、
+        // 光の色にない成分（橙なら青）が白より暗くなり、背景が明るくならずに色が付いて見えるだけになるため。
         let addsLight = !isDark && exposure > 1
         let white = SRGBColor(red: 1, green: 1, blue: 1)
         let colors = stops.map { stop in
@@ -449,7 +449,7 @@ final class ReactionGlowView: UIView {
     /// 点けたり消したりして入れ替わる置き場所は、動く前のアイコンから動いたあとのアイコンへ、動きの進み具合に合わせてクロスフェードする。
     /// 今の明るさで決めると、置き場所ごとに別々の瞬間に絵がぱっと入れ替わってちらつき、割合で不透明度を分け合うと、2色が混ざる真ん中で止まったあとも2つが重なって見えるため。
     ///
-    /// アイコンも光源に照らされているものとして描く。光源（下の端）に近いほど濃く、遠いほど薄くし、色はその位置を照らす光の色にする。
+    /// アイコンも光源に照らされているものとして描く。光源（下の端）に近いほど不透明度を上げ、遠いほど薄くし、色はその位置を照らす光の色にする。
     /// 点けたり消したりする途中は、光源から遠いアイコンほど、明るさを遅れて立ち上げ、早く落とす。下から上へ光が広がり、消えるときは光源のそばが最後まで残る。
     private func scatteredPlacements(
         style: ReactionGlow.Style,

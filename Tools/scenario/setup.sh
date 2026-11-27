@@ -85,7 +85,7 @@ ensure_snapshot() {
 }
 
 # 前のログイン情報を消し、入れ直したSciaでyouとしてログインする。
-# Mastodonのログインのページとサインインのダイアログは、AXeの全体の木に出ないので、位置で要素の名前を確かめてから押す。位置はiPhone 16 Proの画面のもの
+# Mastodonのログインのページとサインインのダイアログは、AXeの全体のツリーに出ないので、位置で要素の名前を確かめてから選択する。位置はiPhone 16 Proの画面のもの
 login_on_device() {
     local udid="$1"
     log "端末のSciaでyouとしてログインする"
@@ -97,12 +97,12 @@ login_on_device() {
     axe tap --value mastodon.social --element-type TextField --tap-style physical --udid "$udid" >/dev/null
     axe type "$SCENARIO_HOST" --udid "$udid" >/dev/null
     axe tap --label ログイン --element-type PopUpButton --tap-style physical --udid "$udid" >/dev/null
-    # サインインのダイアログが出てくる途中に押すと、タップが効かずにダイアログが残ることがあった。消えるまで押し直す
+    # サインインのダイアログが出てくる途中に選択すると、タップが効かずにダイアログが残ることがあった。消えるまで選択し直す
     tap_label_until_gone "$udid" 続ける Button
     wait_point "$udid" 201 544 メールアドレス
     tap_point "$udid" 201 544
     # キーボードが出るとページが動き、パスワードの欄の位置が変わる。Tabキーでは次の欄に移らなかったので、キーボードの上の「次へ」で移る
-    # Returnキーでは送られないことがあったので、動いたあとの位置にある「ログイン」のボタンを押す
+    # Returnキーでは送られないことがあったので、動いたあとの位置にある「ログイン」のボタンを選択する
     axe type "you@$SCENARIO_HOST" --udid "$udid" >/dev/null
     wait_point "$udid" 93 512 次へ
     tap_point "$udid" 93 512

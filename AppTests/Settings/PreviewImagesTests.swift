@@ -18,7 +18,7 @@ struct PreviewImagesTests {
         #expect(UIImage(data: data) != nil)
     }
 
-    /// 見本のアイコンと絵文字の絵は、四隅まで不透明。アイコンの形と角丸の丸みで切り抜くときも、切り抜かれない絵文字でも、元のアイコンの角丸の透明な部分が見えないようにするため。
+    /// 見本のアイコンと絵文字の絵は、四隅まで不透明。アイコンの形と角の丸さで切り抜くときも、切り抜かれない絵文字でも、元のアイコンの角丸の透明な部分が見えないようにするため。
     @Test func avatarCornersAreOpaque() async throws {
         let url = try #require(PreviewImages.avatarURL())
         let data = try await AppDependencies.imageData(from: url)

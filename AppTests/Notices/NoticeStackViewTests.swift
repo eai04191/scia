@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 知らせのチップの並べ方と、消えるまでの時計。決まりはdocs/notices.mdの「チップ」にある。
+/// チップの並べ方と、消えるまでの時計。決まりはdocs/notices.mdの「チップ」にある。
 @MainActor
 @Suite(.failureState)
 struct NoticeStackViewTests {
@@ -122,7 +122,7 @@ struct NoticeStackViewTests {
         #expect(chip.frame.minY == 0)
     }
 
-    /// 入れ替える出たままの知らせが別のものに替わっていれば、入れ替えずに下へ出す。
+    /// 入れ替える出たままのチップが別のものに替わっていれば、入れ替えずに下へ出す。
     @Test func replacingIgnoresOtherPersistentNotice() {
         let stack = makeStack()
         stack.setPersistent(progress)
@@ -133,7 +133,7 @@ struct NoticeStackViewTests {
         #expect(stack.transientNotice?.id == "saved")
     }
 
-    /// ボタン類を隠したら、出たままの失敗だけを、場所を空けたまま薄くし、押せなくする。処理の途中と数秒で消えるものは残す。
+    /// ボタン類を隠したら、出たままの失敗だけを、場所を空けたまま薄くし、選択できなくする。処理の途中と数秒で消えるものは残す。
     @Test func hidingChromeDimsOnlyPersistentFailure() throws {
         let stack = makeStack()
         let failure = Notice(id: "upload", kind: .failure, title: "アップロードできませんでした", action: .disclosure(hint: "", handler: {}))
@@ -160,7 +160,7 @@ struct NoticeStackViewTests {
         #expect(top.isUserInteractionEnabled)
     }
 
-    /// ボタン類と一緒に隠している失敗は、同じ見た目のまま中身を替えても、押せないままにする。透明なチップがタップを受けないようにするため。
+    /// ボタン類と一緒に隠している失敗は、同じ見た目のまま中身を替えても、選択できないままにする。透明なチップがタップを受けないようにするため。
     @Test func hiddenFailureStaysUntouchableWhenRefreshed() throws {
         let stack = makeStack()
         let failure = Notice(id: "upload", kind: .failure, title: "アップロードできませんでした", action: .disclosure(hint: "", handler: {}))
@@ -232,7 +232,7 @@ struct NoticeStackViewTests {
         try await waitUntil { stack.transientNotice == nil }
     }
 
-    /// 押せる数秒で消えるチップは、VoiceOverの読み上げ位置が乗っている間は消さない。
+    /// 選択できる数秒で消えるチップは、VoiceOverの読み上げ位置が乗っている間は消さない。
     @Test func actionableTransientWaitsWhileFocused() async throws {
         let clock = TestClock()
         let stack = makeStack(clock: clock)
@@ -252,7 +252,7 @@ struct NoticeStackViewTests {
         try await waitUntil { stack.transientNotice == nil }
     }
 
-    /// 押そうとしているチップは動かさず、その間に来たチップは重ならない場所に置く。離したら決まりの並びに戻す。
+    /// 押されている状態のチップは動かさず、その間に来たチップは重ならない場所に置く。離したら決まりの並びに戻す。
     @Test func newChipAvoidsHeldChip() throws {
         let stack = makeStack()
         let failure = Notice(id: "favourite", kind: .failure, title: "お気に入りにできませんでした", action: .disclosure(hint: "", handler: {}))
@@ -276,7 +276,7 @@ struct NoticeStackViewTests {
         #expect(held.frame.minY > persistent.frame.maxY)
     }
 
-    /// 押せるチップは、見た目が44ptに満たなくても44pt四方まで押せ、チップのない所は下の画面へ通す。
+    /// 選択できるチップは、見た目が44ptに満たなくてもヒット領域を44pt四方まで広げ、チップのない所は下の画面へ通す。
     @Test func actionableChipHasMinimumHitArea() throws {
         let stack = makeStack()
         stack.setPersistent(Notice(id: "download", kind: .progress, title: "ダウンロード中", action: .disclosure(hint: "", handler: {})))
@@ -289,7 +289,7 @@ struct NoticeStackViewTests {
         #expect(stack.hitTest(CGPoint(x: 2, y: 150), with: nil) == nil)
     }
 
-    /// 押せないチップも、上へスワイプしてしまえるよう触れたものを受ける。押しても何も起きない。
+    /// 選択できないチップも、上へスワイプしてしまえるよう触れたものを受ける。選択しても何も起きない。
     @Test func nonActionableChipReceivesTouchesForDismissing() throws {
         let stack = makeStack()
         stack.setPersistent(progress)
@@ -300,7 +300,7 @@ struct NoticeStackViewTests {
         #expect(!chip.accessibilityTraits.contains(.button))
     }
 
-    /// VoiceOverでは「›」を読ませず、件数と、押すと何が起きるかを伝える。
+    /// VoiceOverでは「›」を読ませず、件数と、選択すると何が起きるかを伝える。
     @Test func accessibilityDescribesCountAndAction() throws {
         let stack = makeStack()
         var notice = Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "42%", action: .disclosure(hint: "ダウンロードを中止するか選べます。", handler: {}))

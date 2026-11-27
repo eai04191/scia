@@ -46,7 +46,7 @@ struct NumericTextOverlayTests {
     }
 
     /// ふだんはラベルが文字を描き、数字を入れ替えている間だけ、ラベルの文字を透明にして重ねた文字に描かせる。
-    /// スクロールで行の中身を当て直すたびにSwiftUIを描き直さないため。
+    /// スクロールで行の中身を当て直すたびにSwiftUIを再描画しないため。
     @Test func drawsWithLabelExceptWhileChanging() throws {
         let container = UIView(frame: CGRect(x: 0, y: 0, width: 390, height: 200))
         let label = UILabel()

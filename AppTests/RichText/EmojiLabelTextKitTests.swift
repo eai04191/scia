@@ -38,7 +38,7 @@ struct EmojiLabelTextKitTests {
     }
 
     /// 使い回したラベルに短い本文を入れたら、前の長い本文で測った高さを返さない。
-    /// UILabelは文字列を入れる中で大きさを測り直して覚えるため、測った結果を入れたあとに捨てると、前の本文の高さのままになった。
+    /// UILabelは文字列を入れる中で大きさを測り直してキャッシュするため、測った結果を入れたあとに捨てると、前の本文の高さのままになった。
     @Test func reusedLabelMeasuresNewText() {
         let label = label()
         label.attributedText = text(String(repeating: "長い本文です。", count: 30))

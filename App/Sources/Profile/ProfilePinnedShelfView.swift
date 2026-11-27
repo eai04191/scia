@@ -303,8 +303,8 @@ private extension MediaGridView.Content {
     }
 }
 
-/// 固定された投稿の棚のスクロールビュー。カードは`UIControl`で、スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えない。
-/// カードを押下して少し待ってから横へ動かしてもスクロールできるよう、カードの押下は取り消してスクロールに切り替える。
+/// 固定された投稿の棚のスクロールビュー。カードは`UIControl`で、スクロールビューは標準では`UIControl`の上で始まったタッチをスクロールに切り替えない。
+/// カードに触れて少し待ってから横へ動かしてもスクロールできるよう、カードのタッチは取り消してスクロールに切り替える。
 private final class PinnedShelfScrollView: UIScrollView {
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is ProfilePinnedCard || super.touchesShouldCancel(in: view)

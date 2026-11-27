@@ -190,7 +190,7 @@ public enum PostTexts {
         otherAccountCount: Int?,
         reactionEmoji: String?
     ) -> NotificationHeader {
-        // 範囲は、組み立て終えた文の中の位置で返す。足す途中の位置は、あとの追加で変わりうるため、UTF-8での位置で覚えて最後に直す。
+        // 範囲は、組み立て終えた文の中の位置で返す。足す途中の位置は、あとの追加で変わりうるため、UTF-8での位置で保持して最後に直す。
         var text = appearance.phrase.before
         var nameRange: Range<Int>?
         var othersRange: Range<Int>?

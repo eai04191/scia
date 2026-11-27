@@ -4,8 +4,8 @@ import UIKit
 
 /// 「タブに追加」で、足した項目のアイコンを、右上の「タブ」ボタンから切り替えタブの丸いボタンへ飛ばす。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
 ///
-/// 浮かび上がる、弧を描いて吸い込まれる、着いて輪を広げる、の3段で動かす。値と飛ぶ間の計算は`TabAddFlightMotion`にある。
-/// アイコンは2枚重ねのビューで動かす。内側が浮かび上がりのスプリング、外側が飛ぶ間の位置と倍率を持ち、見える大きさと不透明度は2つの掛け算になる。
+/// フェードインする、弧を描いて吸い込まれる、着いて輪を広げる、の3段で動かす。値と飛ぶ間の計算は`TabAddFlightMotion`にある。
+/// アイコンは2枚重ねのビューで動かす。内側がフェードインのスプリング、外側が飛ぶ間の位置と倍率を持ち、見える大きさと不透明度は2つの掛け算になる。
 /// 1枚のビューで飛ぶ間の大きさを上書きすると、スプリングが行き過ぎている途中で飛び始めたときに、大きさが段になって飛ぶため。
 /// どれもウインドウの上に重ねたビューで、触れたものを受けないので、飛んでいる間も操作を止めない。
 @MainActor
@@ -24,7 +24,7 @@ enum TabAddFlight {
         let carrier = UIView(frame: CGRect(x: 0, y: 0, width: motion.iconSide, height: motion.iconSide))
         carrier.center = start
         carrier.isUserInteractionEnabled = false
-        // 内側: 浮かび上がりのスプリング。
+        // 内側: フェードインのスプリング。
         let icon = UIImageView(image: image)
         icon.frame = carrier.bounds
         icon.layer.shadowColor = UIColor.black.cgColor
@@ -36,7 +36,7 @@ enum TabAddFlight {
         carrier.addSubview(icon)
         window.addSubview(carrier)
 
-        // 1. ボタンから浮かび上がる。飛び始めても止めずに続ける。
+        // 1. ボタンからフェードインする。飛び始めても止めずに続ける。
         UIView.animateSpring(duration: motion.popScaleSpring.duration, bounce: motion.popScaleSpring.bounce, in: icon) {
             icon.transform = CGAffineTransform(scaleX: motion.popScalePeak, y: motion.popScalePeak)
         }

@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 新着ボタンの出し入れ。`isHidden`は動かないため、濃さで出し入れし、消え終えてから隠す。
+/// 新着ボタンの出し入れ。`isHidden`は動かないため、不透明度で出し入れし、消え終えてから隠す。
 @Suite(.scratch, .failureState)
 @MainActor
 struct NewArrivalsButtonTests {
@@ -12,7 +12,7 @@ struct NewArrivalsButtonTests {
         try #require(harness.viewController.view.subviews.compactMap { $0 as? UIButton }.first { $0.accessibilityLabel?.hasSuffix("の新着") == true })
     }
 
-    /// 出すときは、見えるようにして、濃くする向きにする。
+    /// 出すときは、見えるようにして、不透明度を上げる向きにする。
     @Test func showsWhenThereAreArrivals() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

@@ -153,7 +153,7 @@ custom_rules:
     message: "回線の状態を読んで送るかを分けない。目的（RequestPurpose）を名乗り、送ってよいかはNetworkUsePolicyに聞く"
     severity: error
 
-  # コントロールに組み込まれたコンテキストメニューは、開いても触覚フィードバックが出ず、ボタンはメニューに変形する形で出る。サムネイルで直したあとに足した本文のリンクで、同じ抜けがまた起きた。
+  # コントロールに組み込まれたコンテキストメニューは、開いてもハプティクスが出ず、ボタンはメニューに変形する形で出る。サムネイルで直したあとに足した本文のリンクで、同じ抜けがまた起きた。
   # コンテキストメニューは、別に付けたUIContextMenuInteractionで出す（MediaMenuInteraction、ObjectInteraction、LinkHitAreaのLinkMenuInteraction）
   built_in_context_menu:
     included: "(App/Sources|ShareExtension)/.*\\.swift"
@@ -165,9 +165,9 @@ custom_rules:
     message: "コンテキストメニューは、コントロールに組み込まれたメニューではなく、別に付けたUIContextMenuInteractionで出す。組み込まれたメニューでは触覚フィードバックが出ない"
     severity: error
 
-  # URLSessionは、通信の層のURLSessionTransport.swiftでだけ使う。ほかの場所で直接使うと、HTTPClientの決まり（再開の時刻で止める、送り直す、大きさの上限、httpとhttps以外を開かない）を通らない経路ができる。
+  # URLSessionは、通信の層のURLSessionTransport.swiftでだけ使う。ほかの場所で直接使うと、HTTPClientの決まり（再開の時刻で止める、再送する、大きさの上限、httpとhttps以外を開かない）を通らない経路ができる。
   # 429への対応をREST APIのクライアントにだけ作ったため、ストリーミングや動画の最初のコマやXの投稿が再開の時刻を守らなかった。
-  # 動画の再生（AVPlayerItem(url:)）はAVFoundationが範囲と先読みを自分で決めて読むため、層に載せない例外にしている
+  # 動画の再生（AVPlayerItem(url:)）はAVFoundationが範囲とプリフェッチを自分で決めて読むため、層に載せない例外にしている
   url_session_outside_network_layer:
     included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
     excluded: "Packages/SciaCore/Sources/SciaCore/Networking/URLSessionTransport\\.swift"

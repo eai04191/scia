@@ -1,14 +1,14 @@
 #!/bin/bash
-# `make check`と`make test`が通った中身を覚え、ローカルのmainに入れてよいかを調べる。Tools/git-hooks/reference-transactionもこれで調べる。
-# 覚えるのはcommitではなくtree（ファイルの中身の組）。commitする前の作業ツリーで通しても、commitしたtreeが同じなら、通ったものとして扱える。
+# `make check`と`make test`が通った中身を記録し、ローカルのmainに入れてよいかを調べる。Tools/git-hooks/reference-transactionもこれで調べる。
+# 記録するのはcommitではなくtree（ファイルの中身の組）。commitする前の作業ツリーで通しても、commitしたtreeが同じなら、通ったものとして扱える。
 # 作業ツリーのtreeは、indexのコピーにgit add -Aして作るので、まだcommitしていない変更も含む。.gitignoreにあるもの（生成するxcodeprojやDerivedData）は含めない。
-# 覚えたtreeは、worktreeどうしで共有する.gitの共通ディレクトリのscia-check/<check|test>/に、treeのハッシュを名前にした空のファイルで置く。
+# 記録したtreeは、worktreeどうしで共有する.gitの共通ディレクトリのscia-check/<check|test>/に、treeのハッシュを名前にした空のファイルで置く。
 # 使い方:
 #   Tools/check-stamp.sh tree                        今の作業ツリーのtreeを出す
-#   Tools/check-stamp.sh record <check|test> <tree>  今の作業ツリーが<tree>のままなら、通ったものとして覚える
-#   Tools/check-stamp.sh record-remote <check|test> <tree>  別のMacが<tree>の中身で走らせて通ったものとして覚える。手元の作業ツリーとは比べない
+#   Tools/check-stamp.sh record <check|test> <tree>  今の作業ツリーが<tree>のままなら、通ったものとして記録する
+#   Tools/check-stamp.sh record-remote <check|test> <tree>  別のMacが<tree>の中身で走らせて通ったものとして記録する。手元の作業ツリーとは比べない
 #   Tools/check-stamp.sh missing <commit> [<base>]   <commit>の中身でまだ通っていないもの（make check、make test）を1行ずつ出す
-# <base>を渡すと、<base>の中身で通っていて、<commit>との違いがMarkdown（*.md）とサーバーのリスト（known-servers.txt）だけなら、通ったものとして扱い、<commit>の中身も覚える。
+# <base>を渡すと、<base>の中身で通っていて、<commit>との違いがMarkdown（*.md）とサーバーのリスト（known-servers.txt）だけなら、通ったものとして扱い、<commit>の中身も記録する。
 # 追跡しているMarkdownは、ビルドにもlintにもテストにも入らないので、結果が変わらないため。
 # .agents/skills/にはシェルスクリプトもあるので、ディレクトリではなく拡張子で見る。
 # サーバーのリストは、GitHub Actionsが毎週作り直してPRにするデータで、読むテストはServerSuggestionsTestsのloadsTheBundledListだけ。その条件（1000件を超える、mastodon.socialがある、空の行がない）は、Tools/update-known-servers.shが書き出す前に確かめる。
@@ -55,7 +55,7 @@ case "${1:-}" in
         kind=${2:?checkかtestを渡す}
         tree=${3:?treeを渡す}
         [[ " $KINDS " == *" $kind "* ]] || { echo "error: checkかtestを渡してください: $kind" >&2; exit 1; }
-        # 走らせている間にファイルを書き換えると、確かめた中身と覚える中身がずれるので、覚えない
+        # 走らせている間にファイルを書き換えると、確かめた中身と記録する中身がずれるので、記録しない
         if [[ "$(worktree_tree)" != "$tree" ]]; then
             echo "error: make ${kind}の途中で作業ツリーが変わったので、通ったものとして覚えません。もう一度make ${kind}を走らせてください" >&2
             exit 1
@@ -81,7 +81,7 @@ case "${1:-}" in
         for kind in $KINDS; do
             [[ -e "$(stamp_dir "$kind")/$tree" ]] && continue
             if [[ -n "$base_tree" && -e "$(stamp_dir "$kind")/$base_tree" ]] && only_unchecked_files_differ "$base" "$commit"; then
-                # 次にこの中身と比べるときにも引き継げるよう、覚えておく
+                # 次にこの中身と比べるときにも引き継げるよう、記録しておく
                 touch "$(stamp_dir "$kind")/$tree"
                 continue
             fi

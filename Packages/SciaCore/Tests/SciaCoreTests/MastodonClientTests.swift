@@ -44,7 +44,7 @@ struct MastodonClientTests {
         await #expect(throws: DecodingError.self) { try await client.accountDomain() }
     }
 
-    /// 応答の中で読んだアカウントを、ブーストした人もブーストされた投稿の投稿者も、すべて覚える。送る前にとった番号のものより新しいものとして置き換える。
+    /// 応答の中で読んだアカウントを、ブーストした人もブーストされた投稿の投稿者も、すべて記録する。送る前にとった番号のものより新しいものとして置き換える。
     @Test func remembersAccountsReadInResponse() async throws {
         let received = ReceivedAccounts()
         let client = try makeClient(StubTransport([try .fixture("home_timeline")]), receivedAccounts: received)

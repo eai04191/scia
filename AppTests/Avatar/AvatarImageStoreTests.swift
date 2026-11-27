@@ -49,7 +49,7 @@ struct AvatarImageStoreTests {
         #expect(image.images == nil)
     }
 
-    /// 読めなかったアイコンは、行に描いたときは間隔をおいてから読み直し、使う人がメニューを開いたときはすぐ読み直す。
+    /// 読めなかったアイコンは、行に描いたときは間隔をおいてから再読み込みし、使う人がメニューを開いたときはすぐ再読み込みする。
     @Test func failedAvatarIsRetriedAfterTheDelayOrWhenTheUserAsks() async throws {
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
         let reads = Mutex(0)
@@ -77,7 +77,7 @@ struct AvatarImageStoreTests {
         #expect(reads.withLock { $0 } == 3)
     }
 
-    /// 読めなかったアイコンは、新着の挿入前に待つたびに読み直さない。読めないアイコンのために通信が増え、挿入が上限まで遅れるため。
+    /// 読めなかったアイコンは、新着の挿入前に待つたびに再読み込みしない。読めないアイコンのために通信が増え、挿入が上限まで遅れるため。
     @Test func loadDoesNotRefetchKeysThatFailed() async throws {
         let fetchCount = Mutex(0)
         // 5秒の期限が来ないよう、進めない時計を渡す。
@@ -133,8 +133,8 @@ struct AvatarImageStoreTests {
         #expect(origins.withLock { $0 } == [.display, .action])
     }
 
-    /// 文字に差し込むアイコンは、届いたら描き直す側に知らせ、描き直しで求め直す。裏に回っても読んだアイコンを捨てない。
-    /// 捨てると、通知の行が描き直しで読み直し、読み終えて知らせるとまた描き直すため。
+    /// 文字に差し込むアイコンは、届いたら再描画する側に知らせ、再描画で求め直す。裏に回っても読んだアイコンを捨てない。
+    /// 捨てると、通知の行が再描画で再読み込みし、読み終えて知らせるとまた再描画するため。
     @Test func requestedAvatarsSurviveEnteringTheBackground() async throws {
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
         let reads = Mutex(0)

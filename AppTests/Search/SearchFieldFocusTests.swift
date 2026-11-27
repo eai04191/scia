@@ -3,7 +3,7 @@ import SciaTesting
 import Testing
 import UIKit
 
-/// 検索欄のフォーカス。検索のタブを開くとフォーカスを入れ、タブをもう一度押すと、検索欄を閉じていても入れ直す。空いたところを押すとキーボードを閉じる。
+/// 検索欄のフォーカス。検索のタブを開くとフォーカスを入れ、タブをもう一度選択すると、検索欄を閉じていても入れ直す。空いたところを選択するとキーボードを閉じる。
 @MainActor
 @Suite(.serialized, .failureState) struct SearchFieldFocusTests {
     /// 開いたときに、検索欄にフォーカスを入れる。
@@ -16,10 +16,10 @@ import UIKit
         try await waitUntil { field.isFirstResponder }
     }
 
-    /// フォーカスのない検索欄で、検索のタブをもう一度押すと、フォーカスを入れる。
+    /// フォーカスのない検索欄で、検索のタブをもう一度選択すると、フォーカスを入れる。
     ///
-    /// 検索欄を閉じる動きの途中に押したときに、閉じ終えてからフォーカスを入れることは、テストでは確かめずシミュレーターで確かめる。
-    /// 検索欄の開閉の動きは、窓の時間を止めて進めても終わらず（`LayerClock.runUntilIdle()`のあとも`transitionCoordinator`が残る）、
+    /// 検索欄を閉じる動きの途中に選択したときに、閉じ終えてからフォーカスを入れることは、テストでは確かめずシミュレーターで確かめる。
+    /// 検索欄の開閉の動きは、ウィンドウの時間を止めて進めても終わらず（`LayerClock.runUntilIdle()`のあとも`transitionCoordinator`が残る）、
     /// 実際の時間で待っても、テスト全体を走らせて負荷がかかると終わらないことがあり、閉じ終えるのを待てないため。
     /// ここでは開いたときのフォーカスを止め、開閉の動きを待たずに確かめる。
     @Test func reselectingSearchTabFocusesSearchField() async throws {
@@ -37,7 +37,7 @@ import UIKit
         #expect(field.isFirstResponder)
     }
 
-    /// 検索欄にフォーカスがある間に行とボタンのないところを押すと、キーボードだけを閉じ、検索欄と打った語は残す。ボタンや結果のリストにない行を押したときと、フォーカスがないときは閉じない。見出しの行はUIで確かめる。
+    /// 検索欄にフォーカスがある間に行とボタンのないところを選択すると、キーボードだけを閉じ、検索欄と打った語は残す。ボタンや結果のリストにない行を選択したときと、フォーカスがないときは閉じない。見出しの行はUIで確かめる。
     @Test func tappingEmptySpaceDismissesOnlyKeyboard() async throws {
         let search = SearchViewController()
         let window = try Self.window(showing: search)

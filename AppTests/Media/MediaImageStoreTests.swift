@@ -47,7 +47,7 @@ struct MediaImageStoreTests {
         #expect(await store.hasOriginal(for: url) == false)
     }
 
-    /// 展開した画像がメモリにあっても、元のファイルが整理で消えていたら読み込み直して置き直す。共有と保存が選べなくならないようにするため。
+    /// 展開した画像がメモリにあっても、元のファイルが整理で消えていたら再読み込みして置き直す。共有と保存が選べなくならないようにするため。
     @Test func refetchesWhenOriginalWasRemoved() async throws {
         let data = try pngData()
         let files = MediaFileCache.temporary()
@@ -105,7 +105,7 @@ struct MediaImageStoreTests {
         #expect(fetched.withLock { $0 } == 1)
     }
 
-    /// 動画の先頭から最初のフレームを作れなければ、サーバーのプレビューを出し、その動画は先頭を読み直さない。
+    /// 動画の先頭から最初のフレームを作れなければ、サーバーのプレビューを出し、その動画は先頭を再読み込みしない。
     @Test func videoFrameFallsBackToPreviewAndIsNotRetried() async throws {
         let png = try pngData()
         let rangeReads = Mutex(0)
@@ -188,7 +188,7 @@ struct MediaImageStoreTests {
         #expect(origins.withLock { $0 } == [.display, .action])
     }
 
-    /// 先読みは、展開せずに先読みの置き場へ置き、メディアのキャッシュには置かない。先読みの目的で送る。
+    /// プリフェッチは、展開せずにプリフェッチの置き場へ置き、メディアのキャッシュには置かない。プリフェッチの目的で送る。
     @Test func prefetchStoresOriginalInPrefetchCacheOnly() async throws {
         let png = try pngData()
         let files = MediaFileCache.temporary()
@@ -207,12 +207,12 @@ struct MediaImageStoreTests {
         #expect(store.cachedImage(for: url, maxPixelSize: MediaImagePixelSize.full) == nil)
         #expect(purposes.withLock { $0 } == [.prefetch])
 
-        // 置いてあれば、読み直さない。
+        // 置いてあれば、再読み込みしない。
         await store.prefetchOriginal(url, purpose: .prefetch)
         #expect(purposes.withLock { $0 }.count == 1)
     }
 
-    /// ビューアで開いたら、先読みしたファイルを通信せずに使い、メディアのキャッシュへ移す。
+    /// ビューアで開いたら、プリフェッチしたファイルを通信せずに使い、メディアのキャッシュへ移す。
     @Test func viewerUsesPrefetchedOriginalAndMovesItToMediaCache() async throws {
         let png = try pngData()
         let files = MediaFileCache.temporary()
@@ -233,7 +233,7 @@ struct MediaImageStoreTests {
         #expect(await store.hasOriginal(for: url))
     }
 
-    /// サムネイルに元の画像を読んだら、先読みの置き場にも置き、先読みで同じファイルを読み直さない。
+    /// サムネイルに元の画像を読んだら、プリフェッチの置き場にも置き、プリフェッチで同じファイルを再読み込みしない。
     @Test func thumbnailOriginalIsSharedWithPrefetch() async throws {
         let png = try pngData()
         let prefetched = MediaFileCache.temporary()
@@ -251,7 +251,7 @@ struct MediaImageStoreTests {
         #expect(await prefetched.contains(url))
     }
 
-    /// サムネイルとして読んでいる途中なら、先読みはそれを待ち、同じファイルを読まない。
+    /// サムネイルとして読んでいる途中なら、プリフェッチはそれを待ち、同じファイルを読まない。
     @Test func prefetchWaitsForThumbnailOriginalInFlight() async throws {
         let png = try pngData()
         let gate = Gate()
@@ -273,7 +273,7 @@ struct MediaImageStoreTests {
         #expect(fetches.withLock { $0 } == 1)
     }
 
-    /// ぼかしている間に先読みしているサムネイルは、外したあとの表示の読み込みが待ち、同じ画像を読み直さない。
+    /// ぼかしている間にプリフェッチしているサムネイルは、外したあとの表示の読み込みが待ち、同じ画像を再読み込みしない。
     @Test func revealJoinsCoveredPrefetchInFlight() async throws {
         let png = try pngData()
         let gate = Gate()
@@ -297,7 +297,7 @@ struct MediaImageStoreTests {
         #expect(store.cachedThumbnail(for: MediaThumbnailRequest(url: url, maxPixelSize: 512, purpose: .display)) != nil)
     }
 
-    /// ぼかした動画の最初のコマを作れなかったら、代わりのプレビューも先読みとして読む。モバイル通信に変わってOSが断っても、表示の目的に戻して読まない。
+    /// ぼかした動画の最初のコマを作れなかったら、代わりのプレビューもプリフェッチとして読む。モバイル通信に変わってOSが断っても、表示の目的に戻して読まない。
     @Test func coveredVideoFallbackKeepsPrefetchPurpose() async throws {
         let png = try pngData()
         let purposes = Mutex<[RequestPurpose?]>([])
@@ -317,7 +317,7 @@ struct MediaImageStoreTests {
         #expect(purposes.withLock { $0 } == [.prefetch, .prefetch])
     }
 
-    /// 外して表示しようとする呼び出しが複数あり、待っていた先読みをOSが断ったら、読み直すのは1回だけにする。
+    /// 外して表示しようとする呼び出しが複数あり、待っていたプリフェッチをOSが断ったら、再読み込みは1回だけにする。
     @Test func refusedPrefetchIsReadAgainOnceForManyRevealers() async throws {
         let png = try pngData()
         let gate = Gate()
@@ -349,7 +349,7 @@ struct MediaImageStoreTests {
         #expect(fetches.withLock { $0 } == 2)
     }
 
-    /// ぼかしている間の先読みでも、前に読めなかった画像は読まない。
+    /// ぼかしている間のプリフェッチでも、前に読めなかった画像は読まない。
     @Test func coveredPrefetchSkipsImagesThatFailed() async throws {
         let clock = TestClock()
         let fetches = Mutex(0)
@@ -366,7 +366,7 @@ struct MediaImageStoreTests {
         #expect(fetches.withLock { $0 } == 1)
     }
 
-    /// 読めなかった画像は、読み直しの間隔が過ぎるまで先読みしない。
+    /// 読めなかった画像は、再読み込みの間隔が過ぎるまでプリフェッチしない。
     @Test func prefetchSkipsImagesThatFailed() async throws {
         let fetches = Mutex(0)
         let prefetched = MediaFileCache.temporary()
@@ -437,7 +437,7 @@ struct MediaImageStoreTests {
     }
 }
 
-/// 読めなかった画像は、タイムラインに描いたときは間隔をおいてから読み直し、ビューアを開いたときはすぐ読み直す。
+/// 読めなかった画像は、タイムラインに描いたときは間隔をおいてから再読み込みし、ビューアを開いたときはすぐ再読み込みする。
 @Suite(.scratch, .failureState)
 @MainActor
 struct MediaImageStoreRetryTests {

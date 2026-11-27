@@ -107,7 +107,7 @@ struct AnnouncementsViewControllerTests {
         window.isHidden = true
     }
 
-    /// 描き直しても、同じリアクションのボタンは作り替えない。押している途中のタップを取り消さないため。
+    /// 再描画しても、同じリアクションのボタンは作り替えない。押されている状態のボタンのタップを取り消さないため。
     @Test func reusesReactionButtonsOnRedraw() {
         let view = ReactionChipsView()
         let reaction = ReactionChipsView.Reaction(name: "👍", emoji: NSAttributedString(string: "👍"), count: 1, isMine: false, spokenName: "👍")
@@ -120,7 +120,7 @@ struct AnnouncementsViewControllerTests {
         #expect(view.subviews.first { $0.accessibilityLabel == "👍 2件" } === first)
     }
 
-    /// 既読の送信が失敗して未読に戻り、リストを描き直しても、行が画面の外から入ってくるまで送り直さない。
+    /// 既読の送信が失敗して未読に戻り、リストを再描画しても、行が画面の外から入ってくるまで再送しない。
     @Test func doesNotResendDismissOnRedraw() async throws {
         let dismissals = Mutex(0)
         let operations = AnnouncementsModel.Operations(

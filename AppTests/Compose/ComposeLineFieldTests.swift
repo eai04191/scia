@@ -7,7 +7,7 @@ import UIKit
 @Suite(.failureState)
 struct ComposeLineFieldTests {
     /// 空のときも、書いたときと同じ高さを取る。UITextFieldは空のときの高さを今の書体から出さないため、
-    /// 文字の大きさの設定が既定と違うと、書き始めたときと消したときに、欄と投稿欄の高さが変わる。
+    /// Dynamic Typeの設定が既定と違うと、書き始めたときと消したときに、欄と投稿欄の高さが変わる。
     @Test(arguments: [UIContentSizeCategory.small, .large, .accessibilityLarge])
     func emptyFieldIsAsTallAsFilledField(category: UIContentSizeCategory) {
         let field = ComposeLineField()

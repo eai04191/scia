@@ -116,7 +116,7 @@ final class SessionController {
         }
         return model
     }()
-    /// 「投稿のデフォルト」の言語のシートに渡すもの。最近選んだ言語は候補に並べるために読むだけで、既定に選んだ言語は覚えさせない。
+    /// 「投稿のデフォルト」の言語のシートに渡すもの。最近選んだ言語は候補に並べるために読むだけで、既定に選んだ言語は記録させない。
     private var postingDefaultLanguages: PostingLanguageSource {
         PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: postingLanguages.languages)
     }
@@ -182,7 +182,7 @@ final class SessionController {
     /// 投稿のIDと変換を受け取り、表示しているすべてのタイムラインで、その投稿とそれをブーストした投稿を変える。
     private let updateStatusEverywhere: StatusInteractions.Update
     let interactions: StatusInteractions
-    /// 投稿にリアクションする絵文字を選ぶシート。開くときに、カスタム絵文字と最近使った絵文字を読む。
+    /// 投稿にリアクションする絵文字ピッカー。開くときに、カスタム絵文字と最近使った絵文字を読む。
     private lazy var emojiReactionPicker = {
         let picker = EmojiReactionPicker(completion: TextInputCompletion(
             completion: CompletionModel(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
@@ -217,7 +217,7 @@ final class SessionController {
     /// 401を受けたときに、トークンが無効になったかを決める。
     private var authorization: AuthorizationCheck { session.authorization }
     private let onReauthenticate: (SessionController, Credential) async -> Void
-    /// ログインし直しの途中。続けて選択されても、認可画面を重ねて出さない。
+    /// ログインし直しの途中。続けて選択されても、認可画面を二重に出さない。
     private var isReauthenticating = false
     private let tabBarDelegate: TabReselectionDelegate
     /// タブバーと切り替えタブ。設定のタブの並びから組む。
@@ -272,11 +272,11 @@ final class SessionController {
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
     /// 下書き（`composer.model`）はウィンドウが持ち、アカウントを替えて画面一式を作り直しても、次の画面一式に渡す（docs/compose.mdの「アカウントを変えるとき」）。
     let composer: InlineComposeController
-    /// このアカウントで書くときの送り先。ウィンドウの下書きをこの画面一式につなぎ直すときに渡す。
+    /// このアカウントで書くときの送り先。ウィンドウの下書きをこの画面一式に付け替えるときに渡す。
     private let homeComposeAccount: ComposeAccount<UIImage>
     /// 書き始めたときに始めた、サーバーの上限と既定の公開範囲などの読み込み。共有されたメディアを、読み終えてから足すのに使う。
     private var composeDefaultsTask: Task<Void, Never>?
-    /// 画面のどこにドロップした画像や動画でも、投稿欄に添付する受け口。
+    /// 画面のどこにドロップした画像や動画でも、投稿欄に添付するハンドラー。
     private let mediaDrop = MediaDropTarget()
     /// 状態や設定をそろえるタイムライン。ホームと通知に加え、開いているプロフィールのタイムラインも入る。閉じたものは自然に消える。
     let timelines = NSHashTable<TimelineViewController>.weakObjects()
@@ -317,7 +317,7 @@ final class SessionController {
     ///   - accountManagement: 「アカウントを管理」の画面で、アカウントを切り替え、ログアウトし、追加する。
     ///   - onReauthenticate: トークンが無効なアカウントで、ログインし直しのボタンが選択されたときに、そのアカウントを渡して呼ぶ。ログインし直しが終わるか、取り消されたら返る。
     ///     このセッションのアカウントのほか、「別のアカウントで」の操作で無効と分かったほかのアカウントも渡す。
-    ///   - draft: ウィンドウが持っている下書き。ウィンドウで初めて作る画面一式ならnilで、`draftTasks`の子で作る。渡したら、作ったあとに`rebindDraft()`でつなぎ直す。
+    ///   - draft: ウィンドウが持っている下書き。ウィンドウで初めて作る画面一式ならnilで、`draftTasks`の子で作る。渡したら、作ったあとに`rebindDraft()`で付け替える。
     ///   - draftTasks: 下書きの送信とアップロードの持ち主。ウィンドウを閉じるまで閉じない。
     init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, logOut: (@MainActor () -> Void)?, accountManagement: AccountManagement, draft: ComposeModel<UIImage>?, draftTasks: TaskScope, onReauthenticate: @escaping (SessionController, Credential) async -> Void) {
         self.credential = credential
@@ -837,7 +837,7 @@ final class SessionController {
         }
     }
 
-    /// 見ているタブの項目を、次に起動したときに開けるよう覚えておく。
+    /// 見ているタブの項目を、次に起動したときに開けるよう保存しておく。
     private func rememberShownTab() {
         guard let item = tabs.shownItem else { return }
         settings.setShownTabItem(item, for: credential.handle)
@@ -1524,7 +1524,7 @@ final class SessionController {
 
     /// プロフィールを開く操作は、どの経路もここに通す。`find`で探したアカウントのプロフィールを、`source`の画面にプッシュする。
     /// 探している途中に別のプロフィールを開こうとしたら、前のものは止めて結果を使わない。待っている間も、ほかの操作は止めない。
-    /// 待つ間にタブを移ったり、戻ったり、別の画面を開いたりしたら、見つかってもプッシュせず、失敗も知らせない。
+    /// 待つ間にタブを移ったり、戻ったり、別の画面を開いたりしたら、見つかってもプッシュせず、失敗も表示しない。
     private func openProfile(from source: UIViewController, failureTitle: String = SessionTexts.Failure.openProfile, finding find: @escaping @Sendable () async throws -> Account) {
         let anchor = PushAnchor(source)
         profileOpening.start(.action, debugDelayed(find)) { [logger] in
@@ -2034,7 +2034,7 @@ final class SessionController {
         ThreadPushDelegate.push(viewController, on: navigation, duration: viewController.tuning.value(of: TuningCatalog.threadOpenDuration))
     }
 
-    /// IDしか分からない投稿を読んでから、そのスレッドを開く。待つ間にタブを移ったり、戻ったり、別の画面を開いたりしたら、読めても開かず、失敗も知らせない。
+    /// IDしか分からない投稿を読んでから、そのスレッドを開く。待つ間にタブを移ったり、戻ったり、別の画面を開いたりしたら、読めても開かず、失敗も表示しない。
     private func openThread(statusID: Status.ID, rowFrame: CGRect, from source: UIViewController) {
         let client = client
         let anchor = PushAnchor(source)
@@ -2434,7 +2434,7 @@ final class SessionController {
     private func composeAccount(for account: OtherAccount) -> ComposeAccount<UIImage> {
         let client = otherAccounts.latestClient(for: account)
         let handle = account.credential.handle
-        // 処理できない画像の形式は、今のアカウントのサーバーの版ごとに覚えている。ほかのアカウントのサーバーの版は読まないので覚えず、
+        // 処理できない画像の形式は、今のアカウントのサーバーの版ごとに記録している。ほかのアカウントのサーバーの版は読まないので記録せず、
         // 処理できなかったときにJPEGで再送するのを、送るたびに行う。
         let media = ComposeMediaService<UIImage>(client: client, settings: settings, tuning: AppDependencies.tuning) { file in
             await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize)
@@ -2951,7 +2951,7 @@ final class SessionController {
         }
     }
 
-    /// ハッシュタグのミュートを解除する。除いた投稿は戻さず、読み込み直したときに戻る。ユーザーのミュートの解除と同じ。
+    /// ハッシュタグのミュートを解除する。除いた投稿は戻さず、再読み込みしたときに戻る。ユーザーのミュートの解除と同じ。
     /// 解く条件は、解除するときにフィルターを再読み込みして決める。メニューを組んだときにキャッシュしていた条件で消すと、
     /// その後に別の端末やwebで同じフィルターに足した条件まで、フィルターごと消してしまうため。もうミュートしていなければ、何も消さない。
     private func unmuteHashtag(_ name: String) {
@@ -4067,7 +4067,7 @@ final class SessionController {
     }
 
     /// 行に見える変化がない操作（ブックマーク、会話のミュート、固定）が済んだことを知らせる。メニューを閉じると、変わったことが見えないため。
-    /// お気に入りとブーストは、行の光の動きで分かるので知らせない。決まりはdocs/object-actions.mdの「結果のチップ」にある。
+    /// お気に入りとブーストは、行の光の動きで分かるのでチップを出さない。決まりはdocs/object-actions.mdの「結果のチップ」にある。
     private func showToggledNotice(_ title: String) {
         notices.showTransient(Notice(id: "status.toggled", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
@@ -4254,7 +4254,7 @@ final class SessionController {
 
     // MARK: - 投稿
 
-    /// ウィンドウが持つ下書きを、この画面一式のアカウントにつなぎ直す。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
+    /// ウィンドウが持つ下書きを、この画面一式のアカウントに付け替える。決まりはdocs/compose.mdの「アカウントを変えるとき」にある。
     /// 画面一式を作り直したときと、書いているほかのアカウントからログアウトしたときに呼ぶ。投稿欄は、開いていても閉じたカプセルで始める。
     func rebindDraft() {
         let model = composer.model
@@ -4431,7 +4431,7 @@ final class SessionController {
         account.id == credential.id ? reauthenticate() : reauthenticate(account)
     }
 
-    /// ほかのアカウントにログインし直す。続けて選択されても、同じアカウントの認可画面を重ねて出さない。
+    /// ほかのアカウントにログインし直す。続けて選択されても、同じアカウントの認可画面を二重に出さない。
     @discardableResult
     private func reauthenticate(_ other: Credential) -> Task<Void, Never>? {
         tasks.run(key: "otherAccountReauthenticate:\(other.id)", .skippingWhileRunning, .action) { [weak self] in
@@ -5024,7 +5024,7 @@ private final class ProfileTabRegistry {
         }
     }
 
-    /// アカウントを読んでいる間に変わっても、作ったプロフィール画面に伝えられるよう覚えておく。
+    /// アカウントを読んでいる間に変わっても、作ったプロフィール画面に伝えられるよう保持しておく。
     private var isInForeground = true
 
     func enterForeground() {
@@ -5280,7 +5280,7 @@ extension SessionController: ListEditorHost {
         setTabLayout(settings.tabLayout(for: credential.handle).adding(.list(id: list.id, title: list.title)))
     }
 
-    /// 変えたリストを覚え、名前が変わっていれば、並びの名前と、タブバーとタイムラインの見出しの名前をすぐ変える。
+    /// 変えたリストを保持し、名前が変わっていれば、並びの名前と、タブバーとタイムラインの見出しの名前をすぐ変える。
     func listDidUpdate(_ list: MastodonList) {
         listChangeCount += 1
         let previous = knownList(list.id)

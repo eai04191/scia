@@ -187,7 +187,7 @@ struct FeedTimelineModelTests {
         #expect(finishedCount == 1)
     }
 
-    /// 最初の読み込みに失敗したら、画面ではなくモデルが失敗を覚えていて、電波の回復でやり直す。
+    /// 最初の読み込みに失敗したら、画面ではなくモデルが失敗を保持していて、電波の回復でやり直す。
     @Test func recoverRetriesFailedInitialLoad() async throws {
         let failsTimeline = Mutex(true)
         let transport = RoutedTransport { request in

@@ -4,11 +4,11 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 「その他」の境目を持たない並び（アクションバー）の並びの画面。境目の後ろの節は出さない。
+/// 「その他」の境目を持たない並び（アクションバー）の並びの画面。境目の後ろのセクションは出さない。
 @MainActor
 @Suite(.failureState)
 struct MenuLayoutWithoutMoreTests {
-    /// 並べ替えると、1つの節の中の順で並びを保存する。
+    /// 並べ替えると、1つのセクションの中の順で並びを保存する。
     @Test func reorderingSavesOrder() throws {
         var saved: MenuLayout<PostActionBarItem>?
         let controller = MenuLayoutViewController<PostActionBarItem>(

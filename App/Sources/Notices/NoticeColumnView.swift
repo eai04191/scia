@@ -108,7 +108,7 @@ final class NoticeColumnView: UIView {
         reauthenticationButton.center = CGPoint(x: bounds.midX, y: size.height / 2)
     }
 
-    /// 指が触れている間は、押そうとしているチップが逃げないよう並べ直さない。離したら並べ直す。
+    /// 指が触れている間は、選択しようとしているチップが逃げないよう並べ直さない。離したら並べ直す。
     private func placeStackUnlessHeld() {
         guard !stack.isHeld else {
             needsStackPlacement = true

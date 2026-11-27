@@ -32,7 +32,7 @@ struct FeedTimelineControllerTests {
         return String(decoding: envelope, as: UTF8.self)
     }
 
-    /// 積んで開いたタイムラインを外したら、画面とコントローラーの持ち合いを解く。持ち合いを作る前にコントローラーが止まっていても（トークンが無効と分かったあとに開いたタイムライン）解く。
+    /// プッシュして開いたタイムラインを外したら、画面とコントローラーの持ち合いを解く。持ち合いを作る前にコントローラーが止まっていても（トークンが無効と分かったあとに開いたタイムライン）解く。
     @Test func removingStackedFeedReleasesStoppedController() throws {
         let viewController: TimelineViewController
         weak var released: FeedTimelineController?
@@ -60,7 +60,7 @@ struct FeedTimelineControllerTests {
         #expect(controller.viewController.contentState == .regenerating)
     }
 
-    /// 作り直し中の読み直しを予約したあとに無効にしたら、読み直しをやめる。使わないタイムラインに通信し続けないため。
+    /// 作り直し中の再読み込みを予約したあとに無効にしたら、再読み込みをやめる。使わないタイムラインに通信し続けないため。
     @Test func disablingStopsRegeneratingRetries() async throws {
         let homeRequests = Mutex(0)
         let transport = ScriptedTransport { request in
@@ -83,7 +83,7 @@ struct FeedTimelineControllerTests {
         defer { controller.stop() }
 
         controller.start(purpose: .action)
-        // 最初の読み込みと、つながったときの補完。補完も206なので、読み直しを予約する。
+        // 最初の読み込みと、つながったときの補完。補完も206なので、再読み込みを予約する。
         try await waitUntil { homeRequests.withLock { $0 } >= 2 && clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         controller.setEnabled(false)
         let countWhenDisabled = homeRequests.withLock { $0 }
@@ -94,7 +94,7 @@ struct FeedTimelineControllerTests {
         #expect(homeRequests.withLock { $0 } == countWhenDisabled)
     }
 
-    /// 止めたタイムラインの401は、セッションに知らせない。知らせると、ログアウトされたとして止まるため。
+    /// 止めたタイムラインの401は、セッションに報告しない。報告すると、ログアウトされたとして止まるため。
     @Test func stoppedControllerDoesNotReportUnauthorized() async throws {
         let gate = Gate()
         let transport = ScriptedTransport { _ in
@@ -290,7 +290,7 @@ struct FeedTimelineControllerTests {
         }
     }
 
-    /// 引っぱって離すと、一番新しい投稿より新しいものを読んで上に足し、読み終えたら更新コントロールを閉じる。
+    /// pull to refreshすると、一番新しい投稿より新しいものを読んで上に足し、読み終えたら更新コントロールを閉じる。
     @Test func pullToRefreshAddsNewerStatusesAndEndsRefreshing() async throws {
         let existing = StatusFactory.make(count: 3, startingAt: 100)
         let newer = StatusFactory.make(count: 1, startingAt: 200)
@@ -313,7 +313,7 @@ struct FeedTimelineControllerTests {
         #expect(controller.viewController.displayedStatusIDs == (newer + existing).map(\.id))
     }
 
-    /// つながったときの補完の最中に引っぱったら、その補完と続きの読み込みが終わるまで、更新コントロールを閉じない。
+    /// つながったときの補完の最中にpull to refreshしたら、その補完と続きの読み込みが終わるまで、更新コントロールを閉じない。
     @Test func pullToRefreshDuringFillWaitsForTheFill() async throws {
         let existing = StatusFactory.make(count: 3, startingAt: 100)
         let newer = StatusFactory.make(count: 1, startingAt: 200)

@@ -32,7 +32,7 @@ extension MediaMenuHost {
 /// UIKitのプレビューは角を決まった大きさで丸めるため、小さなアイコンに使うと形が変わりすぎる。
 /// 画像の全体はUIKitのプレビューとして渡し、持ち上げる元と閉じて戻る先にはサムネイル自身を渡す。UIKitが、切り抜いたサムネイルから画像の全体へ変形して持ち上げ、
 /// 閉じると元の形へ戻し、その間のサムネイルの出し入れも受け持つ。別のビューに描いてサムネイルを自分で透明にすると、UIKitの出し入れと間合いがずれ、
-/// 押下し始めたときや閉じたあとにサムネイルの場所が白く抜けたため。
+/// 触れ始めたときや閉じたあとにサムネイルの場所が白く抜けたため。
 @MainActor
 final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     private weak var view: UIView?

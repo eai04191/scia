@@ -16,7 +16,7 @@ public final class AccountPreferencesModel {
 
     /// - Parameters:
     ///   - initial: すでに読めているアカウント設定。再読み込みするまでの表示に使う。
-    ///   - tasks: セッションの持ち主の子。閉じたセッションで読んだ値を覚えさせないため。
+    ///   - tasks: セッションの持ち主の子。閉じたセッションで読んだ値を保持させないため。
     public init(initial: ServerPreferences?, load: @escaping @MainActor @Sendable () async throws -> ServerPreferences, tasks: TaskScope) {
         preferences = initial
         self.load = load

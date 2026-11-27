@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// リンクカードから、読み終えたXの投稿の囲みに替わるときの見え方。
+/// リンクカードから、読み終えたXの投稿のカードに替わるときの見え方。
 @Suite(.scratch, .failureState)
 @MainActor
 struct EmbedArrivalTests {
@@ -48,14 +48,14 @@ struct EmbedArrivalTests {
         return window
     }
 
-    /// カードが画面に描かれるまで待つ。描かれる前は像を取れないため。
+    /// カードが画面に描かれるまで待つ。描かれる前はスナップショットを取れないため。
     private func waitUntilDrawn(_ view: PostBodyView) async throws {
         view.layoutIfNeeded()
         try await waitUntil { view.linkCard?.snapshotView(afterScreenUpdates: false) != nil }
     }
 
-    /// 同じ投稿のリンクカードが囲みに替わったら、カードは1コマで消さず、カードのあった位置に像を残して薄くする。
-    /// 囲みは透明から浮かび上がらせる。
+    /// 同じ投稿のリンクカードがXの投稿のカードに替わったら、リンクカードは1コマで消さず、カードのあった位置にスナップショットを残して薄くする。
+    /// Xの投稿のカードは透明からフェードインさせる。
     @Test func cardStaysWhileEmbedFadesIn() async throws {
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
         let window = try window(showing: view)
@@ -74,7 +74,7 @@ struct EmbedArrivalTests {
         #expect(try #require(view.embed).alpha == 0)
     }
 
-    /// 浮かび上がらせている途中に同じ投稿が描き直されても（絵文字が届いたなど）、囲みを1コマで濃くしない。
+    /// フェードインさせている途中に同じ投稿が再描画されても（絵文字が届いたなど）、Xの投稿のカードの不透明度を1コマで上げない。
     @Test func redrawingSameStatusKeepsEmbedFading() async throws {
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
         let window = try window(showing: view)
@@ -89,7 +89,7 @@ struct EmbedArrivalTests {
         #expect(view.leavingCardSnapshot != nil)
     }
 
-    /// 入れ替えの途中に注意書きを折りたたんだら、カードの像を残さない。囲みもカードも隠れるため。
+    /// 入れ替えの途中に注意書きを折りたたんだら、リンクカードのスナップショットを残さない。Xの投稿のカードもリンクカードも隠れるため。
     @Test func collapsingSpoilerDropsLeavingCard() async throws {
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
         let window = try window(showing: view)
@@ -107,7 +107,7 @@ struct EmbedArrivalTests {
         #expect(view.embed == nil)
     }
 
-    /// 使い回された行で別の投稿に替わったら、前の投稿のカードの像を残さず、囲みもすぐ出す。
+    /// 使い回された行で別の投稿に替わったら、前の投稿のリンクカードのスナップショットを残さず、Xの投稿のカードもすぐ出す。
     @Test func reuseForAnotherStatusDropsLeavingCard() async throws {
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
         let window = try window(showing: view)
@@ -184,7 +184,7 @@ struct XPostArrivalScrollTests {
     }
 
     /// 見えている行が大きく伸びて、下の何行もが表示領域の外へ押し出されるときは、押し出される行をどれも1コマで消さず、
-    /// 描き直す前の像を動かして外へ送る。
+    /// 再描画する前のスナップショットを動かして外へ送る。
     @Test func largeGrowthSendsOutEveryPushedRow() async throws {
         var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
         statuses[10] = linking(statuses[10], to: "7")
@@ -193,7 +193,7 @@ struct XPostArrivalScrollTests {
         let id = TimelineViewController.ItemID.status(statuses[10].id)
         try harness.scroll(to: id, at: .top)
         harness.collectionView.layoutIfNeeded()
-        // 描かれる前の行は像を取れないため、描かれるのを待つ。
+        // 描かれる前の行はスナップショットを取れないため、描かれるのを待つ。
         try await waitUntil { harness.collectionView.visibleCells.allSatisfy { $0.snapshotView(afterScreenUpdates: false) != nil } }
         let before = Set(harness.collectionView.visibleCells.map(ObjectIdentifier.init))
 
@@ -212,7 +212,7 @@ struct XPostArrivalScrollTests {
         #expect(pushedOut.count >= 2, "複数の行が押し出される条件になっていません")
         let sentOut = harness.collectionView.subviews.filter { !($0 is UICollectionViewCell) && $0.layer.animation(forKey: "rowShiftEnd") != nil }
         #expect(sentOut.count >= pushedOut.count, "押し出された行の像を動かしていません")
-        // 替わったリンクカードの像は、本文が自分で薄くして外す。新しく現れた部品として切り抜くと、見えていた像が最初のコマで隠れる。
+        // 替わったリンクカードのスナップショットは、本文が自分で薄くして外す。新しく現れた部品として切り抜くと、見えていたスナップショットが最初のコマで隠れる。
         let leaving = try #require((harness.visibleCell(of: id)?.contentView as? PostContentView)?.postBody.leavingCardSnapshot, "替わったカードの像を残していません")
         #expect(leaving.layer.mask == nil, "薄くして消すカードの像を切り抜いています")
     }

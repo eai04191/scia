@@ -39,7 +39,7 @@ struct ProfileEditRevealTests {
         return (controller, window)
     }
 
-    /// 窓を隠し、編集の画面を外す。外さないと、隠した窓に編集の画面が残り、あとのテストの窓の扱い（ステータスバーの通知、チップの位置）を変えるため。
+    /// ウィンドウを隠し、編集の画面を外す。外さないと、隠したウィンドウに編集の画面が残り、あとのテストのウィンドウの扱い（ステータスバーの通知、チップの位置）を変えるため。
     private func close(_ window: UIWindow) {
         window.isHidden = true
         window.rootViewController = nil

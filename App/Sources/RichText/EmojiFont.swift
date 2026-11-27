@@ -8,7 +8,7 @@ import UIKit
 /// twemojiでは、アプリに入れたtwemojiの書体（`Tools/build-twemoji-font.py`で作る）を代わりの書体の先頭に置く。
 /// 標準の書体にない文字はAppleの絵文字より先にtwemojiで探されるため、「©」のように標準の書体で描ける文字は、絵文字にならずに文字のまま描かれる。
 /// 文字列は変えないため、コピーや読み上げ、行の折り返しは、Appleの絵文字で描くときと変わらない。
-/// タイムラインの本文はメインスレッドの外でも作るため、覚えておく表は`Mutex`で守る。
+/// タイムラインの本文はメインスレッドの外でも作るため、キャッシュする表は`Mutex`で守る。
 enum EmojiFont {
     private struct FontKey: Hashable {
         let font: UIFont
@@ -121,7 +121,7 @@ enum EmojiFont {
     static func pointSize(of font: UIFont, drawingGlyphsOfHeight height: CGFloat) -> CGFloat {
         let key = SizeKey(font: font, glyphHeight: height)
         if let cached = sizes.withLock({ $0[key] }) { return cached }
-        // 探す途中の大きさは、ほかで使わないので覚えない。
+        // 探す途中の大きさは、ほかで使わないのでキャッシュしない。
         var low: CGFloat = 0
         var high = height
         while measureGlyphBounds(of: font.withSize(high)).height < height {

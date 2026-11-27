@@ -80,7 +80,7 @@ extension UserRelationChange {
         }
     }
 
-    /// 送れたときのチップ。メニューを閉じると変わったことが見えないため知らせる。鍵のかかった相手のフォローは、リクエストになったことを伝える。
+    /// 送れたときのチップ。メニューを閉じると変わったことが見えないため知らせる。承認制アカウントのフォローは、リクエストになったことを伝える。
     public func doneTitle(_ relationship: Relationship) -> String {
         switch self {
         case .follow: relationship.requested ? "フォローをリクエストしました" : "フォローしました"

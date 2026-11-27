@@ -3,11 +3,11 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// SciaCoreで組んだメニューの木を、UIKitのメニューに描くことを確かめる。何をどの順に出すかは、SciaCoreのテストで確かめる。
+/// SciaCoreで組んだメニューのツリーを、UIKitのメニューに描くことを確かめる。何をどの順に出すかは、SciaCoreのテストで確かめる。
 @MainActor
 @Suite(.failureState)
 struct MenuRendererTests {
-    /// まとまりは見出しのないメニューにし、横並びのまとまりは選んだ大きさで並べる。押せない項目、取り消せない操作、選んでいる状態を印にし、押すと操作を渡す。
+    /// グループは見出しのないメニューにし、横並びのグループは選んだ大きさで並べる。無効な項目、取り消せない操作、選んでいる状態を、項目の属性とチェックマークで示し、選択すると操作を渡す。
     @Test func rendersNodesAsUIKitMenu() throws {
         var performed: [Int] = []
         let renderer = MenuRenderer<Int> { performed.append($0) }
@@ -32,7 +32,7 @@ struct MenuRendererTests {
         #expect(reply.image != nil)
         let group = try #require(menu.children[1] as? UIMenu)
         #expect(group.preferredElementSize != .medium && group.preferredElementSize != .small)
-        // 横並びのまとまりで横に並ぶ項目は、サブタイトルを出さない。横に並ぶ数を超えてふだんの行で出る項目には残す。
+        // 横並びのグループで横に並ぶ項目は、サブタイトルを出さない。横に並ぶ数を超えてふだんの行で出る項目には残す。
         let small = try #require(menu.children[3] as? UIMenu)
         #expect(small.preferredElementSize == .small)
         #expect(small.children.map(\.subtitle) == [nil, nil, nil, nil, "日本語"])

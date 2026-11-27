@@ -59,7 +59,7 @@ enum EmojiReactionCatalog {
     }
 
     /// `local`を“ショートコードで表示”、`remote`を“表示しない”にしたカタログ用の設定。描き方の一覧はアプリ全体で1つなので、アプリの設定には書かない。
-    /// ほかの状態と見比べられるよう、プリセット（「投稿の見た目」など）はアプリのものを写す。
+    /// ほかの状態と見比べられるよう、プリセット（「投稿の見た目」など）はアプリのものをコピーする。
     @MainActor
     private static func hidingEmojis(_ local: ReactionEmoji, _ remote: ReactionEmoji) -> AppSettings {
         let suiteName = "net.mizle.scia.catalog.emojiReactions.hiding"

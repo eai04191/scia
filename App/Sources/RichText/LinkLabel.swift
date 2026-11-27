@@ -15,10 +15,10 @@ final class LinkLabel: EmojiLabel {
     /// ハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。投稿の本文なら投稿した人、プロフィールならその人。nilなら項目を出さない。
     var hashtagAccount: Account?
 
-    /// リンクの上の押下だけを受ける、ラベルと同じ大きさの透明な部品。
+    /// リンクの上の選択だけを受ける、ラベルと同じ大きさの透明な部品。
     /// MacのDesigned for iPadでは、アクティブでないウィンドウへの最初のクリックを、クリックされた場所のビューが`UIControl`のときだけアプリに渡し、
     /// それ以外はウィンドウを前に出すだけで捨てる。ラベルにタップのジェスチャーを付けるだけだと、リンクをクリックしてもまずウィンドウが前に出るだけになるため、
-    /// リンクの上で押下されたビューが`UIControl`になるようにする。
+    /// リンクの上で選択されたビューが`UIControl`になるようにする。
     private lazy var hitArea = LinkHitArea(label: self)
 
     /// 長い本文を切る行数。nilなら切らない。決まりはdocs/long-post.mdにある。
@@ -204,7 +204,7 @@ final class LinkLabel: EmojiLabel {
         context.restoreGState()
     }
 
-    /// リンクの外では当たりにならず、押下は後ろのビューに渡る。リンクの上では、重ねた`hitArea`が当たりになる。
+    /// リンクの外では当たりにならず、選択は後ろのビューに渡る。リンクの上では、重ねた`hitArea`が当たりになる。
     /// ラベル自身が当たりになると、Xの投稿のカードのようにボタンの中に置いたとき、リンクの外を選択してもボタンが反応しない。
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let view = super.hitTest(point, with: event)
@@ -265,7 +265,7 @@ final class LinkLabel: EmojiLabel {
 
 /// 切った本文の最後の行の末尾に重ねる「続きを読む」。ヒット領域は、文字の周りに少し広げる。
 /// 読み上げでは、本文の要素の操作で広げるので、要素にしない。
-/// スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
+/// スクロールビューは標準では`UIControl`の上で始まったタッチをスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
 final class ReadMoreButton: UIControl {
     static let title = PostTexts.readMore
     private let label = UILabel()
@@ -395,8 +395,8 @@ protocol LinkMenuHost: AnyObject {
     func menuIcon(ofOtherAccount account: OtherAccount) -> UIImage?
 }
 
-/// `LinkLabel`の上に重ねる、リンクの上だけを当たりにする部品。リンクの外では当たりにならず、押下はラベルの後ろのセルへ渡る。
-/// スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
+/// `LinkLabel`の上に重ねる、リンクの上だけを当たりにする部品。リンクの外では当たりにならず、選択はラベルの後ろのセルへ渡る。
+/// スクロールビューは標準では`UIControl`の上で始まったタッチをスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
 /// リンクの上の長押しは、セルの後ろのコレクションビューに渡らず投稿のメニューにならないため、この部品でリンクのメニューを出す。
 /// メニューは、コントロールに組み込まれたメニュー（`isContextMenuInteractionEnabled`）ではなく、別に付けた`UIContextMenuInteraction`で出す。
 /// 組み込まれたメニューでは、長押しで開いてもハプティクスが出ないため。
@@ -479,7 +479,7 @@ final class LinkHitArea: UIControl {
         let point = convert(location, to: label)
         // 出す項目をすべて隠していれば、メニューを出さない。
         guard let destination = label.link(at: point), let menu = menu(for: destination, at: point) else { return nil }
-        // 浮かせるリンクを選び直せるよう、押下した場所をidentifierに持たせる。
+        // 浮かせるリンクを選び直せるよう、選択した場所をidentifierに持たせる。
         return UIContextMenuConfiguration(identifier: NSValue(cgPoint: point), previewProvider: nil) { _ in menu }
     }
 
@@ -500,10 +500,10 @@ final class LinkHitArea: UIControl {
 
     /// 選択したリンクの文字だけを浮かせる。部品はラベルと同じ大きさで透明なため、そのままでは本文の全体が浮く。
     /// ラベルそのものを渡すと、UIKitがメニューを出している間ラベルを隠し、浮かせたリンクのほかの本文が消えるため、ラベルのスナップショットを浮かせる。
-    /// スナップショットは、リンクの文字の枠でちょうど切り抜く。浮かせる面はリンクの枠より余白の分広く、切り抜かないと隣の文字まで面に入り、元の本文と二重に見えるため。
-    /// スナップショットは画面に置かないので、開き始めの約3コマは本文に残ったリンクと浮かせた面が二重に見え、閉じた直後の約3コマはリンクの両隣の文字が欠ける。
+    /// スナップショットは、リンクの文字の枠でちょうど切り抜く。UIKitが浮かせるプレビューはリンクの枠より余白の分広く、切り抜かないと隣の文字までプレビューに入り、元の本文と二重に見えるため。
+    /// スナップショットは画面に置かないので、開き始めの約3コマは本文に残ったリンクと浮かせたプレビューが二重に見え、閉じた直後の約3コマはリンクの両隣の文字が欠ける。
     /// リンクだけを撮ったスナップショットをリンクの真上に置き、ラベルからリンクの部分を抜いてそのビューを浮かせると、開閉の両端はずれなくなる。
-    /// ただ、メニューを出す前に指を動かして取りやめると、UIKitは置いたビューを隠したまま縮めて戻し、面にも中身を描かないので、約0.4秒リンクの場所が空白になる。
+    /// ただ、メニューを出す前に指を動かして取りやめると、UIKitは置いたビューを隠したまま縮めて戻し、プレビューにも中身を描かないので、約0.4秒リンクの場所が空白になる。
     /// 公開APIでは取りやめの間にビューを見せ直せないため、取りやめでも文字が見えたままのこちらを選んだ。
     fileprivate func linkPreview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
         guard let label, let point = (configuration.identifier as? NSValue)?.cgPointValue else { return nil }
@@ -516,11 +516,11 @@ final class LinkHitArea: UIControl {
         frames.forEach { path.append(UIBezierPath(rect: $0)) }
         mask.path = path.cgPath
         linkOnly.layer.mask = mask
-        // UIKitは、浮かせる面（リンクの枠）の中央をtargetの中央に置く。ラベルの中央を渡すと、面がリンクの位置からずれて出る。
+        // UIKitは、浮かせるプレビュー（リンクの枠）の中央をtargetの中央に置く。ラベルの中央を渡すと、プレビューがリンクの位置からずれて出る。
         let linkBounds = frames.reduce(CGRect.null) { $0.union($1) }
         let target = UIPreviewTarget(container: label, center: CGPoint(x: linkBounds.midX, y: linkBounds.midY))
         let parameters = UIPreviewParameters(textLineRects: frames.map { NSValue(cgRect: $0) })
-        // 既定の下地のままだと、色付きのカードの黒い文字がダークモードの黒い面に載って読めない。文字が載っている面の色を敷く。
+        // 既定の下地のままだと、色付きのカードの黒い文字がダークモードの黒い背景に載って読めない。文字が載っている背景の色を敷く。
         if let backdrop = label.nearestOpaqueBackgroundColor {
             parameters.backgroundColor = backdrop
         }

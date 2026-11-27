@@ -167,7 +167,7 @@ public enum AppearanceCatalog {
     public static let bodyTruncationThreshold = AppearanceValue(id: "timeline.bodyTruncationThreshold", title: "この行数を超えたら切る", range: 0...200, step: 1, defaultValue: 32, unit: .lines)
     /// 本文を切ったときに出す行数。切り始める行数より多ければ、切り始める行数まで出す。
     public static let bodyTruncatedLines = AppearanceValue(id: "timeline.bodyTruncatedLines", title: "切ったときの行数", range: 1...200, step: 1, defaultValue: 15, unit: .lines)
-    /// アイコンを角丸の四角にしたときの、radiusの一辺に対する割合。0.5で円になる。
+    /// アイコンを四角にしたときの、radiusの一辺に対する割合。0.5で円になる。
     public static let avatarCornerRatio = AppearanceValue(id: "timeline.avatarCornerRatio", title: "角の丸さ", range: 0...0.5, step: 0.05, defaultValue: 0.2, unit: .percent)
     /// 注意書きのボックスのradius。
     public static let spoilerCornerRadius = AppearanceValue(id: "timeline.spoilerCornerRadius", title: "ボックスの角の半径", range: 0...100, step: 1, defaultValue: 8, role: .free)

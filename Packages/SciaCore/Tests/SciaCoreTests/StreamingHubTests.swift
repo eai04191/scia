@@ -58,7 +58,7 @@ struct StreamingHubTests {
         publicSubscription.cancel()
     }
 
-    /// どのストリームのイベントも、ストリームによらず`onEvent`で受け取れる。引用元の編集や削除をセッションで覚えるため。
+    /// どのストリームのイベントも、ストリームによらず`onEvent`で受け取れる。引用元の編集や削除をセッションで保持するため。
     @Test func reportsEventsOfEveryStream() async throws {
         let connector = ScriptedConnector([.init(messages: [Self.delete("1"), Self.delete("2", stream: #"["public"]"#)])])
         let hub = makeHub(connector)
@@ -110,7 +110,7 @@ struct StreamingHubTests {
                 sentWhenConnected = connector.sent
             }
         }
-        // 購読を送っている途中では、まだ知らせない。
+        // 購読を送っている途中では、まだ`connected`を届けない。
         try await waitUntil { sendGate.waiterCount > 0 }
         #expect(sentWhenConnected == nil)
         sendGate.open()
@@ -151,7 +151,7 @@ struct StreamingHubTests {
                 sentWhenConnected = connector.sent
             }
         }
-        // ローカルの購読を送っている途中では、まだ知らせない。
+        // ローカルの購読を送っている途中では、まだ`connected`を届けない。
         try await waitUntil { sendGate.waiterCount > 0 }
         #expect(sentWhenConnected == nil)
         sendGate.open()

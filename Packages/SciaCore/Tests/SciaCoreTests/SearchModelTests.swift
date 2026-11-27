@@ -197,7 +197,7 @@ struct SearchModelTests {
         #expect(found.count == 1)
     }
 
-    /// ハンドルは、名前の一致するユーザーが結果にあれば知らせる。前方一致しただけのユーザーでは知らせない。
+    /// ハンドルは、名前の一致するユーザーが結果にあれば`onFound`で渡す。前方一致しただけのユーザーでは渡さない。
     @Test func handleReportsMatchingAccount() async throws {
         let transport = Self.transport { query in
             query.type == "accounts" ? try Self.body(accounts: [12, 1]) : try Self.body()

@@ -18,7 +18,7 @@ final class TimelineHarness {
     /// 数秒で消えるチップの時計。実際の時間では進まないので、負荷で確かめる前にチップが消えることはない。消えるところを確かめるテストが進める。
     let noticeClock = TestClock()
     let window: UIWindow
-    /// アプリのタブと同じく、タイムラインを積んだナビゲーション。投稿欄のカプセルなどが覆う下端を、ここからタイムラインに渡す。
+    /// アプリのタブと同じく、タイムラインをプッシュしたナビゲーション。投稿欄のカプセルなどが覆う下端を、ここからタイムラインに渡す。
     let navigation: ContentNavigationController
     /// 最上部へスプリングで動かすときのコマ。実際の時間では進まず、テストが送った分だけ進む。
     let frames = ManualFrameSource()

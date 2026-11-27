@@ -1,7 +1,7 @@
 # `axe describe-ui`の出力（JSON）を標準入力で受け取り、要素があるかを終了コードで返す。setup.shが画面を待つのに使う。
 # 使い方:
 #   axe describe-ui --udid <UDID> | python3 -I ui.py has <AXLabelかAXValue> [<type>]
-#     木のどこかに、AXLabelかAXValueが一致する（typeを渡せば種類も一致する）要素があれば0、なければ1。入力欄のプレースホルダーはAXValueに入る
+#     ツリーのどこかに、AXLabelかAXValueが一致する（typeを渡せば種類も一致する）要素があれば0、なければ1。入力欄のプレースホルダーはAXValueに入る
 #   axe describe-ui --udid <UDID> | python3 -I ui.py contains <文字列>
 #     AXLabelにその文字列を含む要素があれば0、なければ1。投稿の行のように、時刻などが混ざるラベルに使う
 #   axe describe-ui --point <x,y> --udid <UDID> | python3 -I ui.py label

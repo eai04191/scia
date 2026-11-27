@@ -8,7 +8,7 @@ import UIKit
 import UniformTypeIdentifiers
 @testable import Scia
 
-/// 読めなかった絵文字は、起動し直すまで文字のままにせず、間隔をおいて読み直す。
+/// 読めなかった絵文字は、起動し直すまで文字のままにせず、間隔をおいて再読み込みする。
 @MainActor
 @Suite(.failureState)
 struct EmojiImageStoreTests {
@@ -42,8 +42,8 @@ struct EmojiImageStoreTests {
         }
     }
 
-    /// 通信の失敗やサーバーの一時的な障害で読めなかった絵文字は、間隔が過ぎてから描くと読み直し、読めたら画像で描く。
-    /// 読み直している間も、文字で描き続ける。
+    /// 通信の失敗やサーバーの一時的な障害で読めなかった絵文字は、間隔が過ぎてから描くと再読み込みし、読めたら画像で描く。
+    /// 再読み込みしている間も、文字で描き続ける。
     @Test(arguments: [URLError(.notConnectedToInternet) as any Error & Sendable, HTTPStatusError(statusCode: 503)])
     func temporaryFailureIsRetriedAfterTheDelay(error: any Error & Sendable) async throws {
         let responses = Responses(first: error)
@@ -62,7 +62,7 @@ struct EmojiImageStoreTests {
         #expect(!store.hasFailed(url))
     }
 
-    /// 消えた画像は、自動では読み直さない。使う人がメニューを開いたときは読み直す。
+    /// 消えた画像は、自動では再読み込みしない。使う人がメニューを開いたときは再読み込みする。
     @Test func missingImageIsRetriedOnlyWhenTheUserAsks() async throws {
         let responses = Responses(first: HTTPStatusError(statusCode: 404))
         let store = makeStore(responses)
@@ -136,8 +136,8 @@ struct EmojiImageStoreTests {
         #expect(origins.withLock { $0 } == [.display, .action])
     }
 
-    /// 裏に回っても読んだ静止画を捨てない。捨てると、行を描き直すたびに画面に出ている絵文字を空けた場所で描いて読み直すため。
-    /// Macでは窓が見えたまま録画のツールなどにフォーカスが移っても裏に回った扱いになる。
+    /// 裏に回っても読んだ静止画を捨てない。捨てると、行を再描画するたびに画面に出ている絵文字を空けた場所で描いて再読み込みするため。
+    /// Macではウィンドウが見えたまま録画のツールなどにフォーカスが移っても裏に回った扱いになる。
     @Test func stillImagesSurviveEnteringTheBackground() async throws {
         let urls = (0..<3).map { URL(filePath: "/").appending(path: "emoji\($0).png") }
         let reads = Mutex(0)
@@ -157,7 +157,7 @@ struct EmojiImageStoreTests {
         }
     }
 
-    /// 動く絵文字も、裏に回っても読んだアニメーションを捨てない。読み終えてから行を描き直して層がつかむまでの間に捨てると、描き直しで読み直し、読み終えるとまた捨てられるため。
+    /// 動く絵文字も、裏に回っても読んだアニメーションを捨てない。読み終えてから行を再描画して層がつかむまでの間に捨てると、再描画で再読み込みし、読み終えるとまた捨てられるため。
     @Test func animationsSurviveEnteringTheBackground() async throws {
         let urls = (0..<3).map { URL(filePath: "/").appending(path: "emoji\($0).gif") }
         let reads = Mutex(0)

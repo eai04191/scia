@@ -1,6 +1,6 @@
 import type { EngineInterface, Register, RenderSurface } from 'claude-code'
 
-// /merge-to-mainのafter:に渡す、このスレッドのセッションIDをコピーする。前提にしたいスレッドで押し、後のスレッドへの合図に貼る
+// /merge-to-mainのafter:に渡す、このスレッドのセッションIDをコピーする。前提にしたいスレッドで選択し、後のスレッドへの合図に貼る
 const copySessionId = async ($: EngineInterface, surface?: RenderSurface) => {
   const id = await $.env.get('CLAUDE_CODE_HOST_SESSION_ID')
   if (id === undefined) {

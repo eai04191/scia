@@ -242,7 +242,7 @@ private struct ExtendedURLAnimation: View {
             CubicKeyframe(1, duration: t.cut)
             LinearKeyframe(1, duration: total - split)
         }
-        // 切って開くのと、下へ落ちるのは、短い距離なのでスプリングで弾ませる。止まりきるまでの時間（`settlingDuration`）をキーフレームに取り、
+        // 切って開くのと、下へ落ちるのは、短い距離なのでバウンスのあるスプリングで動かす。止まりきるまでの時間（`settlingDuration`）をキーフレームに取り、
         // 止まりきらない残りを、次のキーフレームが直線でゆっくり詰めないようにする。
         let slideStart = dropStart + slideDelay
         let snapSpring = Spring.snappy(duration: snap, extraBounce: 0.2)

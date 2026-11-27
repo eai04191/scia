@@ -25,7 +25,7 @@ struct AppSettingsPresetTests {
         #expect(account.linkBrowser == .external)
     }
 
-    /// 組み込みのプリセットから作って切り替えたときだけ、作ったプリセットを知らせる。作ったあとの値の変更では知らせない。
+    /// 組み込みのプリセットから作って切り替えたときだけ、作ったプリセットを`onPresetCreated`で渡す。作ったあとの値の変更では呼ばない。
     @Test func reportsCreatedPresetOnlyWhenSwitching() {
         let app = makeSettings()
         let account = app.forAccount("a@example.social")

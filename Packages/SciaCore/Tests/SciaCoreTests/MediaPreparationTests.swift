@@ -193,7 +193,7 @@ struct MediaPreparationTests {
         #expect(videoPlan(1080, 1920) == .original)
     }
 
-    /// 4Kの動画は、短辺1080に縮めて、設定どおりのビットレートで書き出す。設定で選んだ変化なので知らせない。
+    /// 4Kの動画は、短辺1080に縮めて、設定どおりのビットレートで書き出す。設定で選んだ変化なので、縮めたことを伝えない。
     @Test func shrinks4KVideoToTheChosenSize() {
         #expect(videoPlan(3840, 2160, bytes: 90_000_000) == .export(size: PixelSize(width: 1920, height: 1080), frameRate: nil, bitRate: 8_000_000, reducedByServer: false))
     }

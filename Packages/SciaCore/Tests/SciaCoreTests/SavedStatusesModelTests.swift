@@ -69,7 +69,7 @@ struct SavedStatusesModelTests {
         #expect(display.statusIDs.isEmpty)
     }
 
-    /// 最初の読み込みに失敗したら、モデルが失敗を覚えていて、pull to refreshでやり直す。
+    /// 最初の読み込みに失敗したら、モデルが失敗を保持していて、pull to refreshでやり直す。
     @Test func refreshRetriesFailedInitialLoad() async throws {
         let (model, display) = makeModel(transport: Self.transport([try Self.saved([1])], failsFirst: true))
         defer { model.stop() }

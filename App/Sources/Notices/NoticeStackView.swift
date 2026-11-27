@@ -348,7 +348,7 @@ final class NoticeStackView: UIView {
     // MARK: 並べ方
 
     /// 上から順に並べたときの、チップごとの上端。
-    /// 指が触れているチップは、押そうとしているチップが逃げないよう今の場所から動かさず、ほかのチップはそれと重ならない場所に置く。
+    /// 指が触れているチップは、選択しようとしているチップが逃げないよう今の場所から動かさず、ほかのチップはそれと重ならない場所に置く。
     /// 離したら、決まりの並びに戻す。
     private func targetOrigins() -> [ObjectIdentifier: CGFloat] {
         let heldRanges = chips.filter(\.isHeld).map { chip in

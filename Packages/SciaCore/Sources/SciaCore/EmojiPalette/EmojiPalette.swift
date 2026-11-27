@@ -5,7 +5,7 @@ public enum PaletteEmoji: Hashable, Sendable {
     case custom(ServerEmoji)
     case standard(StandardEmoji)
 
-    /// 最近使った絵文字として覚えるときのキー。カスタム絵文字はショートコード、Unicodeの絵文字は絵文字そのもの。
+    /// 最近使った絵文字として保存するときのキー。カスタム絵文字はショートコード、Unicodeの絵文字は絵文字そのもの。
     /// ショートコードは英数字と`_`だけなので、絵文字と取り違えない。
     public var recentKey: String {
         switch self {
@@ -204,15 +204,15 @@ public enum EmojiPaletteGrid {
     }
 }
 
-/// 最近使った絵文字を、サーバーごとに新しい順で覚える。カスタム絵文字はショートコード、Unicodeの絵文字は絵文字そのもので覚える（`PaletteEmoji.recentKey`）。
-/// パレットと補完のどちらで入れても覚える。ショートコードはサーバーごとに違う絵文字を指すので、サーバーをまたいで混ぜない。
+/// 最近使った絵文字を、サーバーごとに新しい順で保存する。カスタム絵文字はショートコード、Unicodeの絵文字は絵文字そのもので保存する（`PaletteEmoji.recentKey`）。
+/// パレットと補完のどちらで入れても保存する。ショートコードはサーバーごとに違う絵文字を指すので、サーバーをまたいで混ぜない。
 /// 同じサーバーを複数のウィンドウで開くと、ウィンドウごとに作られるので、手元に持たずに毎回UserDefaultsを読み書きする。
 /// 持っていると、片方のウィンドウで選んだものを、もう片方が古い並びで上書きして消すため。
 @MainActor
 public final class RecentEmojis {
     private let defaults: UserDefaults
     private let key: String
-    /// 覚えておく数。パレットに出す数はチューニングで、これより少なく選ぶ。
+    /// 保存しておく数。パレットに出す数はチューニングで、これより少なく選ぶ。
     public static let capacity = 100
 
     public init(defaults: UserDefaults, instance: URL) {

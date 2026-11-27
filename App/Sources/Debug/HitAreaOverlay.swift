@@ -536,7 +536,7 @@ private struct HitAreaRaster: Sendable {
 
 /// 点ごとに受けるビューを、区画に分けて調べる。区画の角と中心が同じビューを受け、細かく調べる点（`detail`）も含まない区画は、まとめてそのビューで埋める。
 /// 画面のすべての点で`hitTest`を呼ぶと、タイムラインの画面で1回に0.6秒ほどかかったため、境目の近くだけを細かく調べる。
-/// フレームに分けて調べられるよう、調べ残した区画を積んでおき、`advance`で続きから調べる。
+/// フレームに分けて調べられるよう、調べ残した区画をスタックに入れておき、`advance`で続きから調べる。
 private struct HitGrid {
     /// 最初に分ける区画の一辺の点の数。2のべき乗にする。
     private static let blockSize = 4
@@ -556,7 +556,7 @@ private struct HitGrid {
         self.hit = hit
         views = [UIView?](repeating: nil, count: columns * rows)
         sampled = [Bool](repeating: false, count: columns * rows)
-        // 積んだものを後ろから取り出すので、左上から調べるよう逆に積む。
+        // スタックの後ろから取り出すので、左上から調べるよう逆の順に入れる。
         for row in stride(from: 0, to: rows, by: Self.blockSize).reversed() {
             for column in stride(from: 0, to: columns, by: Self.blockSize).reversed() {
                 blocks.append((column, row, Self.blockSize))

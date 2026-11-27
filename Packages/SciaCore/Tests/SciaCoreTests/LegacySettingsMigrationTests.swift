@@ -165,7 +165,7 @@ struct LegacySettingsMigrationTests {
     }
 }
 
-/// 保存先の`settings.presets`に書かれた値を、書かれた順に覚える保存先。
+/// 保存先の`settings.presets`に書かれた値を、書かれた順に記録する保存先。
 private final class PresetsSaveRecorder: UserDefaults {
     private(set) var saves: [Data] = []
 

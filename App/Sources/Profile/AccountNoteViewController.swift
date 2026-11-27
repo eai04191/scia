@@ -121,7 +121,7 @@ final class AccountNoteViewController: UIViewController {
                 onSaved(saved)
                 dismiss(animated: true)
             } catch where HTTPFailure(error) == nil {
-                // ログアウトやアカウントの切り替えで止めた。通信の途中なら`URLError(.cancelled)`で届く。シートもセッションと一緒に閉じるので、知らせない。
+                // ログアウトやアカウントの切り替えで止めた。通信の途中なら`URLError(.cancelled)`で届く。シートもセッションと一緒に閉じるので、失敗を表示しない。
             } catch {
                 logger.error("account note save failed: \(SciaLog.describe(error), privacy: .public)")
                 onError(error, AccountNoteTexts.saveFailure)

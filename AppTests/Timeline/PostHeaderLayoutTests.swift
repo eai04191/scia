@@ -65,7 +65,7 @@ struct PostHeaderLayoutTests {
         #expect(abs(body.minY - second.maxY - configuration.metrics.nameBodySpacing) < 0.5)
     }
 
-    /// 2段のとき、名前と時刻の最小のすき間は、1段目の名前と時刻のあいだで示す。2段目は時刻と並ばないので、そこから測ると幅が0になる。
+    /// 2段のとき、名前と時刻の最小の間隔は、1段目の名前と時刻のあいだで示す。2段目は時刻と並ばないので、そこから測ると幅が0になる。
     @Test func stackedNameTimeGapIsMeasuredOnFirstLine() throws {
         let configuration = try configuration(displayName: String(repeating: "とても長い名前", count: 10)) { $0.appearance.stacksNameParts = true }
         let frames = frames(of: configuration).frames
@@ -219,7 +219,7 @@ struct PostHeaderLayoutTests {
     }
 
     /// 区切り線は、行の本文の左端から引く。アイコンの下を空けるときはアイコンの列に入れず、空けないときは行の左の余白から引く。
-    /// メンションは投稿の行なので投稿と同じにし、お気に入りやフォローの通知の行、人の行、すき間と読めなかった投稿の行は、いつも文字の列から引く。
+    /// メンションは投稿の行なので投稿と同じにし、お気に入りやフォローの通知の行、人の行、ギャップと読めなかった投稿の行は、いつも文字の列から引く。
     @Test(arguments: [false, true])
     func separatorStartsAtBodyLeading(wraps: Bool) throws {
         let settings = AppSettings.isolated()

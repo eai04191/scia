@@ -20,7 +20,7 @@ struct ContentNavigationPushTests {
         return (navigation, window)
     }
 
-    /// 重ねた画面を閉じるのと同時に積む間は、アニメーション付きで頼まれても、その場で出す。
+    /// モーダルビューを閉じるのと同時にプッシュする間は、アニメーション付きで頼まれても、その場で出す。
     @Test func pushesImmediatelyWhileAnimationIsOff() throws {
         let (navigation, window) = try makeNavigation()
         defer { window.isHidden = true }

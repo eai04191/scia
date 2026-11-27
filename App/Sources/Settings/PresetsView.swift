@@ -440,7 +440,7 @@ struct AccountPresetView: View {
     }
 }
 
-/// 組み込みのプリセットとマイプリセットを、見出しを付けたセクションに分けて、選ぶ行で並べる。鍵のアイコンは付けない。選べないように見えるため（docs/preset.md）。
+/// 組み込みのプリセットとマイプリセットを、見出しを付けたセクションに分けて、選ぶ行で並べる。ロックのアイコンは付けない。選べないように見えるため（docs/preset.md）。
 private struct PresetChoiceSections: View {
     let library: PresetLibrary
     let selected: PresetID?

@@ -109,7 +109,7 @@ struct ReactionGlowGradientTests {
         #expect(lit.exposure == 1)
     }
 
-    /// 白い面を白い光で照らすと、白のまま2倍の明るさになる。
+    /// 白を白い光で照らすと、白のまま2倍の明るさになる。
     @Test func whiteLightDoublesWhite() {
         let lit = white.lightAdded(white, intensity: 1)
 
@@ -117,7 +117,7 @@ struct ReactionGlowGradientTests {
         #expect(abs(lit.exposure - 2) < 1e-9)
     }
 
-    /// 白い面を色の光で照らすと、どの成分も白より暗くならず、光の色に寄る。倍率を掛け戻すと、面に光を足した値になる。
+    /// 白を色の光で照らすと、どの成分も白より暗くならず、光の色に寄る。倍率を掛け戻すと、`base`に光を足した値になる。
     @Test func coloredLightBrightensWhiteTowardItsColor() {
         let lit = white.lightAdded(yellow, intensity: 0.5)
         let restored = lit.color.linear * lit.exposure

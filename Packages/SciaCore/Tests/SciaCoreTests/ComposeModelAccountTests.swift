@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 @Suite(.scratch)
 @MainActor
 struct ComposeModelAccountTests {
-    /// アップロードした添付のファイル名を、サーバーごとに覚える。`gate`を渡したサーバーは、開くまで応答を返さない。
+    /// アップロードした添付のファイル名を、サーバーごとに記録する。`gate`を渡したサーバーは、開くまで応答を返さない。
     private final class Uploads: Sendable {
         let names = Mutex<[String]>([])
 
@@ -35,7 +35,7 @@ struct ComposeModelAccountTests {
         }
     }
 
-    /// 送った投稿を、どのアカウントで送ったかと一緒に覚える。
+    /// 送った投稿を、どのアカウントで送ったかと一緒に記録する。
     private final class Posted: Sendable {
         let texts = Mutex<[String]>([])
     }
@@ -208,7 +208,7 @@ struct ComposeModelAccountTests {
         #expect(model.otherAccount == nil)
     }
 
-    /// ほかのアカウントの投稿を削除して書き直すときは、そのアカウントのサーバーで元の投稿を消し、消せたことはそのアカウントに知らせる。今のアカウントには知らせない。
+    /// ほかのアカウントの投稿を削除して書き直すときは、そのアカウントのサーバーで元の投稿を消し、消せたことはそのアカウントに伝える。今のアカウントには伝えない。
     /// 今のアカウントで同じIDの投稿が消えたというイベントは、別の投稿なので使わない。
     @Test func redraftsOtherAccountsStatus() async throws {
         let deleted = Posted()

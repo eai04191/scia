@@ -9,7 +9,7 @@
 /// 予約投稿の一覧（`ScheduledStatusesModel`）も`register(_:)`で登録する。
 /// 弱く持つので、外す必要はない。
 ///
-/// 引用元のカードは、一覧が持つ投稿を書き換えずに、ここで覚えた変化（`quoteSources`）を出すときに当てる。
+/// 引用元のカードは、一覧が持つ投稿を書き換えずに、ここで保持した変化（`quoteSources`）を出すときに当てる。
 @MainActor
 public final class SessionStatuses {
     private var lists: [WeakStatusList] = []
@@ -78,7 +78,7 @@ public final class SessionStatuses {
         changeQuoteSources(.status(id)) { $0.delete(id) }
     }
 
-    /// 引用元の変化を覚え、変わったときだけ`onQuoteSourcesChange`を呼ぶ。
+    /// 引用元の変化を保持し、変わったときだけ`onQuoteSourcesChange`を呼ぶ。
     /// ストリーミングで届いた編集と削除、ミュートとブロックの変化にも使う。
     public func changeQuoteSources(_ change: QuoteSourceChange, _ apply: (inout QuoteSourceChanges) -> Void) {
         var changed = quoteSources

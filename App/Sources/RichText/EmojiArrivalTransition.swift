@@ -5,7 +5,7 @@ import UIKit
 ///
 /// 届いた画像の幅が空けていた正方形と違うと、同じ行のあとの文字が横へずれ、折り返しが変われば次の行へ移る。
 /// 新しい描画を1枚の画像にし、同じだけ動く文字のグループごとに切り出して、前の位置から新しい位置へ動かす。
-/// 次の行へ移る文字は、行をまたいで動く。新しく入った絵文字は、新しい位置で薄い状態から濃くする。
+/// 次の行へ移る文字は、行をまたいで動く。新しく入った絵文字は、新しい位置で薄い状態から不透明度を上げる。
 /// 動かしている間は、ラベル自身の描画と動く絵文字の層を隠し、切り出したスナップショットだけを見せる。
 ///
 /// 1つの文字列の絵文字は、少しずつずれて届く。動いている途中に次の絵文字が届いたら、いま見えている位置と不透明度から、
@@ -26,7 +26,7 @@ final class EmojiArrivalTransition {
         var frame: CGRect
         /// 動き始める位置から新しい位置までの動き。
         var offset: CGPoint
-        /// 動き始めるときの不透明度。新しく入った絵文字は0から濃くする。
+        /// 動き始めるときの不透明度。新しく入った絵文字は0から不透明度を上げる。
         var startOpacity: Float
     }
 
@@ -35,7 +35,7 @@ final class EmojiArrivalTransition {
     /// 動き始めるときの、引用の縦線の枠（`QuoteBars`）。
     private let startBars: [CGRect]
     private let duration: TimeInterval
-    /// 動き始める見え方がない文字を、透明から濃くする。編集で新しく入った文字に使う。
+    /// 動き始める見え方がない文字を、透明から不透明にする。編集で新しく入った文字に使う。
     private let fadesInNewCharacters: Bool
     /// 編集でなくなった文字。前の描画のスナップショットと、その大きさ、文字の枠（前の並びでの、ラベルの座標）。
     struct Leaving {
@@ -66,7 +66,7 @@ final class EmojiArrivalTransition {
         self.leavingFadeFraction = leavingFadeFraction
     }
 
-    /// 編集で入った文字を濃くし始めるまでの、動きの時間に対する割合。
+    /// 編集で入った文字の不透明度を上げ始めるまでの、動きの時間に対する割合。
     private let newCharacterFadeDelay: Double
     /// 編集でなくなった文字を薄くし終えるまでの、動きの時間に対する割合。
     private let leavingFadeFraction: Double
@@ -156,8 +156,8 @@ final class EmojiArrivalTransition {
             pieceLayers.append((piece, layer))
             if piece.startOpacity < 1 {
                 if fadesInNewCharacters {
-                    // 編集で入った文字の場所は、前の文字が通ってから空く。通り終えるまで透明のままにし、残りの時間で濃くする。
-                    // 始めから濃くすると、動いている前の文字と、同じ場所で重なって見える。
+                    // 編集で入った文字の場所は、前の文字が通ってから空く。通り終えるまで透明のままにし、残りの時間で不透明度を上げる。
+                    // 始めから不透明度を上げると、動いている前の文字と、同じ場所で重なって見える。
                     let fade = CAKeyframeAnimation(keyPath: "opacity")
                     fade.values = [piece.startOpacity, piece.startOpacity, 1]
                     fade.keyTimes = [0, NSNumber(value: newCharacterFadeDelay), 1]

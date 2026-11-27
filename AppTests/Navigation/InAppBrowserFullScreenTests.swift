@@ -123,7 +123,7 @@ struct InAppBrowserFullScreenTests {
     }
 
     /// 全画面に広げている間は、伏せられる画面のときだけ引ける範囲を出す。iPhoneの横向きには伏せた高さがないので、出すとタップで何も起きず、
-    /// 重ねた範囲にあるSafariのバーのボタン（横向きでは戻る・共有などがバーの左右に並ぶ）を押せなくなる。縦に戻したら、また出す。
+    /// 重ねた範囲にあるSafariのバーのボタン（横向きでは戻る・共有などがバーの左右に並ぶ）を選択できなくなる。縦に戻したら、また出す。
     @Test func expandedBarGrabFollowsWhetherItCanCollapse() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -193,7 +193,7 @@ struct InAppBrowserFullScreenTests {
         try await close(browser, overlay: overlay, from: root)
     }
 
-    /// シートの上に別の画面を重ねている間に読み込み終えても広げず、その画面を閉じてから広げる。
+    /// シートの上に別のモーダルビューを出している間に読み込み終えても広げず、その画面を閉じてから広げる。
     /// 重ねたまま広げると、伏せたシートを片付けるときに、上の画面まで閉じてしまう。
     @Test func coveredSheetDefersExpansionUntilUncovered() async throws {
         let harness = try TimelineHarness(notices: notices)
@@ -264,7 +264,7 @@ struct InAppBrowserFullScreenTests {
     }
 
     /// 伏せたシートの上に、Safariの範囲にかからない画面（メニューと同じく、画面の上の隅の小さなビュー）を重ねても、Safariを隠さない。
-    /// 隠すと、Safariを持たない伏せたシートだけが残って見える。範囲にかかる画面を重ねたときに隠すのは、`coveredSheetDefersExpansionUntilUncovered`で確かめる。
+    /// 隠すと、Safariを持たない伏せたシートだけが残って見える。範囲にかかるモーダルビューを出したときに隠すのは、`coveredSheetDefersExpansionUntilUncovered`で確かめる。
     @Test func smallScreenAboveSheetKeepsSafariShown() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -358,7 +358,7 @@ struct InAppBrowserFullScreenTests {
         try await close(browser, overlay: overlay, from: root)
     }
 
-    /// 広げている途中にシートの上に画面を重ねたら（行き先を開いたなど）、広げ終えてもその画面を閉じない。Safariを隠し、その画面を閉じてから広げる。
+    /// 広げている途中にシートの上にモーダルビューを出したら（行き先を開いたなど）、広げ終えてもその画面を閉じない。Safariを隠し、その画面を閉じてから広げる。
     @Test func screenPresentedWhileExpandingStaysOpen() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -429,7 +429,7 @@ struct InAppBrowserFullScreenTests {
         try await close(browser, overlay: overlay, from: root)
     }
 
-    /// 読み込みの間に重ねた画面をまとめて閉じると、伏せたシートと一緒に重ねたSafariも閉じる。
+    /// 読み込みの間に出したモーダルビューをまとめて閉じると、伏せたシートと一緒に重ねたSafariも閉じる。
     /// 重ねたウインドウは、`dismissPresentedScreens`が辿るアプリのウインドウの外にあるため、閉じたことを受けて閉じないとSafariだけが残る。
     @Test func closingScreensWhileLoadingAlsoHidesOverlay() async throws {
         let harness = try TimelineHarness(notices: notices)
@@ -476,7 +476,7 @@ struct InAppBrowserFullScreenTests {
         let root = harness.viewController
         let frames = ManualFrameSource()
         let scene = try #require(root.view.window?.windowScene)
-        // 番地（ObjectIdentifier）だけで覚えると、解放されたウインドウの番地を新しいウインドウが使い回したときに取り違えるので、ウインドウを持ち続ける。
+        // 番地（ObjectIdentifier）だけで記録すると、解放されたウインドウの番地を新しいウインドウが使い回したときに取り違えるので、ウインドウを持ち続ける。
         let existing = scene.windows
         let (browser, firstSheet, firstOverlay) = try await openFullScreen(from: root, frames: frames)
 
@@ -490,8 +490,8 @@ struct InAppBrowserFullScreenTests {
         try await close(browser, overlay: try #require(overlays.first), from: root)
     }
 
-    /// アプリと同じく、全画面に広げたSafariを閉じてから、重ねた画面をまとめて閉じる。読み込みの間の重ねたウインドウは、伏せたシートを閉じ終えたときに閉じる。
-    /// 閉じ終えたという知らせが`InAppBrowser`に届くまで待つ。待たずにテストを終えると、知らせを受ける`InAppBrowser`がいなくなり、ウインドウが残る。
+    /// アプリと同じく、全画面に広げたSafariを閉じてから、モーダルビューをまとめて閉じる。読み込みの間の重ねたウインドウは、伏せたシートを閉じ終えたときに閉じる。
+    /// 閉じ終えたときのコールバックが`InAppBrowser`に届くまで待つ。待たずにテストを終えると、コールバックを受ける`InAppBrowser`がいなくなり、ウインドウが残る。
     private func close(_ browser: InAppBrowser, overlay: InAppBrowserOverlayWindow, from root: UIViewController) async throws {
         browser.closeFullScreen()
         root.dismissPresentedScreens(animated: false)
@@ -500,7 +500,7 @@ struct InAppBrowserFullScreenTests {
 
     private func openFullScreen(from root: UIViewController, frames: ManualFrameSource, tuning: TuningStore = .withoutBrowserMotion()) async throws -> (InAppBrowser, InAppBrowserSheet, InAppBrowserOverlayWindow) {
         let scene = try #require(root.view.window?.windowScene)
-        // 番地（ObjectIdentifier）だけで覚えると、解放されたウインドウの番地を新しいウインドウが使い回したときに取り違えるので、ウインドウを持ち続ける。
+        // 番地（ObjectIdentifier）だけで記録すると、解放されたウインドウの番地を新しいウインドウが使い回したときに取り違えるので、ウインドウを持ち続ける。
         let existing = scene.windows
         let browser = InAppBrowser(tuning: tuning, settings: AppDependencies.settings, frameSource: frames)
         browser.openFullScreen(try #require(URL(string: "https://example.com/1")), from: root)

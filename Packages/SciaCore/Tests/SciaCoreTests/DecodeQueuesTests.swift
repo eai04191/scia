@@ -81,7 +81,7 @@ struct DecodeQueuesTests {
         await firstTask.value
     }
 
-    /// 長い展開が走っているキューに、あとの展開を決め打ちで積まない。ほかのキューが空いたら、そこで走る。
+    /// 長い展開が走っているキューに、あとの展開を決め打ちで入れない。ほかのキューが空いたら、そこで走る。
     @Test func waitingImageRunsOnWhicheverQueueFreesFirst() async throws {
         let queues = DecodeQueues(count: 2)
         let slow = Blocker()

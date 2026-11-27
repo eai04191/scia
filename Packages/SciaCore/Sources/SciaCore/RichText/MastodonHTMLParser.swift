@@ -54,7 +54,7 @@ private struct Builder {
         let rels: Set<String>
         /// 省略された部分（`ellipsis`）を読んだ。このあとの`invisible`は、縮めるときに省いた後ろの部分。
         var hasEllipsis = false
-        /// リンクの中の文字を、書式ごとのまとまりで持つ。
+        /// リンクの中の文字を、書式ごとに分けて持つ。
         var runs: [(text: String, style: RichText.Style)] = []
         /// サーバーが`invisible`で隠した部分も入れ、「…」を入れない、元の文字。
         var wholeText = ""

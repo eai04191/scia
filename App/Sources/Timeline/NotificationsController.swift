@@ -25,7 +25,7 @@ final class NotificationsController {
         get { model.onReload }
         set { model.onReload = newValue }
     }
-    /// 通知のタイムラインを最上部からさらに引っぱったときに見せる、ストリーミングの状態。
+    /// 通知のタイムラインを最上部からさらにオーバースクロールしたときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
     /// 開いている、保留中の通知の1人分の画面。通知のタイムラインと同じく、投稿の操作や削除を反映する。
     private let accountScreens = NSHashTable<AccountNotificationsController>.weakObjects()
@@ -84,7 +84,7 @@ final class NotificationsController {
         model.enterForeground()
     }
 
-    /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。
+    /// ストリーミングの接続の状態を、オーバースクロールしたときに見せる表示へ伝える。
     func showStreamingState(_ state: ConnectionDiagnostics.StreamingState?) {
         model.showStreamingState(state)
     }

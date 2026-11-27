@@ -140,7 +140,7 @@ struct StreamingClientTests {
         ])
     }
 
-    /// イベントの中で読んだアカウントを、受け取ったときにとった番号で覚える。
+    /// イベントの中で読んだアカウントを、受け取ったときにとった番号で記録する。
     @Test func remembersAccountsReadInEvent() async throws {
         let url = try #require(Bundle.module.url(forResource: "streaming_update", withExtension: "json", subdirectory: "Fixtures"))
         let connector = StubWebSocketConnector(messages: [try String(contentsOf: url, encoding: .utf8)])

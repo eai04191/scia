@@ -1,8 +1,8 @@
 public import Foundation
 
-/// アカウントごと、サーバーごとに覚える値のキー。キーの頭を`account.<ハンドル>/`と`server.<ホスト>/`に揃え、ログアウトでその頭のキーをまとめて消す。
+/// アカウントごと、サーバーごとに保存する値のキー。キーの頭を`account.<ハンドル>/`と`server.<ホスト>/`に揃え、ログアウトでその頭のキーをまとめて消す。
 /// ハンドルとホストの後ろは、どちらにも出ない「/」で区切る。「.」で区切ると、`example.social`の頭が`example.social.jp`のキーにも一致するため。
-/// 覚える値を足すときは、ここでキーを作る。ほかの形のキーにすると、ログアウトしても残る。
+/// 保存する値を足すときは、ここでキーを作る。ほかの形のキーにすると、ログアウトしても残る。
 public enum AccountScopedDefaults {
     /// アカウントのための値のキー。
     public static func key(_ name: String, account handle: String) -> String {
@@ -14,7 +14,7 @@ public enum AccountScopedDefaults {
         "\(serverPrefix(instance))\(name)"
     }
 
-    /// `name`の値を覚えているアカウントのハンドルと、その値。
+    /// `name`の値を保存しているアカウントのハンドルと、その値。
     public static func accountValues(named name: String, in defaults: UserDefaults) -> [String: Any] {
         let suffix = "/\(name)"
         var values: [String: Any] = [:]
@@ -24,7 +24,7 @@ public enum AccountScopedDefaults {
         return values
     }
 
-    /// ログアウトしたアカウントのために覚えた値を消す。同じサーバーのアカウントが`remaining`にいなければ、サーバーのための値も消す。
+    /// ログアウトしたアカウントのために保存した値を消す。同じサーバーのアカウントが`remaining`にいなければ、サーバーのための値も消す。
     @MainActor
     public static func removeData(of credential: Credential, remaining: [Credential], defaults: UserDefaults, settings: AppSettings) {
         var prefixes = [accountPrefix(credential.handle)]

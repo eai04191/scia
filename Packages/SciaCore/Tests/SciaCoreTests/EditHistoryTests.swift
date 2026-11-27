@@ -105,7 +105,7 @@ struct RichTextDiffTests {
         }
     }
 
-    /// 段落を足して消したまとまりでは、消えた改行を挟まない。挟むと改行が2つ並ぶ。
+    /// 段落を足して消した差分では、消えた改行を挟まない。挟むと改行が2つ並ぶ。
     @Test func replacedParagraphDoesNotDoubleBreak() {
         #expect(marked(diff("<p>前</p><p>古い段落</p>", "<p>前</p><p>新しい段落</p>")) == "前¶[-古い-]{+新しい+}段落")
     }

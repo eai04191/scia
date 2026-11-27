@@ -13,7 +13,7 @@ CACHE_XCCONFIG := -xcconfig Config/Cache.xcconfig
 generate:
 	xcodegen generate
 
-## Config/app-info.jsonから、App/Sources/Settings/AppInfo.generated.swiftとREADME.mdの生成の節を書き出す
+## Config/app-info.jsonから、App/Sources/Settings/AppInfo.generated.swiftとREADME.mdの生成のセクションを書き出す
 ## 謝辞、第三者のライセンス、Scia自身のリンクは、JSONだけを編集する。書き出したものは直接編集せず、JSONと一緒にcommitする。合っているかはmake checkが調べる
 ## JSONのcontactは、クラッシュした投稿の報告の宛先（メールとMastodonのハンドル）
 app-info:
@@ -89,8 +89,8 @@ warnings: build
 ## シミュレーター上でschemeのテストを実行する
 ## 貸し借りする端末（Scia 1〜、Scia iPad 1〜、Scia Duo）をSIMで指定するときは、このworktreeが借りている端末だけを受け付ける（Tools/sim.sh leased）
 ## 端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（SciaSystemUITests）も走らせる（Tools/system-ui-check.sh）
-## 通ったら、確かめた作業ツリーの中身を覚える
-## ONLYにテストの識別子（空白区切りで複数）を渡すと、それだけを走らせる。手元で走り、SIMを省くとこのworktreeが借りている端末（Tools/sim.sh acquire）を使うので、先に借りる。全部は走らせていないので、SciaSystemUITestsも走らせず、通っても中身を覚えない
+## 通ったら、確かめた作業ツリーの中身を記録する
+## ONLYにテストの識別子（空白区切りで複数）を渡すと、それだけを走らせる。手元で走り、SIMを省くとこのworktreeが借りている端末（Tools/sim.sh acquire）を使うので、先に借りる。全部は走らせていないので、SciaSystemUITestsも走らせず、通っても中身を記録しない
 ## 失敗時の診断の収集は止める。集めると、simctl diagnoseが応答を待って600秒のタイムアウトまで止まるため
 ## 例: make test
 ## 例: make test ONLY='SciaTests/LinkLabelTests SciaTests/TimelineNoticeTests/progressGainingDigitWidensWithAnimation()'
@@ -138,7 +138,7 @@ else
 	@Tools/keep-checked-app.sh "$$(cat $(TEST_TREE))" $(DERIVED_DATA)
 endif
 
-## シミュレーターのハードウェアキーボードを外してソフトウェアキーボードを出す（KEYBOARD=hardwareでつなぎ直す）
+## シミュレーターのハードウェアキーボードを外してソフトウェアキーボードを出す（KEYBOARD=hardwareで再接続する）
 ## SIMを省くと、このworktreeが借りている端末で行う。端末の選び方はONLYを付けたmake testと同じ
 ## 例: make sim-keyboard
 KEYBOARD ?= software
@@ -213,9 +213,9 @@ update-known-servers:
 	Tools/update-known-servers.sh
 
 ## 変更を報告する前に通すべき検証
-## 通ったら、確かめた作業ツリーの中身を覚える
-## $(MAKE)を含む行はmake -nでも走るので、覚える処理はその行に入れない。入れると、何も確かめないmake -n checkで中身を覚えてしまう
-## make -i checkは失敗を無視して最後まで進むので、通っていない中身も覚えてしまう。失敗の無視はわざと保証を外す操作で、ふだんの手順では使わないので止めない
+## 通ったら、確かめた作業ツリーの中身を記録する
+## $(MAKE)を含む行はmake -nでも走るので、記録する処理はその行に入れない。入れると、何も確かめないmake -n checkで中身を記録してしまう
+## make -i checkは失敗を無視して最後まで進むので、通っていない中身も記録してしまう。失敗の無視はわざと保証を外す操作で、ふだんの手順では使わないので止めない
 ## テストを任せる別のMacと手元の、空いている枠で走らせる（docs/test-dispatch.md）。手元ではcheck-here
 CHECK_TREE := $(DERIVED_DATA)/check-tree
 check:
@@ -240,7 +240,7 @@ logged-%:
 
 ## make checkとmake testを両方走らせる。アプリのビルドと警告の検査を済ませてから、checkの残り（lintとmacOSのテスト）をmake testと同時に走らせる。
 ## 同時に走らせるとmake testは1割ほど遅くなるが、checkの残りの40〜50秒がmake testの裏に隠れるので、続けて走らせるより30秒ほど早く終わる。
-## 端末の選び方はmake testと同じ。通ったものだけ、確かめた作業ツリーの中身を覚える（make testの分はmake testが覚える）。
+## 端末の選び方はmake testと同じ。通ったものだけ、確かめた作業ツリーの中身を記録する（make testの分はmake testが記録する）。
 ## checkの残りの出力は、make testの出力と混ざらないようファイルに書き、落ちたときだけ、落ちた対象の見出しの付いた出力（Tools/check-logged.sh）を出す。
 ## 止められたら、どちらも止めて終わるのを待つ。前で走らせると、シェルはそれが終わるまで止める合図を扱わないので、どちらも後ろで走らせて待つ。
 ## makeは止める合図を子に回さないので、どちらもset -mで別のプロセスグループにして起動し、グループごと止める。子のmakeだけを止めると、その先のmake test-on-simやxcodebuildが残る

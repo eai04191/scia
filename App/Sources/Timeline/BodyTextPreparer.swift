@@ -52,7 +52,7 @@ final class BodyTextPreparer {
         /// 投稿のリンクカードの文字の書く方向を判定しておく。カードを本文から探すのにHTMLを読むので、これもメインスレッドの外で行う。
         case writingDirections(Status)
 
-        /// 同じ投稿の同じ種類の仕事を、新しく頼まれたもので置き換えるための鍵。
+        /// 同じ投稿の同じ種類の仕事を、新しく頼まれたもので置き換えるためのキー。
         var key: String {
             switch self {
             case .body(let request): "body \(request.id)"

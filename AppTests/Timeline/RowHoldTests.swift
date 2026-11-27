@@ -4,7 +4,7 @@ import SciaTesting
 import UIKit
 @testable import Scia
 
-/// コンテキストメニューを出している間も、並びの更新と描き直しはすぐ反映し、メニューの元になった行は追従で流さないことを確かめる。
+/// コンテキストメニューを出している間も、並びの更新と再描画はすぐ反映し、メニューの元になった行は追従で流さないことを確かめる。
 /// スワイプのボタンを閉じる途中は、閉じ終えるまで並びを溜めることも確かめる。
 @MainActor
 @Suite(.scratch, .serialized, .failureState)
@@ -32,7 +32,7 @@ struct RowHoldTests {
         #expect(try abs(#require(harness.windowMinY(of: .status(existing[0].id))) - touched) < 0.5, "閉じたあとに追従して行が動きました")
     }
 
-    /// メニューを出している間に中身が変わった投稿は、閉じるのを待たずに描き直す。
+    /// メニューを出している間に中身が変わった投稿は、閉じるのを待たずに再描画する。
     @Test func contentChangeIsRedrawnWhileMenuIsShown() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -185,7 +185,7 @@ struct RowHoldTests {
     }
 
     /// まとめて行う操作のために投稿を選んでいる間は、新着を入れずに溜め、選び終えたら1度だけ知らせることを確かめる。
-    /// 新着で行がずれると、押そうとした行を押し損なうため。
+    /// 新着で行がずれると、選択しようとした行を選択し損なうため。
     @Test func selectingPostsHoldsUntilSelectionEnds() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

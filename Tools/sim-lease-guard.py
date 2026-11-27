@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """借りていない端末へ命令を送るのを、実行の前に止める。Claude CodeとCodexのPreToolUseのhookから呼ぶ。
 
-貸し借り（Tools/sim.sh acquire）は約束事で、端末に鍵は掛からない。`xcrun simctl`とシミュレーターのツールは、
+貸し借り（Tools/sim.sh acquire）は約束事で、端末にロックは掛からない。`xcrun simctl`とシミュレーターのツールは、
 名前を渡せばどの端末にも届くので、次の操作を止める。
 
 - 端末に命令を送る`xcrun simctl`を、直接呼ぶこと。貸し借りを確かめる関門（`Tools/sim.sh ctl '<端末>' <操作> ...`）を通させる。

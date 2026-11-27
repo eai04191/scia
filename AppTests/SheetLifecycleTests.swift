@@ -3,7 +3,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 投稿欄の下に出すシートが閉じたことを、UIKitの開閉の知らせが来ても来なくても、一度だけ知らせるか確かめる。
+/// 投稿欄の下に出すシートが閉じたことを、UIKitの開閉のコールバックが来ても来なくても、一度だけ知らせるか確かめる。
 @MainActor
 @Suite(.failureState)
 struct SheetLifecycleTests {
@@ -18,7 +18,7 @@ struct SheetLifecycleTests {
         let window = UIWindow(windowScene: scene)
         let host = UIViewController()
         window.rootViewController = host
-        // 確かめるのは出し入れの知らせの順なので、UIKitの出し入れの動きを速めて待つ時間を減らす。
+        // 確かめるのは出し入れのコールバックの順なので、UIKitの出し入れの動きを速めて待つ時間を減らす。
         window.layer.speed = 20
         window.makeKeyAndVisible()
         return (window, host)
@@ -40,7 +40,7 @@ struct SheetLifecycleTests {
         #expect(controller.presentingViewController === host)
     }
 
-    /// 閉じた知らせ（`presentationControllerDidDismiss`）が来ないままシートが消えても、キーボードを戻す知らせと閉じ終わりを1回ずつ出す。
+    /// 閉じたコールバック（`presentationControllerDidDismiss`）が来ないままシートが消えても、キーボードを戻すコールバックと閉じ終わりを1回ずつ出す。
     /// 出さないと、投稿欄はシートを出しているつもりのままになり、写真のボタンも絵文字のボタンも何もしなくなる。
     @Test func reportsCloseWhenSheetDisappearsWithoutDismissCallback() async throws {
         let (window, host) = try makeHost()
@@ -48,7 +48,7 @@ struct SheetLifecycleTests {
         let (lifecycle, controller, recorder) = makeLifecycle()
         try await presentAndWait(lifecycle, controller, from: host, recorder: recorder)
 
-        // プログラムから閉じると、UIKitは閉じた知らせを出さない。知らせなしに消える場合を、これで作る。
+        // プログラムから閉じると、UIKitは閉じたコールバックを呼ばない。コールバックなしに消える場合を、これで作る。
         try await controller.dismissForTesting()
 
         try await waitUntil { recorder.didClose > 0 }
@@ -59,7 +59,7 @@ struct SheetLifecycleTests {
         #expect(!lifecycle.isPresentedOrPending)
     }
 
-    /// 下へスワイプして閉じたときのように閉じた知らせが来ても、閉じ終わりは1回だけ出す。
+    /// 下へスワイプして閉じたときのように閉じたコールバックが来ても、閉じ終わりは1回だけ出す。
     @Test func reportsCloseOnceWhenDismissCallbackAlsoArrives() async throws {
         let (window, host) = try makeHost()
         defer { window.isHidden = true }
@@ -108,7 +108,7 @@ struct SheetLifecycleTests {
         #expect(controller.presentingViewController == nil)
     }
 
-    /// 知らせなしに消えたあとに閉じるよう頼まれても、閉じ終わりは1回だけで、閉じる操作は何もしない。
+    /// コールバックなしに消えたあとに閉じるよう頼まれても、閉じ終わりは1回だけで、閉じる操作は何もしない。
     @Test func closeAfterDisappearingFinishesOnce() async throws {
         let (window, host) = try makeHost()
         defer { window.isHidden = true }

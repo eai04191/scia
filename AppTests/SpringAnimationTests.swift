@@ -19,8 +19,8 @@ struct SpringAnimationTests {
         return (window, view, clock)
     }
 
-    /// 動きの外で濃さを0にした直後に濃くし始めると、まだ画面に出ていない0から濃くする。
-    /// 入れ替える文字（リンクカードの文字など）を、画面に残っている前の濃さから始めると、薄くしている前の文字と重なって見えるため。
+    /// 動きの外で不透明度を0にした直後に上げ始めると、まだ画面に出ていない0から上げる。
+    /// 入れ替える文字（リンクカードの文字など）を、画面に残っている前の不透明度から始めると、薄くしている前の文字と重なって見えるため。
     /// 同じビューの位置を同時に動かしていても変わらない。
     @Test func fadeStartsFromValueSetJustBefore() async throws {
         let (window, view, clock) = try makeWindow()
@@ -35,7 +35,7 @@ struct SpringAnimationTests {
         #expect(opacity < 0.05, "濃さが\(opacity)から始まりました")
     }
 
-    /// 濃くしている途中で`stopFading`すると、残りを足さずにその濃さで止まる。
+    /// 不透明度を上げている途中で`stopFading`すると、残りを足さずにその不透明度で止まる。
     @Test func stopFadingStopsImmediately() async throws {
         let (window, view, clock) = try makeWindow()
         defer { window.isHidden = true }

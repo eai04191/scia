@@ -19,7 +19,7 @@ struct MenuPlacementTests {
         return settings
     }
 
-    /// 関係を覚えている相手として組ませ、関係の項目もその場で並べる。
+    /// 関係を保持している相手として組ませ、関係の項目もその場で並べる。
     private func makeViewController(settings: AppSettings) -> TimelineViewController {
         let viewController = TimelineViewController(settings: settings, refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
         viewController.userMenuActions = UserMenuActions(
@@ -32,7 +32,7 @@ struct MenuPlacementTests {
         return viewController
     }
 
-    /// 項目の名前。いちばん上の区切り線のまとまりは`|`で、サブメニューは`名前[中身]`で表す。
+    /// 項目の名前。いちばん上の区切り線で分けたグループは`|`で、サブメニューは`名前[中身]`で表す。
     private func describe(_ elements: [UIMenuElement]) -> String {
         func describe(_ element: UIMenuElement) -> String {
             guard let menu = element as? UIMenu else { return element.title }

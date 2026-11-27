@@ -132,7 +132,7 @@ final class ImageCropViewController: UIViewController, StaysForSharedContent {
         scrollView.clipsToBounds = false
         scrollView.addSubview(imageView)
         canvas.addSubview(scrollView)
-        // 触れた瞬間の位置を覚え、回している途中なら回し終える。枠のハンドルも画像も、キャンバスの中で触れるので、ここで1か所で受ける。
+        // 触れた瞬間の位置を記録し、回している途中なら回し終える。枠のハンドルも画像も、キャンバスの中で触れるので、ここで1か所で受ける。
         let touchDown = TouchDownObserver { [weak self] touch in
             guard let self else { return }
             self.touchDownLocation = touch.location(in: self.overlay)

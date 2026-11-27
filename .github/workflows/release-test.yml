@@ -1,6 +1,6 @@
 # SciaCoreとMemoryCacheのテストを、Release構成で走らせる（make test-release）。
 # 手元の`make check`と`make test`はDebug構成で走るので、最適化したビルドでだけ変わる動きは通ってしまう。
-# 絵文字の先読みが、Release構成でだけ、取得した画像を別の絵文字のものとして端末に置いていたことがある。
+# 絵文字のプリフェッチが、Release構成でだけ、取得した画像を別の絵文字のものとして端末に置いていたことがある。
 #
 # 毎日17:00（JST）にmainで走らせる。このときは警告をエラーとして扱い、アプリもReleaseでビルドする（make build-release-strict）。
 # 警告を止めるのはDebugのビルドの役目にしてあり（project.ymlとPackage.swift）、Releaseにしかない警告はここで見つける。

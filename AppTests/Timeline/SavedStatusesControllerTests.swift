@@ -104,7 +104,7 @@ struct SavedStatusesControllerTests {
         let first = Self.saved[0].settingBookmarked(false)
         let second = Self.saved[1].settingBookmarked(false)
 
-        // 押したときにブックマークを外し、サーバーが受け付けたら知らせる。StatusInteractionsと同じ順に送る。
+        // 選択したときにブックマークを外し、サーバーが受け付けたら知らせる。StatusInteractionsと同じ順に送る。
         controller.model.updateStatus(first.id) { $0.settingBookmarked(false) }
         controller.statusDidSettle(.bookmark, first)
         #expect(controller.viewController.displayedItemIDs.contains(.status(first.id)))
@@ -118,7 +118,7 @@ struct SavedStatusesControllerTests {
     }
 
     /// ほかの端末で付けた分が多くて手元とつながらなければ、手元の行を残してギャップを置く。
-    /// ギャップを押して読んだ行を足しても、押した位置の側で読んでいた行は動かない。上半分で押したら下の行、下半分で押したら上の行を保つ。
+    /// ギャップを選択して読んだ行を足しても、選択した位置の側で読んでいた行は動かない。上半分を選択したら下の行、下半分を選択したら上の行を保つ。
     @Test(arguments: [TimelineStore.GapDirection.fromOlder, .fromNewer])
     func loadingGapKeepsReadingRow(direction: TimelineStore.GapDirection) async throws {
         let others = StatusFactory.make(count: 40, startingAt: 3_000).map { $0.settingBookmarked(true) }

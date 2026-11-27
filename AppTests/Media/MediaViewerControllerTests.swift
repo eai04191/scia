@@ -104,7 +104,7 @@ struct MediaViewerControllerTests {
         topLevelActions(of: viewer).first { $0.title == title }
     }
 
-    /// メニューの最初の階層に並ぶ項目。区切り線で分けたまとまりの中も含め、「その他」などのサブメニューの中は含めない。
+    /// メニューの最初の階層に並ぶ項目。区切り線で分けたグループの中も含め、「その他」などのサブメニューの中は含めない。
     private func topLevelActions(of viewer: MediaViewerController) -> [UIAction] {
         viewer.menuElements().flatMap { element -> [UIAction] in
             if let action = element as? UIAction { return [action] }
@@ -229,7 +229,7 @@ struct MediaViewerControllerTests {
         harness.frames.runUntilStopped()
     }
 
-    /// シートの上でビューアを開いて閉じたら、チップの列を根の画面のすぐ上に戻し、残ったシートが列を覆うようにする。
+    /// シートの上でビューアを開いて閉じたら、チップの列をルートの画面のすぐ上に戻し、残ったシートが列を覆うようにする。
     @Test func closingViewerOverSheetReturnsOverlayBelowSheet() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -297,7 +297,7 @@ struct MediaViewerControllerTests {
         return viewer
     }
 
-    /// 投稿欄から開いたとき、代替テキストが空でも帯に「代替テキストを追加」と出し、押すとキーボードの上の入力欄で書き始める。
+    /// 投稿欄から開いたとき、代替テキストが空でも帯に「代替テキストを追加」と出し、選択するとキーボードの上の入力欄で書き始める。
     /// 書き終えた値は投稿欄に渡し、届く前から帯に出す。
     @Test func draftCaptionStartsEditingDescription() async throws {
         let harness = try TimelineHarness(notices: notices)
@@ -310,7 +310,7 @@ struct MediaViewerControllerTests {
         #expect(viewer.captionView.accessibilityLabel == "代替テキストを追加")
         #expect(viewer.captionView.accessibilityActivate())
         #expect(viewer.isEditingDescription)
-        // 帯を薄くして消し、入力欄を0から浮かび上がらせる。1コマで入れ替えない。
+        // 帯を薄くして消し、入力欄を0からフェードインさせる。1コマで入れ替えない。
         #expect(!viewer.descriptionEditor.isHidden && viewer.descriptionEditor.alpha == 1)
         #expect(!viewer.captionView.isHidden && viewer.captionView.alpha == 0)
 
@@ -321,7 +321,7 @@ struct MediaViewerControllerTests {
         #expect(actions.commits.map(\.text) == ["黒猫"])
         #expect(actions.commits.map(\.id) == ["a"])
         #expect(viewer.captionView.accessibilityLabel == "黒猫")
-        // 入力欄は薄くしてから隠し、帯は浮かび上がらせる。
+        // 入力欄は薄くしてから隠し、帯はフェードインさせる。
         #expect(!viewer.descriptionEditor.isHidden && viewer.descriptionEditor.alpha == 0)
         #expect(!viewer.captionView.isHidden && viewer.captionView.alpha == 1)
     }
@@ -364,7 +364,7 @@ struct MediaViewerControllerTests {
         #expect(actions.commits.map(\.text) == ["猫"])
     }
 
-    /// 入力欄の右端のボタンを押したら、その時点の内容で書き終える。
+    /// 入力欄の右端のボタンを選択したら、その時点の内容で書き終える。
     @Test func doneButtonCommitsDescription() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -395,7 +395,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { harness.viewController.presentedViewController == nil }
     }
 
-    /// アップロードの状態は上の中央に出たままのチップで出し、開いている間に変わったら描き直す。失敗したときだけ押せて、理由を出す操作を投稿欄に頼む。
+    /// アップロードの状態は上の中央に出たままのチップで出し、開いている間に変わったら再描画する。失敗したときだけ選択でき、理由を出す操作を投稿欄に頼む。
     @Test func draftStatusFollowsUpdates() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -829,7 +829,7 @@ struct MediaViewerControllerTests {
         #expect(page.transitionOverlay != nil)
     }
 
-    /// 投稿の動画を読み込めなかったら、「ブラウザで開く」を添え、押すと元のサーバーのURLを開く。自分のサーバーのコピーが読めなくても、元のファイルなら見られることがあるため。
+    /// 投稿の動画を読み込めなかったら、「ブラウザで開く」を添え、選択すると元のサーバーのURLを開く。自分のサーバーのコピーが読めなくても、元のファイルなら見られることがあるため。
     @Test func failedServerVideoOpensRemoteURLInBrowser() async throws {
         let missing = URL(filePath: "/tmp/scia-missing-\(UUID().uuidString).mp4")
         let remote = try #require(URL(string: "https://remote.example/1.gif"))
@@ -1032,7 +1032,7 @@ struct MediaViewerControllerTests {
         #expect(try Data(contentsOf: file) == data)
     }
 
-    /// 落としている途中のチップは押すと止めるかを確かめ、確かめている間に落とし終えたら、確認を閉じて保存する。
+    /// 落としている途中のチップは選択すると止めるかを確かめ、確かめている間に落とし終えたら、確認を閉じて保存する。
     @Test func tappingDownloadChipConfirmsStopAndClosesWhenDone() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1113,7 +1113,7 @@ struct MediaViewerControllerTests {
         #expect(viewer.downloadProgressText == nil)
         #expect(recent.activities.isEmpty)
         try await waitUntil { stopped.isSet }
-        // 取り消しを受けて戻り切るまで待つ。戻ったあとは、保存も知らせもしない。
+        // 取り消しを受けて戻り切るまで待つ。戻ったあとは、保存もせず、チップも出さない。
         try await waitUntil { transfers.transfers.runningCount == 0 }
         #expect(saved.files.isEmpty)
         #expect(viewer.statusChipText == nil)
@@ -1148,7 +1148,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { stopped.isSet }
     }
 
-    /// ページを`index`の添付ファイルへ切り替える。スワイプで切り替え終えたときと同じ知らせをビューアに送る。
+    /// ページを`index`の添付ファイルへ切り替える。スワイプで切り替え終えたときと同じデリゲートメソッドを、ビューアに呼ぶ。
     private func showPage(_ index: Int, in viewer: MediaViewerController) throws {
         let pageViewController = try #require(viewer.children.lazy.compactMap { $0 as? UIPageViewController }.first)
         let current = try #require(pageViewController.viewControllers?.first)
@@ -1212,7 +1212,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { viewer.downloadProgressText == nil }
     }
 
-    /// 見ている添付ファイルのものを落としている途中に、ほかのものも落としていれば、件数を添え、押すと「操作の状況」の画面を開く。
+    /// 見ている添付ファイルのものを落としている途中に、ほかのものも落としていれば、件数を添え、選択すると「操作の状況」の画面を開く。
     @Test func chipWithOtherDownloadsOpensOperationStatus() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1239,7 +1239,7 @@ struct MediaViewerControllerTests {
         #expect(opened.presenters.first === viewer)
     }
 
-    /// ビューアを閉じても保存のためのダウンロードは続け、済んだらタイムラインの知らせの場所で、落としている途中のチップと入れ替えて知らせる。
+    /// ビューアを閉じても保存のためのダウンロードは続け、済んだらタイムラインのチップの場所で、落としている途中のチップと入れ替えて知らせる。
     @Test func closingViewerKeepsSavingAndReportsOnTimeline() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1346,7 +1346,7 @@ struct MediaViewerControllerTests {
         #expect(chip.accessibilityHint == "理由を見られます。")
     }
 
-    /// 見ている添付ファイルを落とせなかったら、何ができなかったかだけを数秒で消えるチップで出し、押すと理由を出す。
+    /// 見ている添付ファイルを落とせなかったら、何ができなかったかだけを数秒で消えるチップで出し、選択すると理由を出す。
     @Test func downloadFailureIsShown() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1466,7 +1466,7 @@ struct MediaViewerControllerTests {
         #expect(viewer.view.superview == nil)
     }
 
-    /// 閉じる動きの途中に同じサムネイルを押して開き直したら、前の閉じる動きが着地しても、開き直したビューアが開き終えるまでサムネイルを隠したままにする。
+    /// 閉じる動きの途中に同じサムネイルを選択して開き直したら、前の閉じる動きが着地しても、開き直したビューアが開き終えるまでサムネイルを隠したままにする。
     /// 見せると、開く途中の複製とタイムラインのサムネイルが二重に見える。
     @Test func reopeningSameTileWhileClosingKeepsTileConcealedUntilOpened() async throws {
         let harness = try TimelineHarness(notices: notices)
@@ -1575,7 +1575,7 @@ struct MediaViewerControllerTests {
     /// タイムラインで重ねた写真のように回して置いた起点からは、同じ角度と大きさから回しながら開き、開ききったらまっすぐにする。
     /// 閉じるときは、起点の角度と大きさまで回しながら戻す。外側に接する四角へ戻すと、閉じ終わりにまっすぐな四角から回した写真へ切り替わって見えるため。
     /// 写真の白いフチも、フチを含めた写真の枠から始めて開くにつれて細くしてなくし、閉じるときは元の太さに戻す。
-    /// 写真が落とす影も、開き始めは同じ濃さから薄くしてなくし、閉じ終わりには同じ濃さに戻す。
+    /// 写真が落とす影も、開き始めは同じ不透明度から薄くしてなくし、閉じ終わりには同じ不透明度に戻す。
     @Test func transitionFollowsRotationOfSource() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1650,7 +1650,7 @@ struct MediaViewerControllerTests {
         #expect(abs(closed.unrotatedFrame.width - source.width) < 0.5 && abs(closed.unrotatedFrame.midX - source.midX) < 0.5 && abs(closed.unrotatedFrame.midY - source.midY) < 0.5, "閉じ終わりの枠が起点と違います: \(closed.unrotatedFrame) \(source)")
     }
 
-    /// 開く途中でつかんだら、ボタン類はつかんだときの濃さから薄くする。開いている度合いと指の位置から濃さを決め直すと、
+    /// 開く途中でつかんだら、ボタン類はつかんだときの不透明度から薄くする。開いている度合いと指の位置から不透明度を決め直すと、
     /// 半分ほど開いたところでつかんだ瞬間に、ボタン類が一度に消える。
     @Test func grabbingWhileOpeningKeepsChromeAlpha() async throws {
         let harness = try TimelineHarness(notices: notices)
@@ -1698,8 +1698,8 @@ struct MediaViewerControllerTests {
         harness.frames.runUntilStopped()
     }
 
-    /// 開く途中で左右にめくり始めたら、開ききった見え方に移しつつ、途中の見え方を描き写した像を手前に残して薄くする。
-    /// 像を残さないと、半分開いた小さい画像と透けた背景が、画面いっぱいの画像と黒い背景に1コマで替わる。
+    /// 開く途中で左右にめくり始めたら、開ききった見え方に移しつつ、途中の見え方のスナップショットを手前に残して薄くする。
+    /// スナップショットを残さないと、半分開いた小さい画像と透けた背景が、画面いっぱいの画像と黒い背景に1コマで替わる。
     @Test func pagingWhileOpeningFadesOutInterruptedMotion() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1877,7 +1877,7 @@ struct MediaViewerControllerTests {
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
         #expect(row.subviews.contains { $0 !== tile }, "開く途中にタイムラインの行の中へ複製を置いていません")
-        // バーの奥に描き分ける間は動かす複製を薄くするが、影は起点と同じ濃さで残す。
+        // バーの奥に描き分ける間は動かす複製を薄くするが、影は起点と同じ不透明度で残す。
         harness.frames.step()
         #expect(viewer.morphPlacement.shadowOpacity > 0.15, "バーの奥に描き分ける開き始めに影が消えています: \(viewer.morphPlacement.shadowOpacity)")
 

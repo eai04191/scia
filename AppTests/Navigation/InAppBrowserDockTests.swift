@@ -224,15 +224,15 @@ struct InAppBrowserDockTests {
         root.dismiss(animated: false)
     }
 
-    /// ステータスバーを押したら、伏せた高さと中くらいの高さでは後ろの画面のスクロールビューを最上部へ動かし、全画面では動かさない。
-    /// 後ろの画面に届くかはUIKitの公開されていない作りで決まるので、ステータスバーを押したときにUIKitが呼ぶ処理を呼んで確かめる。iOSの更新で作りが変わると落ちる。
+    /// ステータスバーを選択したら、伏せた高さと中くらいの高さでは後ろの画面のスクロールビューを最上部へ動かし、全画面では動かさない。
+    /// 後ろの画面に届くかはUIKitの公開されていない作りで決まるので、ステータスバーを選択したときにUIKitが呼ぶ処理を呼んで確かめる。iOSの更新で作りが変わると落ちる。
     @Test func statusBarTapReachesScreenBehind() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = ShakeDetectingWindow(windowScene: scene)
         let root = UIViewController()
         let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
         scrollView.contentSize = CGSize(width: 400, height: 4000)
-        // 最上部にいると、UIKitは押されても問い合わせない。
+        // 最上部にいると、UIKitは選択されても問い合わせない。
         scrollView.contentOffset.y = 1000
         let delegate = ScrollToTopRecorder()
         scrollView.delegate = delegate
@@ -280,7 +280,7 @@ struct InAppBrowserDockTests {
         root.dismiss(animated: false)
     }
 
-    /// シートがウインドウより狭いときも、シートの左右でステータスバーを押したら後ろの画面に届く。
+    /// シートがウインドウより狭いときも、シートの左右でステータスバーを選択したら後ろの画面に届く。
     @Test func statusBarTapBesideNarrowSheetReachesScreenBehind() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = ShakeDetectingWindow(windowScene: scene)

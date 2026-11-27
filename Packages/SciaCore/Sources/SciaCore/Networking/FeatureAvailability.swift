@@ -25,7 +25,7 @@ public enum OptionalFeature: String, Sendable, CaseIterable {
 
 /// 使えないと分かった機能を、そのセッションの間だけ止める。セッションの中で共有する。
 ///
-/// サーバーが更新されて使えるようになることがあるため、サーバーごとには覚えず、次のセッション（次の起動）でもう一度試す。
+/// サーバーが更新されて使えるようになることがあるため、サーバーごとには記録せず、次のセッション（次の起動）でもう一度試す。
 /// 止めたら、以後は送らずに`FeatureUnavailable`で失敗させ、使えないサーバーに同じリクエストを送り続けない。
 public actor FeatureAvailability {
     public struct Disabled: Sendable, Equatable {

@@ -142,7 +142,7 @@ struct PostContentViewTests {
         }
     }
 
-    /// 絵文字の画像が届いたときや時刻の表記が変わったときは、大きさの変わらない描き直しで並べ直しが起きない。
+    /// 絵文字の画像が届いたときや時刻の表記が変わったときは、大きさの変わらない再描画で並べ直しが起きない。
     /// そのあとも、読み上げの要素は画面上の文字の位置を指したままにする。枠が空になると、VoiceOverで指でなぞってもその投稿に止まらない。
     @Test func accessibilityFrameSurvivesRedrawWithoutLayout() throws {
         let configuration = makeViewController().contentConfiguration(for: try status(content: "<p>短い</p>"), base: .cell())
@@ -178,7 +178,7 @@ struct PostContentViewTests {
         _ = actions.first?.actionHandler?(try #require(actions.first))
         #expect(opened == [.url(try #require(URL(string: "https://example.com/a")))])
     }
-    /// 空行の多い本文の末尾のリンクも押せる。判定の位置を、ラベルが実際に描いた位置と比べる。
+    /// 空行の多い本文の末尾のリンクも選択できる。判定の位置を、ラベルが実際に描いた位置と比べる。
     /// TextKit 1で並べ直すと、空行のたびに行の位置がUILabelの描画からずれ、末尾のリンクを外したことがある。
     @Test func linkAfterManyBlankLinesIsTappableWhereDrawn() throws {
         let content = #"<blockquote>これ系のセキュリティ系のお漏らしや脆弱性を見つけることは割とするんだけど、<br><br>純粋に煙たがられますね<br><br>普通の経営者って労働者を時間いっぱい働かすことに合理性があって、労働者はパンパンの状態で働く。その中で、セキュリティの指摘をするやつは、<br><br>経営者から見れば、経営不安にさせる指摘をする奴<br>労働者から見れば、余計な仕事を増やす奴<br><br>なので、いいことないですよ。<br>で、基本的には自分の個人情報ではなく、自分以外の顧客情報が洩れることになるので、経営者・労働者、双方にノーダメだったりする。そうすると<br><br>いかにセキュリティの脆弱性を見つけても、指摘したやつが問題や余計な仕事を増やす嫌な奴<br><br>になる。<br>だから煙たがられる。</blockquote><a href="https://x.com/kotauchisunsun/status/2111061896434782560" rel="nofollow noopener" target="_blank">https://x.com/kotauchisunsun/status/2111061896434782560</a>"#
@@ -202,7 +202,7 @@ struct PostContentViewTests {
         return nil
     }
 
-    /// 右から左へ書く文字のリンクも、描いた位置で押せる。文字の端の位置は書く向きで左右が入れ替わる。
+    /// 右から左へ書く文字のリンクも、描いた位置で選択できる。文字の端の位置は書く向きで左右が入れ替わる。
     @Test func rightToLeftLinkIsTappableWhereDrawn() throws {
         let content = #"<p>אאאא <a href="https://example.com/rtl">בבבבבבבב</a> גגגג</p>"#
         let configuration = makeViewController().contentConfiguration(for: try status(content: content), base: .cell())
@@ -242,7 +242,7 @@ struct PostContentViewTests {
             }
         }
         guard let bottom = rows.last else { return nil }
-        // いちばん下の行のまとまりの、上下の中ほど。
+        // いちばん下の行のグループの、上下の中ほど。
         var top = bottom
         while rows.contains(top - 1) || rows.contains(top - 2) { top -= 1 }
         let lineColumns = (top...bottom).flatMap { y in (0..<cgImage.width).filter { isLink($0, y) } }
@@ -348,7 +348,7 @@ struct PostContentViewTests {
         #expect((element.accessibilityCustomActions ?? []).filter { !$0.name.hasSuffix("のプロフィール") }.map(\.name) == ["本文を隠す", "example.com/a"])
     }
 
-    /// 押した場所の押下を受けるビュー。押したビューから上へたどり、タップのジェスチャーを持つ最初のビューを返す。なければ行全体の押下に渡る。
+    /// 選択した場所の選択を受けるビュー。選択したビューから上へたどり、タップのジェスチャーを持つ最初のビューを返す。なければ行全体の選択に渡る。
     private func tapTarget(in view: UIView, at point: CGPoint) -> UIView? {
         var target = view.hitTest(point, with: nil)
         while let current = target, current !== view {
@@ -362,7 +362,7 @@ struct PostContentViewTests {
         view.subviews.flatMap { subview in [subview as? T].compactMap(\.self) + subviews(of: type, in: subview) }
     }
 
-    /// 名前の行は押下を受けず、行全体の押下に渡す。投稿した人はアイコンで、ブーストした人は上の行のアイコンと名前で開く。
+    /// 名前の行は選択を受けず、行全体の選択に渡す。投稿した人はアイコンで、ブーストした人は上の行のアイコンと名前で開く。
     @Test func nameRowPassesTapToRow() throws {
         let original = try status(content: "<p>短い</p>")
         let booster = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: original.account.avatar)
@@ -409,7 +409,7 @@ extension PostContentViewTests {
         #expect(opened == ["author", "booster"])
     }
 
-    /// 返信のラベルのように押せない名前の上の行には、プロフィールを開く操作を付けない。
+    /// 返信のラベルのように選択できない名前の上の行には、プロフィールを開く操作を付けない。
     @Test func contextWithoutAccountHasNoProfileAction() throws {
         var configuration = makeViewController().contentConfiguration(for: try status(content: "<p>短い</p>"), base: .cell())
         configuration.onOpenAccount = {}

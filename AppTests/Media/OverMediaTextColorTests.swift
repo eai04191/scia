@@ -11,7 +11,7 @@ struct OverMediaTextColorTests {
         return alpha
     }
 
-    /// 画像の上の控えめな白い文字は、コントラストを上げる設定では、透ける分を半分にして濃くする。
+    /// 画像の上の控えめな白い文字は、コントラストを上げる設定では、透ける分を半分にして不透明度を上げる。
     @Test func dimmedWhiteTextGetsDarkerWithIncreasedContrast() {
         let color = UIColor.dimmedWhiteText(alpha: 0.6)
 

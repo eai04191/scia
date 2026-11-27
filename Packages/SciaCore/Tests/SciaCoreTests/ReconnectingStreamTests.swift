@@ -282,7 +282,7 @@ final class ScriptedConnector: WebSocketConnector {
     private let state: Mutex<(scripts: [Script], connectCount: Int, closedCount: Int, sent: [[String]], unansweredPings: Int)>
     private let rest: Script
 
-    /// - Parameter rest: `scripts`を使い切ったあとの接続の台本。
+    /// - Parameter rest: `scripts`を使い切ったあとの接続のシナリオ。
     init(_ scripts: [Script], rest: Script = Script()) {
         state = Mutex((scripts, 0, 0, [], 0))
         self.rest = rest

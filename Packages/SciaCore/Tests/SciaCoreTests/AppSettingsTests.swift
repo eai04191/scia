@@ -82,7 +82,7 @@ struct AppSettingsTests {
         #expect(AppSettings(defaults: defaults).isAutoTranslationEnabled)
     }
 
-    /// 対象外の人は、サーバー名を補ったハンドルで覚え、大文字と小文字を区別せずに比べる。
+    /// 対象外の人は、サーバー名を補ったハンドルで保存し、大文字と小文字を区別せずに比べる。
     @Test func persistsAutoTranslationExclusions() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)

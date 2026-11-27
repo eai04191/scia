@@ -194,7 +194,7 @@ enum AgentScreenDump {
         return name
     }
 
-    /// 上に画面を重ねている画面のビュー。下に隠れていて触れないため、書き出さない。
+    /// モーダルビューを出している画面のビュー。下に隠れていて触れないため、書き出さない。
     private static func coveredViews(in window: UIWindow) -> Set<ObjectIdentifier> {
         var covered: Set<ObjectIdentifier> = []
         var current = window.rootViewController

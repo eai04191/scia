@@ -157,7 +157,7 @@ final class ComposeRestThumbnails: PhotoStackView {
         setPlacements(scatteredPlacements ?? basePlacements)
     }
 
-    /// 写真のスタックがカプセルの面に落とす影の不透明度。開閉で動かす複製の影も、カプセルに着くときにこの不透明度にする。
+    /// 写真のスタックがカプセルに落とす影の不透明度。開閉で動かす複製の影も、カプセルに着くときにこの不透明度にする。
     static func stackShadowOpacity(in tuning: TuningStore) -> Float {
         Float(tuning.value(of: TuningCatalog.composeStackShadowOpacity))
     }

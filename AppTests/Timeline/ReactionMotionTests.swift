@@ -42,7 +42,7 @@ struct ReactionMotionTests {
         return collect(cell)
     }
 
-    /// リアクションのない見えている投稿に付いたら、行のセルを入れ替えずに伸ばし、下の行を元の位置から動かす。ボタンはその場で浮かび上がる。
+    /// リアクションのない見えている投稿に付いたら、行のセルを入れ替えずに伸ばし、下の行を元の位置から動かす。ボタンはその場でフェードインする。
     @Test func firstReactionGrowsRowAndShiftsRowsBelow() throws {
         var (harness, statuses, id) = try harness()
         defer { harness.tearDown() }
@@ -125,8 +125,8 @@ struct ReactionMotionTests {
         #expect(buttons.allSatisfy { $0.layer.animationKeys() == nil && $0.lastCountTransition == nil }, "別の投稿の描き直しで動かしました")
     }
 
-    /// すでにリアクションのある列に付いたら、新しいボタンは、そこにいた「＋」が動いて場所を空けてから浮かび上がる。
-    /// 同時に始めると、動き出したばかりの「＋」に、浮かび上がり始めたボタンが重なって見えるため。
+    /// すでにリアクションのある列に付いたら、新しいボタンは、そこにいた「＋」が動いて場所を空けてからフェードインする。
+    /// 同時に始めると、動き出したばかりの「＋」に、フェードインし始めたボタンが重なって見えるため。
     @Test func addedReactionWaitsForAddButtonToMove() throws {
         var (harness, statuses, id) = try harness(reactions: [EmojiReaction(emoji: thumbsUp, count: 1, me: false)], showsAddButton: true)
         defer { harness.tearDown() }
@@ -163,7 +163,7 @@ struct ReactionMotionTests {
         #expect(leaving.isUserInteractionEnabled)
     }
 
-    /// 動きの途中で別の投稿に使い回したら、前の投稿の動きと、消えかけの列の像を残さない。
+    /// 動きの途中で別の投稿に使い回したら、前の投稿の動きと、消えかけの列のスナップショットを残さない。
     @Test func reuseCancelsRunningTransitions() throws {
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -227,7 +227,7 @@ struct ReactionMotionTests {
         var toggled: [String] = []
         harness.viewController.onToggleEmojiReaction = { _, emoji in toggled.append(emoji.name) }
         harness.viewController.onOpenEmojiReactionedBy = { _, _ in }
-        // 受け口を渡したあとで描き直す。
+        // ハンドラーを渡したあとで再描画する。
         statuses[10] = Self.replacing(statuses[10], reactions: [EmojiReaction(emoji: thumbsUp, count: 2, me: false)])
         harness.setStatuses(statuses)
         let cell = try #require(harness.visibleCell(of: id))

@@ -31,7 +31,7 @@ struct ProfileHeaderAccentTests {
         )
     }
 
-    /// 色のはっきりしたアイコンを返すヘッダーを窓に置く。返した窓は、テストの終わりに隠す。
+    /// 色のはっきりしたアイコンを返すヘッダーをウィンドウに置く。返したウィンドウは、テストの終わりに隠す。
     private func placeHeader() throws -> (ProfileHeaderView, UIWindow) {
         let avatar = try #require(DummyMedia.image(size: CGSize(width: 64, height: 64), color: UIColor(red: 0, green: 0.45, blue: 1, alpha: 1), label: "").pngData())
         let header = ProfileHeaderView(

@@ -100,7 +100,7 @@ struct ComposePollEditorTests {
         #expect(editor.labelLength == .shortResults)
     }
 
-    /// 増えた欄のマークは、浮かび上がらせる前に、今の選び方の形で置かれている。あとから置くと、マークが大きさ0から広がるところが動きに乗る。
+    /// 増えた欄のマークは、フェードインさせる前に、今の選び方の形で置かれている。あとから置くと、マークが大きさ0から広がるところが動きに乗る。
     @Test func addedRowHasIndicatorBeforeReveal() throws {
         var poll = PollDraft(options: ["a", ""], multiple: true)
         let editor = ComposePollEditor(frame: CGRect(x: 0, y: 0, width: 320, height: 400))

@@ -129,7 +129,7 @@ struct MediaTransfersTests {
         try await waitUntil { network.cancelled == [url("first.mp4")] }
 
         #expect(transfers.transfers.map(\.target.url.lastPathComponent) == ["saved.mp4", "second.mp4"])
-        // 前の共有を止めたことは、使う人が新しく始めた結果なので知らせない。
+        // 前の共有を止めたことは、使う人が新しく始めた結果なのでイベントを出さない。
         #expect(events.all.isEmpty)
     }
 

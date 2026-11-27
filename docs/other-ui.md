@@ -21,7 +21,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 - `CrashMark`と`PostQuarantine`、`PostCrashReport`: クラッシュした投稿の隔離と、開発者に送る文章（[crash-quarantine.md](crash-quarantine.md)）。行の処理の前にマークを付け、隠すのと送る画面はUIで書く
 - `AccountRegistry`と`KeychainCredentialStore(service:)`: ログインしたアカウント。サービス名はUIで決める
 - ログインしているアカウントごとの、「別のアカウントで」の部品（`OtherAccount`、そのアカウントのクライアント、ハッシュタグの状態、投稿欄の上限と既定値）は、アプリに1つ持ち、ウィンドウごとに作らない。使われたアカウントの分だけ作り、アカウントごとの`TaskScope`の子で始める。`AccountRegistry.accounts`を購読し、ログアウトしたアカウントと、ログインし直してトークンが変わったアカウントの部品は、その`TaskScope`を閉じて捨てる。ストリーミングはつながない。ウィンドウごとに持つのは、絵文字のパレットのメニュー、リアクションの絵文字ピッカー、ハッシュタグの操作の済んだことと失敗のチップの出し先だけ。ハッシュタグの操作は`StatusMenuTree.otherAccountHashtagActions`で、メニューを出すウィンドウが渡す（iOSは`App/Sources/SignedInAccounts.swift`と`OtherAccounts.swift`）
-- ログアウトは`AccountLogout.logOut(_:from:defaults:settings:images:)`。アカウントのリストから消し、そのアカウントのために覚えた設定、メディアのキャッシュ、そのサーバーのカスタム絵文字のリストを消す。呼んだあと、そのアカウントのセッションを閉じ、残ったアカウントかログインの画面を出すのはUI。使う人がログアウトを選んだときだけ呼ぶ
+- ログアウトは`AccountLogout.logOut(_:from:defaults:settings:images:)`。アカウントのリストから消し、そのアカウントのために保存した設定、メディアのキャッシュ、そのサーバーのカスタム絵文字のリストを消す。呼んだあと、そのアカウントのセッションを閉じ、残ったアカウントかログインの画面を出すのはUI。使う人がログアウトを選んだときだけ呼ぶ
 
 ## ログイン
 
@@ -41,7 +41,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
   - 届いたものを再描画するのはUI。`xPosts.onChange`、`translations?.onChange`、`onTranslationSettingsChange`で受ける
 - ストリーミングの状態の変化は、`streamingHub.onChange`ではなく`onStreamingChange`で受ける。`streamingHub.onChange`は1つしか置けず、セッションが使う
 - 一覧のモデルは`init(…session:…)`で作る。`session`を受け取らない一覧（`ThreadModel`、`SearchModel`、`AccountNotificationsModel`、UIが持つ一覧）は、`session.statuses.register(_:)`で登録する。登録した一覧は、削除、編集、お気に入りなどで変わった投稿を受け取る
-- アカウントの設定（`onPreferencesLoad`）は、注意書きを最初から開くか（`ServerPreferences.expandsSpoilers`を`SpoilerExpansion`へ）に使う。アニメーションを再生するかとメディアの表示は、セッションが設定（`AppSettings`）へ覚えさせる。添付ファイルをぼかすかは、`MediaCovers`に`AppSettings.mediaDisplay`を渡して決める
+- アカウントの設定（`onPreferencesLoad`）は、注意書きを最初から開くか（`ServerPreferences.expandsSpoilers`を`SpoilerExpansion`へ）に使う。アニメーションを再生するかとメディアの表示は、セッションが設定（`AppSettings`）へ保存する。添付ファイルをぼかすかは、`MediaCovers`に`AppSettings.mediaDisplay`を渡して決める
 - `tasks: TaskScope`を受け取るモデル（`ThreadModel`、`SearchModel`、`NotificationRequestsModel`、`AccountNotificationsModel`など）には、`session.tasks.child()`を渡す。`TaskScope`は手放すと閉じるので、画面を閉じたときに`close()`を呼ばなくてよい。モデルを持つものが捨てられれば、始めた処理も止まる
 - `backgroundTime`の引数と`enterBackground()`、`enterForeground()`は、OSがバックグラウンドでアプリを止めるUIだけが使う
 
@@ -81,7 +81,7 @@ SciaCoreだけで、iOSのアプリ（`App/Sources`）とは別のUI（AppKitの
 ## 投稿
 
 - 投稿欄は`ComposeModel`。`AccountSession.applyComposeDefaults(to:)`が済むまで`canPost`はfalseのまま。値だけが要るときは`composeDefaults()`で読む。書き始めたときに待たせないよう、セッションを始めたら`preloadComposeDefaults()`で先に読んでおく
-- 下書き（`ComposeModel`）は、アカウントの画面一式ではなくウィンドウが持つ。アカウントを替えて画面一式を作り直したら、新しい画面一式の`ComposeAccount`を`rebind(home:writing:)`に渡してつなぎ直し、返った`Rebinding`に従って返信先を探し直す。ログアウトで外した返信先は`pendingRetarget`に残り、探し終えたら`resolvePendingRetarget(_:)`を呼ぶまで投稿させない。送った結果は、送り始めたときの`ComposeAccount`の`onSubmitted`、`onScheduleRewritten`、`onRedraftDeleted`に渡る（[compose.md](compose.md)の「アカウントを変えるとき」）。書いているアカウント（`writingAccountID`）からログアウトしたときも同じ`rebind`を呼ぶ
+- 下書き（`ComposeModel`）は、アカウントの画面一式ではなくウィンドウが持つ。アカウントを替えて画面一式を作り直したら、新しい画面一式の`ComposeAccount`を`rebind(home:writing:)`に渡し、返った`Rebinding`に従って返信先を探し直す。ログアウトで外した返信先は`pendingRetarget`に残り、探し終えたら`resolvePendingRetarget(_:)`を呼ぶまで投稿させない。送った結果は、送り始めたときの`ComposeAccount`の`onSubmitted`、`onScheduleRewritten`、`onRedraftDeleted`に渡る（[compose.md](compose.md)の「アカウントを変えるとき」）。書いているアカウント（`writingAccountID`）からログアウトしたときも同じ`rebind`を呼ぶ
 - 送れた結果（`onSubmitted`）は`session.statuses.reflect(_:usingTagsIn:)`に渡す。どの一覧へ配るかはそこで決まる
 - 書きかけの投稿欄で返信、引用、編集、書き直しを始める前に、進むか、確かめるか、断るかは`Confirmation.starting(_:draft:now:)`が決める（共有されたもので書き始めるときは`Confirmation.shared`）。後から選んだ投稿の読み込みだけを使うのは`LatestLookup`
 - 投稿欄の文言: 本文の上のラベル（返信先、引用元、編集、書き直し）は`ComposeModel.contextChip`、投稿ボタンの名前は`sendButtonTitle`、添付の状態は`ComposeAttachmentStatus.title`、絵文字のパレットの見出しは`EmojiPaletteSection.Kind.title`。添付を縮めた、ペーストした添付を足さなかった、ビューアでの添付の状態のチップは`Notice.mediaReduced(_:)`、`Notice.pastedMediaSkipped(_:)`、`Notice.draftStatus(_:progress:reduction:showFailure:)`

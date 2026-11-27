@@ -6,7 +6,7 @@ import UIKit
 /// 表示中のcompactのコンテキストメニューを、決めた高さより下に出ないよう上へ移す。
 ///
 /// compactの表示では、メニューの位置をUIKitが決め、ハイライトのプレビューを渡しても動かない。そこで、メニューを組む前に、ウィンドウの上に重なっている
-/// `UICollectionView`を覚えておき（`prepare(in:)`）、出たあとに新しく現れた`UICollectionView`を、メニューの項目のリストとみなす。
+/// `UICollectionView`を保持しておき（`prepare(in:)`）、出たあとに新しく現れた`UICollectionView`を、メニューの項目のリストとみなす。
 /// 祖先をたどり、親がウィンドウと同じ大きさで自身はそれより小さいビューを、メニュー全体とみなして`center`を動かす。候補が1つに決まらなければ、ほかの重なりを動かさないよう何もしない。
 /// 開く動きの間も位置を保つよう、メニューを閉じ始めるまで毎コマ確かめる。
 ///
@@ -25,7 +25,7 @@ final class ContextMenuPositioner: NSObject {
     private var didFindMenu = false
     private let logger = SciaLog.logger(category: "contextMenuPosition")
 
-    /// メニューを組む前（`configurationForMenuAtLocation`）に呼び、そのとき重なっている`UICollectionView`を覚える。
+    /// メニューを組む前（`configurationForMenuAtLocation`）に呼び、そのとき重なっている`UICollectionView`を保持する。
     func prepare(in window: UIWindow?) {
         stop()
         self.window = window

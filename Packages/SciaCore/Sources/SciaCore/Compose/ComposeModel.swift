@@ -79,7 +79,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     private var hasLoadedConfiguration = false
     /// ペーストか共有で入れた文字にあったURL。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
     @ObservationIgnored private var insertedURLs: [String] = []
-    /// `insertedURLs`を忘れるたびに進める。忘れる前に読み始めたペーストを、読み終えたあとに覚えないため。
+    /// `insertedURLs`を忘れるたびに進める。忘れる前に読み始めたペーストを、読み終えたあとに記録しないため。
     @ObservationIgnored private var insertedGeneration = 0
     /// 最後に送った内容。同じ内容を再送するときだけ同じIdempotency-Keyを使い、変えたら別の投稿として新しいキーにする。
     /// 応答だけが失われていた場合に、変えた内容が投稿されないまま成功扱いにならないようにするため。
@@ -568,8 +568,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
         InsertedTextToken(generation: insertedGeneration)
     }
 
-    /// ペーストか共有で入れた文字のURLを覚える。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
-    /// - Parameter token: 読み始めたときの`insertedTextToken`。そのあと下書きを空に戻すか本文を入れ替えていたら、覚えない。
+    /// ペーストか共有で入れた文字のURLを記録する。決まりはdocs/compose.mdの「URLの後ろに続いた文字」にある。
+    /// - Parameter token: 読み始めたときの`insertedTextToken`。そのあと下書きを空に戻すか本文を入れ替えていたら、記録しない。
     public func noteInsertedText(_ inserted: String, token: InsertedTextToken? = nil) {
         guard token == nil || token == insertedTextToken else { return }
         for url in LinkTitling.urls(in: inserted) where !insertedURLs.contains(where: { $0.utf8.elementsEqual(url.utf8) }) {
@@ -983,7 +983,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         }
     }
 
-    /// 添付の準備が済むのを待ち、送れるならtrueを返す。失敗したら知らせ、待つのをやめたら何も知らせない。
+    /// 添付の準備が済むのを待ち、送れるならtrueを返す。失敗したらエラーを出し、待つのをやめたら何も出さない。
     private func waitForMediaToPost() async -> Bool {
         switch await waitForMedia() {
         case .ready:
@@ -1300,7 +1300,7 @@ public struct ComposeMediaService<Thumbnail> {
     public var makeThumbnail: (LocalMediaFile) async -> Thumbnail?
     /// 接続しているサーバーの今の版が処理できないと分かっている、画像の形式のMIMEタイプ。
     public var unprocessableImageTypes: @MainActor () -> Set<String>
-    /// 画像の形式を、接続しているサーバーの今の版では処理できないと覚える。
+    /// 画像の形式を、接続しているサーバーの今の版では処理できないと記録する。
     public var recordUnprocessableImageType: @MainActor (String) -> Void
     public var preparation: @MainActor () -> MediaPreparationSettings
 
@@ -1324,9 +1324,9 @@ public struct ComposeMediaService<Thumbnail> {
 
     /// `client`で送る口を組む。書いている間にログインし直しても新しいトークンで送れるよう、送るたびに`client`を呼ぶ。
     /// - Parameters:
-    ///   - formats: 処理できなかった画像の形式を、サーバーの版ごとに覚える先。今のアカウントなら`AccountSession.composeMediaService`が渡す。
-    ///     nilなら覚えず、処理できなかったときにJPEGで再送するのを、送るたびに行う。
-    ///   - serverVersion: 接続しているサーバーの版。読めていなければnilを返し、版の分からないサーバーとして覚える。
+    ///   - formats: 処理できなかった画像の形式を、サーバーの版ごとに記録する先。今のアカウントなら`AccountSession.composeMediaService`が渡す。
+    ///     nilなら記録せず、処理できなかったときにJPEGで再送するのを、送るたびに行う。
+    ///   - serverVersion: 接続しているサーバーの版。読めていなければnilを返し、版の分からないサーバーとして記録する。
     public init(
         client: @escaping @MainActor @Sendable () -> MastodonClient,
         settings: AppSettings,
@@ -1372,7 +1372,7 @@ extension ComposeModel {
     }
 
     /// ピッカーの今の選択を取り込む。外されたものは添付から外し、足されたものは後ろに足してアップロードを始める。
-    /// 投稿を待つ間も取り込む。ピッカーは選択が変わったことを覚えるので、捨てると投稿に失敗した後の下書きとピッカーの選択が食い違う。
+    /// 投稿を待つ間も取り込む。ピッカーは選択が変わったことを保持するので、捨てると投稿に失敗した後の下書きとピッカーの選択が食い違う。
     /// 送っている下書きは送る前にコピーしてあるので、ここで変えても影響しない。
     /// 添付の準備を待っている間に選択が変わったら、待つのをやめる。待ったあとに作る下書きが、選択した時点と違う添付になるため。
     /// 選択したときにシートは閉じるが、閉じ終わる前に選び直しが届くことがある。
@@ -1666,7 +1666,7 @@ extension ComposeModel {
                 // 切り抜き直して止めたアップロードには、止める前に届いたエラーがそのまま返る。再送すると元のファイルを消すので、先に止まったかを確かめる。
                 try Task.checkCancellation()
                 // 対応形式として返しているのに処理できないサーバーがある。
-                // 同じ写真のJPEGで1回だけ再送し、このサーバーのこの版ではその形式を送らないと覚える。
+                // 同じ写真のJPEGで1回だけ再送し、このサーバーのこの版ではその形式を送らないと記録する。
                 logger.info("attachment format unprocessable, resending as jpeg mime=\(sending.mimeType, privacy: .public) reencoded=\(sending != file, privacy: .public)")
                 media.recordUnprocessableImageType(sending.mimeType)
                 let replacement: LocalMediaFile
@@ -1735,8 +1735,8 @@ extension ComposeModel {
 
     /// 送るファイルを決める。設定で選んだ大きさとサーバーの上限に収まれば、読み込んだファイルのまま送る。位置情報があれば、それだけを除いたファイルにする。
     /// 収まらなければ作り直し、サーバーの上限のために設定より小さくしたら知らせる。再送するときは、前に決めたファイルを使う。
-    /// - Parameter forcingJPEG: JPEGで再送するので、縮めて作り直すときもHEICなどにしない。覚えたのは処理できなかった形式（HEIFなど）だけで、
-    ///   HEICは覚えていないことがあり、同じサーバーがHEICも処理できないことが多いため。
+    /// - Parameter forcingJPEG: JPEGで再送するので、縮めて作り直すときもHEICなどにしない。記録したのは処理できなかった形式（HEIFなど）だけで、
+    ///   HEICは記録していないことがあり、同じサーバーがHEICも処理できないことが多いため。
     /// - Parameter audio: 動画をGIFとして送るかと、切り替えた回数。
     private func prepare(_ file: LocalMediaFile, of id: DraftAttachment.ID, audio: AudioChoice = AudioChoice(), forcingJPEG: Bool = false) async throws -> LocalMediaFile {
         if let sending = localMedia[id]?.sending { return sending }
@@ -1855,7 +1855,7 @@ extension ComposeModel {
         localMedia[id]?.exportProgress = fraction
     }
 
-    /// サーバーが処理できなかったファイルを捨て、その形式を避けて読み込み直す。サムネイルは同じ写真なので作り直さない。
+    /// サーバーが処理できなかったファイルを捨て、その形式を避けて再読み込みする。サムネイルは同じ写真なので作り直さない。
     private func reloadFile(_ id: DraftAttachment.ID, local: LocalMedia<Thumbnail>, avoiding rejected: LocalMediaFile) async throws -> LocalMediaFile {
         rejected.remove()
         localMedia[id]?.file = nil

@@ -313,7 +313,7 @@ public final class SavedStatusesStore {
         return true
     }
 
-    /// ミュートやブロックを解除した相手の投稿を、また足すようにする。除いた投稿は戻さず、読み込み直したときに戻る。
+    /// ミュートやブロックを解除した相手の投稿を、また足すようにする。除いた投稿は戻さず、再読み込みしたときに戻る。
     public func includeAccount(_ id: String) {
         excludedAccountIDs.remove(id)
     }

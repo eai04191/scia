@@ -20,7 +20,7 @@ public struct BodyTruncation: Sendable, Equatable {
 
 /// 「続きを読む」で広げた本文。
 ///
-/// 投稿は元の投稿のIDで覚え、同じ投稿のブーストや通知の行、引用のカードもそろえる。Xの投稿は投稿のIDで覚える。覚えるのはアプリを起動している間だけ。
+/// 投稿は元の投稿のIDで保持し、同じ投稿のブーストや通知の行、引用のカードもそろえる。Xの投稿は投稿のIDで保持する。保持するのはアプリを起動している間だけ。
 public struct LongBodyExpansion: Sendable, Equatable {
     /// 広げたものを見分けるキー。
     public enum Key: Hashable, Sendable {

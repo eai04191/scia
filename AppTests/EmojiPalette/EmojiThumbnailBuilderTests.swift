@@ -4,7 +4,7 @@ import Synchronization
 import Testing
 @testable import Scia
 
-/// 絵文字ピッカーの小さい静止画を、絵文字ピッカーを閉じている間に裏で作る仕組み。
+/// 絵文字ピッカーのサムネイルを、絵文字ピッカーを閉じている間に裏で作る仕組み。
 @MainActor
 @Suite(.failureState)
 struct EmojiThumbnailBuilderTests {

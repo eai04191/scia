@@ -89,7 +89,7 @@ public final class UserDisplayStore {
         if changed || (!existed && wasShown(handle: latest.acct, key: key, settings: settings)) { revision += 1 }
     }
 
-    /// ドメインが分かる前に出した人は、ローカルのキーで覚えている。
+    /// ドメインが分かる前に出した人は、ローカルのキーで保持している。
     private func wasShown(handle: String, key: String, settings: AppSettings) -> Bool {
         if shownKeys.contains(key) { return true }
         let localName = String(handle.prefix(while: { $0 != "@" }))

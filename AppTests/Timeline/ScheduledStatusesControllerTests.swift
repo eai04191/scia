@@ -28,7 +28,7 @@ struct ScheduledStatusesControllerTests {
         return ScheduledStatusesController(client: MastodonClient(credential: credential, transport: transport), tasks: tasks, settings: AppDependencies.settings, myAccount: { account })
     }
 
-    /// 読んでいる間に予約できたら、その前に送った読み込みの古い応答で、予約した行を消さない。読み直して、新しい応答を使う。
+    /// 読んでいる間に予約できたら、その前に送った読み込みの古い応答で、予約した行を消さない。再読み込みして、新しい応答を使う。
     @Test func localChangeDuringLoadIsNotOverwritten() async throws {
         let gate = Gate()
         let calls = Mutex(0)
@@ -59,7 +59,7 @@ struct ScheduledStatusesControllerTests {
         #expect(calls.withLock { $0 } == 3)
     }
 
-    /// 引っぱって読み直す読み込みも、タイムラインの持ち主の子で走らせる。ログアウトで閉じたら止まる。
+    /// pull to refreshの読み込みも、タイムラインの持ち主の子で走らせる。ログアウトで閉じたら止まる。
     @Test func refreshRunsInsideScope() async throws {
         let gate = Gate()
         let transport = ScriptedTransport { _ in
@@ -108,7 +108,7 @@ struct ScheduledStatusesControllerTests {
 @MainActor
 @Suite(.failureState)
 struct ScheduledStatusBodyTests {
-    /// 書いたときのソースの文字なので、HTMLとして読まず、連続する空白、字下げ、改行、記号を書いたまま残す。
+    /// 書いたときのソースの文字なので、HTMLとして読まず、連続する空白、インデント、改行、記号を書いたまま残す。
     @Test func plainBodyKeepsSourceAsWritten() {
         let builder = PostContentBuilder(tuning: AppDependencies.tuning, renderSettings: PostRenderSettings(settings: AppDependencies.settings), emojiImages: AppDependencies.emojiImages, mediaImages: AppDependencies.mediaImages, avatarImages: AppDependencies.avatarImages)
         let status = Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: Account(id: "1", username: "a", acct: "a", displayName: "A", avatar: nil), content: "", spoilerText: "", url: nil)

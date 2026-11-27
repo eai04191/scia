@@ -37,7 +37,7 @@ struct ExtendedURLTests {
         #expect(ExtendedURL.find(in: text, inserted: ["https://example.com/a"]).isEmpty)
     }
 
-    /// 括弧ごとペーストしたURLも、括弧を外したURLで覚える。括弧を消してURLの後ろに書き足せば見つける。
+    /// 括弧ごとペーストしたURLも、括弧を外したURLで記録する。括弧を消してURLの後ろに書き足せば見つける。
     @Test func bracketedPasteRemembersURLWithoutBracket() {
         let model = makeModel()
         model.noteInsertedText("「https://example.com/a」")
@@ -62,7 +62,7 @@ struct ExtendedURLTests {
         #expect(found.map(\.continuation) == ["これ"])
     }
 
-    /// 下書きを空に戻す前にペーストを読み始めていたら、読み終えても前の下書きのURLとして覚えない。
+    /// 下書きを空に戻す前にペーストを読み始めていたら、読み終えても前の下書きのURLとして記録しない。
     @Test func staleInsertedTextIsIgnoredAfterReset() {
         let model = makeModel()
         let token = model.insertedTextToken
@@ -73,7 +73,7 @@ struct ExtendedURLTests {
         #expect(model.extendedURLs.isEmpty)
     }
 
-    /// 続いた文字ごとコピーしたURLは、そのまま覚えるので見つけない。
+    /// 続いた文字ごとコピーしたURLは、そのまま記録するので見つけない。
     @Test func ignoresURLCopiedWithContinuation() {
         let model = makeModel()
         model.noteInsertedText("https://ja.wikipedia.org/wiki/日本")

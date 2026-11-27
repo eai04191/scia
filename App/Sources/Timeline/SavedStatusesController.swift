@@ -39,7 +39,7 @@ final class SavedStatusesController {
     }
 
     #if DEBUG
-    /// 始めているタイムラインだけ読み込み直す。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
+    /// 始めているタイムラインだけ再読み込みする。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
     func reloadIfStarted() {
         model.reloadIfStarted()
     }

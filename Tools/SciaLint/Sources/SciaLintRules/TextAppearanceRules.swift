@@ -1,7 +1,7 @@
 import SwiftSyntax
 
 extension Rule {
-    // 文字の大きさを数字で決め打ちすると、端末の文字の大きさに従わない。書式（preferredFont）か、UIFontMetricsで大きさを変える文字で作る。
+    // 文字の大きさを数字で決め打ちすると、Dynamic Typeに従わない。書式（preferredFont）か、UIFontMetricsで大きさを変える文字で作る。
     // preferredFontのpointSizeから作った文字も、作った時点の大きさで止まるため、数字の幅を揃えるときはmonospacedDigitFont(forTextStyle:)で作る。
     // 枠の大きさが決まっていて文字を大きくできない場所（ステータスバーのように）だけ、拡大表示（Large Content Viewer）を付け、理由を書いてこの規則を外す
     static let fixedFontSize = Rule(
@@ -59,7 +59,7 @@ private extension FunctionCallExprSyntax {
         return name == "system" && calledExpression.is(MemberAccessExprSyntax.self) && firstLabel == "size"
     }
 
-    /// `UIFontMetrics(...).scaledFont(for:)`に渡して、端末の文字の大きさに合わせているか
+    /// `UIFontMetrics(...).scaledFont(for:)`に渡して、Dynamic Typeに合わせているか
     var isScaled: Bool {
         ancestorsInStatement.contains { node in
             guard let argument = node.as(LabeledExprSyntax.self), argument.label?.text == "for",

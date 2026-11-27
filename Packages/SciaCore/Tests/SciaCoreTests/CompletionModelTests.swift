@@ -826,7 +826,7 @@ struct CompletionModelTests {
         #expect(accts(completion.content) == ["@bob"])
     }
 
-    /// 補完で選んだアカウントを、新しい順に覚える。
+    /// 補完で選んだアカウントを、新しい順に保存する。
     @Test func recordsSelectedMention() async throws {
         let recent = try makeRecentMentions()
         let completion = makeCompletion(recentMentions: recent)

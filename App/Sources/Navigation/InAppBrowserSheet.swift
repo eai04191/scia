@@ -89,7 +89,7 @@ final class InAppBrowserSheet: UIViewController {
         scrollToTopReceiver.frame = CGRect(x: width.minX, y: 0, width: width.width, height: 1)
     }
 
-    /// 後ろの画面を触れる状態か。全画面に広げているときと、シートの上に画面を重ねているときは触れない。
+    /// 後ろの画面を触れる状態か。全画面に広げているときと、シートの上にモーダルビューを出しているときは触れない。
     var leavesScreenBehindUsable: Bool {
         guard sheetPresentation?.passesTouchesOutsideSheet == true else { return false }
         let front = frontmostPresented

@@ -194,7 +194,7 @@ final class LinkCardView: UIButton {
                 snapshot.frame.origin = label.frame.origin
             }
         }
-        // 不透明度は位置と別に、古い文字を先に薄くし、新しい文字を少し遅れて濃くする。同時に入れ替えると、
+        // 不透明度は位置と別に、古い文字を先に薄くし、新しい文字を少し遅れて不透明度を上げる。同時に入れ替えると、
         // スプリングの出だしで両方が濃いまま重なり、読めない文字が数コマ出るため。
         // 新しい文字は直前に不透明度を0にしたばかりで、画面上はまだ濃いため、今の見た目からは始めない。
         // スナップショットは、薄くし終えてから外す。位置の動きの完了で外すと、サムネイルの枠が変わらないカードでは位置の動きが何も動かさず、
@@ -310,7 +310,7 @@ final class LinkCardView: UIButton {
         }
         for label in [siteLabel, headlineLabel, descriptionLabel] {
             label.layer.removeAllAnimations()
-            // 届いたときの動きで濃くしている途中なら、その動きも止める。止めないと、使い回した行の新しい文字が薄い状態から濃くなる。
+            // 届いたときの動きで不透明度を上げている途中なら、その動きも止める。止めないと、使い回した行の新しい文字が薄い状態から不透明度が上がる。
             label.stopFading(at: 1)
         }
         setText(of: content)
@@ -511,7 +511,7 @@ final class LinkCardView: UIButton {
         super.layoutSubviews()
         let thumbnailOnRight = content?.thumbnailSide == .right
         thumbnailView.frame = CGRect(x: thumbnailOnRight ? bounds.width - thumbnailWidth : 0, y: 0, width: thumbnailWidth, height: bounds.height)
-        // カードの外側の角だけを丸め、文字の側は角を立てる。ビューアは、この丸みに合わせて画像を縮めて戻す。
+        // カードの外側の角だけを丸め、文字の側は角を立てる。ビューアは、この角の丸さに合わせて画像を縮めて戻す。
         thumbnailView.layer.maskedCorners = thumbnailOnRight
             ? [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
             : [.layerMinXMinYCorner, .layerMinXMaxYCorner]
@@ -591,7 +591,7 @@ final class LinkCardView: UIButton {
                   let self, !Task.isCancelled, self.request == request
             else { return }
             if let incoming = self.incomingThumbnail {
-                // 下地を濃くしている途中に届いたら、重ねている方で入れ替え、サムネイルそのものは前の見え方のまま残す。
+                // 下地の不透明度を上げている途中に届いたら、重ねている方で入れ替え、サムネイルそのものは前の見え方のまま残す。
                 let base = self.thumbnailView.image
                 self.thumbnailView.showLoaded(image, from: request.url)
                 self.thumbnailView.image = base
@@ -607,7 +607,7 @@ final class LinkCardView: UIButton {
         }
     }
 
-    /// サムネイルの見え方を入れ替える。`duration`があれば、新しい見え方をサムネイルの中に重ねて濃くし、濃くし終えてから入れ替える。
+    /// サムネイルの見え方を入れ替える。`duration`があれば、新しい見え方をサムネイルの中に重ねて不透明度を上げ、上げ終えてから入れ替える。
     /// 前の見え方を上に重ねて薄くする形にしないのは、灰色の下地が半透明で、下の新しい画像が透けて1コマで替わって見えるため。
     private func crossfadeThumbnail(duration: TimeInterval?, _ change: (LinkCardThumbnailView) -> Void) {
         guard let duration else {
@@ -616,7 +616,7 @@ final class LinkCardView: UIButton {
             return
         }
         // 重ねている途中にまた入れ替えるとき（下地を出した同じ回に、端末に残っていた画像を出すなど）は、重ねていたものを捨て、
-        // 前の見え方から濃くし直す。
+        // 前の見え方から不透明度を上げ直す。
         let base = incomingThumbnail != nil ? incomingThumbnailBase : thumbnailView.image
         incomingThumbnail?.removeFromSuperview()
         incomingThumbnail = nil
@@ -643,7 +643,7 @@ final class LinkCardView: UIButton {
         }
     }
 
-    /// 入れ替えの途中で、サムネイルの中に重ねて濃くしている新しい見え方。サムネイルそのものは、その間は前の見え方を描く。
+    /// 入れ替えの途中で、サムネイルの中に重ねて不透明度を上げている新しい見え方。サムネイルそのものは、その間は前の見え方を描く。
     private var incomingThumbnail: UIImageView?
     private var incomingThumbnailBase: UIImage?
 

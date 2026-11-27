@@ -164,7 +164,7 @@ struct AnimatedEmojiTests {
         #expect(renderer.render(split).string == "前  本文")
     }
 
-    /// セルを描き直して同じ文字列を渡し直しても、層を作り直さない。作り直すと、描き直すたびに層とアニメーションを作る手間がかかるため。
+    /// セルを再描画して同じ文字列を渡し直しても、層を作り直さない。作り直すと、再描画するたびに層とアニメーションを作る手間がかかるため。
     @Test func sameTextKeepsLayers() async throws {
         let crab = try emoji("crab")
         let store = try store()

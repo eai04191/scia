@@ -74,7 +74,7 @@ XとYは、起動のたびに新しく作る。前の回のsessionに頼まな�
 1. Xのsessionが動いていないことを`mcp__ccd_session_mgmt__get_session`で確かめる。動いていれば、止まるまで取り込まない
 2. Xのworktreeに未commitの変更がないことを`git -C <Xのworktree> status --short`で確かめる。あれば取り込まずにユーザーに報告する
 3. `git -C <Xのworktree> merge --no-edit refs/heads/main`、続けて`git -C <Xのworktree> merge --no-edit refs/heads/<Yのbranch>`で取り込む。mainを先に取り込むのは、前の回のYがmainへrebaseされて入ったとき、Xに残る前のYのcommitとmainのYのcommitの中身をそろえ、今の回のYのmergeの基点をmainにするため。どちらかでconflictしたら`git -C <Xのworktree> merge --abort`で戻し、どのファイルかをユーザーに報告する。親はconflictを解決しない
-4. Xのsessionに`SendMessage`で、下の「Xへの確認の依頼」を送る。送る前に、決まりの「伝えること」で読み直す
+4. Xのsessionに`SendMessage`で、下の「Xへの確認の依頼」を送る。送る前に、決まりの「伝えること」で読み直す <!-- coined-words: allow -->
 
 ### 6. Xの報告を受けて、ユーザーに伝える
 

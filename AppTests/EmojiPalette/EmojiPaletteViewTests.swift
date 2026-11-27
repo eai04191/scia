@@ -8,7 +8,7 @@ import UIKit
 @MainActor
 @Suite(.failureState, .scratch)
 struct EmojiPaletteViewTests {
-    /// 個人セットは、絵文字ピッカーを出している間に読み直したものが届いたら、その場で並べ直す。
+    /// 個人セットは、絵文字ピッカーを出している間に再読み込みしたものが届いたら、その場で並べ直す。
     @Test func personalSetArrivingWhileShownReplacesTheSections() async throws {
         let sets = PersonalSets(["前のカテゴリー", "後のカテゴリー"])
         var sources = CompletionModel.Sources.unavailable
@@ -31,7 +31,7 @@ struct EmojiPaletteViewTests {
         #expect(titles.contains("後のカテゴリー") && !titles.contains("前のカテゴリー"), "まとまりのボタン: \(titles)")
     }
 
-    /// 出している間に、個人セットの同じ絵文字の画像だけが変わったら、そのセルを新しい画像で描き直す。
+    /// 出している間に、個人セットの同じ絵文字の画像だけが変わったら、そのセルを新しい画像で再描画する。
     @Test func personalEmojiWithChangedImageIsRedrawn() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -153,8 +153,8 @@ struct EmojiPaletteViewTests {
         return descendants(of: palette).compactMap { ($0 as? UIButton)?.accessibilityLabel }
     }
 
-    /// 画面に入る前に組み立てたセルも、画像が届いたら描き直し、画面に入ったときに画像で描く。
-    /// 画面に見えているセルだけを描き直していたため、スクロールで先に組み立てたセルは、画像が届いても空のまま画面に出ていた。
+    /// 画面に入る前に組み立てたセルも、画像が届いたら再描画し、画面に入ったときに画像で描く。
+    /// 画面に見えているセルだけを再描画していたため、スクロールで先に組み立てたセルは、画像が届いても空のまま画面に出ていた。
     @Test func cellPreparedBeforeImageArrivesShowsTheImage() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -192,7 +192,7 @@ struct EmojiPaletteViewTests {
             // パレットは絵文字を動かすので、元の画像を読む。
             return custom.url
         }
-        // パレットより後に登録したので、ここに知らせが届いたときには、パレットも描き直し終えている。
+        // パレットより後に登録したので、ここのリスナーが呼ばれたときには、パレットも再描画し終えている。
         var notified: Set<URL> = []
         store.addListener(owner: palette) { notified.formUnion($0) }
         // 毎回すべてを求める。`allSatisfy`で求めると最初の読めていないもので止まり、残りを待つたびに1つずつしか読みに行かない。
@@ -204,7 +204,7 @@ struct EmojiPaletteViewTests {
         #expect(blank.isEmpty, "画像が届いたのに空のまま画面に出たセル: \(blank.compactMap(\.accessibilityLabel))")
     }
 
-    /// 静止画がまだ届いていない絵文字は、小さい静止画で描き、静止画が届いたら差し替える。
+    /// 静止画がまだ届いていない絵文字は、サムネイルで描き、静止画が届いたら差し替える。
     /// 速く流したときに、ファイルの読み出しや展開を待って枠が空いたまま見えないようにするため。
     @Test(.scratch) func drawsThumbnailUntilStillArrives() async throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -242,7 +242,7 @@ struct EmojiPaletteViewTests {
     }
 
     /// 描く画像がそろって組み立てたセルだけを、組み立て済みとみなす。パレットは、組み立て済みのセルを画面に入る直前に組み立て直さない。
-    /// 小さい静止画で描いたセルや、枠の大きさが変わったセルは、組み立て直して届いた画像で描く。
+    /// サムネイルで描いたセルや、枠の大きさが変わったセルは、組み立て直して届いた画像で描く。
     @Test func cellIsFinalOnlyWithItsImage() async throws {
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 96, height: 96)).image { _ in }.pngData())
         let store = EmojiImageStore { _ in png }

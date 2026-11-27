@@ -105,7 +105,7 @@ const DRAG=420,DT=0.15;const drag=(t,t1)=>{const k=clamp((t-(t1-DT))/DT);return 
 const S1off=t=>t<4.3?140*spring(t-2.7,4)+drag(t,4.3):140+DRAG+flick(t-4.3);
 const ZS=14.6,ZD=3.4,ZDIST=1.5*SZ;
 const OFF0=DRAG+flick(ZS-9.9);
-// 印の枠は、3つ目の見出し（サムネイルを表示して）が始まる16.0に入ってくる行の、4列目
+// ハイライトの枠は、3つ目の見出し（サムネイルを表示して）が始まる16.0に入ってくる行の、4列目
 let FOCUS=0;function pickFocus(){const y=S3off(15.8)+H-PAD-SZ;for(let i=0;i<NC;i++)if(PX[i]===3*SZ&&PY[i]>=y){FOCUS=i;return}}
 const FP=18.7,FL=1.2,QP=19.1,QL=2.5;
 const S3base=t=>t<9.9?drag(t,9.9):t<ZS?DRAG+flick(t-9.9):OFF0+ZDIST*ease((t-ZS)/ZD);
@@ -146,7 +146,7 @@ function palette(t){
  const fp=zoomP();
  for(let i=0;i<cells.length;i++){const el=cells[i];if(!el._v)continue;const f=i===FOCUS;el.style.opacity=f?1:1-0.88*fp;el.style.boxShadow=f&&t>=ZS?`inset 0 0 0 ${3*fp}px var(--accent)`:'none';el.style.borderRadius='22px'}
  // 近づく: v4と同じく1枠に3.4倍で寄る。枠が入るまではパレットの下の端で待ち、入ったら枠を追う
- // 注目点（印の枠の列で、パレットの下の端から半行上の点。印の枠が入ってくる所）は動かさず、画面の上の位置が元の場所から中心へまっすぐ移るようにする
+ // 注目点（ハイライトの枠の列で、パレットの下の端から半行上の点。ハイライトの枠が入ってくる所）は動かさず、画面の上の位置が元の場所から中心へまっすぐ移るようにする
  const p=zoomP(),s=lerp(1,3.4,p);
  const fx=96+60+PX[FOCUS]+SZ/2,fy=404+H-PAD-0.5*SZ,vt=$('view').offsetTop;
  const sx=lerp(fx,540,p),sy=lerp(fy,740-vt,p);
@@ -160,7 +160,7 @@ let SRV=[340,455],APP=[580+30+28+40,300+80+70];
 const COLX={s:580+30+14+78,o:580+30+182+78},ROWY0=300+240+62+44,ROW=56,VIS=6;
 let SRVR=340,MOFF=0;
 function clipEl(el,x,y,sz,bottom){const h=sz*MS/2,l=Math.max(0,(SRVR-(x-h))/MS),b=bottom==null?0:Math.max(0,((y+h)-bottom)/MS);el.style.clipPath=`inset(0px 0px ${b}px ${l}px)`;if(l>=sz||b>=sz)el.style.opacity=0}
-// 列の枠と同じ角丸の形で切り取る。上は、Sciaの囲みから降りてくるので切らない
+// 列の枠と同じ角丸の形で切り取る。上は、Sciaのボックスから降りてくるので切らない
 function clipCol(el,x,y,sz,col,ready){if(!ready){el.style.clipPath='none';return}const h=sz*MS/2,L=x-h,T=y-h,Rr=x+h,B=y+h;el.style.clipPath=`inset(-2000px ${(Rr-col.right)/MS}px ${(B-col.bottom)/MS}px ${(col.left-L)/MS}px round 8px)`;if(T>=col.bottom)el.style.opacity=0}
 function colOff(t,k){let f=0;for(const it of items)if(it.k===k)f+=spring(t-it.st-ARR+0.22,24);return Math.max(0,f-VIS)*ROW}
 function mech(t){
@@ -188,12 +188,12 @@ function mech(t){
   if(t<it.st||ty-ROW/2>sr.bottom+20){big.style.opacity=0;sm.style.opacity=0;return}
   big.src=sharp(ei);sm.src=small(ei);
   const a=clamp((t-it.st)/DS),b=t<it.st+DS?0:spring(t-it.st-DS,DW);
-  // サーバーから線に沿って、囲みの左の端から中へ入る。アイコンは囲みの上の線に乗っているので通らない
+  // サーバーから線に沿って、ボックスの左の端から中へ入る。アイコンはボックスの上の線に乗っているので通らない
   const bx=$('d'+it.k).querySelector('.app').getBoundingClientRect(),cx=bx.left+bx.width/2,cy=bx.top+bx.height/2+10;
   const put=(el,x,y,sz,op)=>{el.style.left=((x-ML)/MS-sz/2)+'px';el.style.top=((y-MT)/MS-sz/2)+'px';el.style.width=sz+'px';el.style.height=sz+'px';el.style.opacity=op};
   const ex=lerp(SRV[0]-30,cx,a),ey=lerp(SRV[1],cy,a);
   if(b<=0){put(big,ex,ey,48,1);clipEl(big,ex,ey,48);sm.style.opacity=0;return}
-  // 囲みの中で2つに分かれ、真下の列のいちばん上へ入る
+  // ボックスの中で2つに分かれ、真下の列のいちばん上へ入る
   const bb=b,sb=ease(clamp(b*1.6));
   const sx=lerp(cx,sr.left+sr.width/2,sb),ssz=lerp(48,26,sb);put(sm,sx,ty,ssz,vis);clipCol(sm,sx,ty,ssz,$('d'+it.k).querySelector('.cs').getBoundingClientRect(),sb>=1);
   if(it.k===1){const ox=lerp(cx,orr.left+orr.width/2,sb),osz=lerp(48,46,sb);put(big,ox,ty,osz,vis);clipCol(big,ox,ty,osz,$('d1').querySelector('.co').getBoundingClientRect(),sb>=1)}

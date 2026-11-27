@@ -318,7 +318,7 @@ struct FilteredTimelineTests {
         #expect(filtering.verdict(for: boost, now: now).warningTitles == ["x"])
     }
 
-    /// 1ページ目が全部隠れて、続きの読み込みに失敗したら、空に戻して失敗を返す。読み込み直すときに、最初の読み込みからやり直せるようにする。
+    /// 1ページ目が全部隠れて、続きの読み込みに失敗したら、空に戻して失敗を返す。再読み込みするときに、最初の読み込みからやり直せるようにする。
     @Test func failedReadPastHiddenInitialPageLeavesStoreEmpty() async throws {
         let hide = [filter("x", .hide)]
         let recorder = QueryRecorder(results: [

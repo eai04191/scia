@@ -341,7 +341,7 @@ struct TimelineMediaTests {
         #expect(MediaBarLayering.visibleRect(around: tile, in: window) == expected)
     }
 
-    /// 行を押している間は、行の中身の手前に押下の色を重ね、背景の色と合わせてUIKitの色の半分の強さにする。離したら外す。
+    /// 行が押されている状態では、行の中身の手前に押されている状態の色を重ね、背景の色と合わせてUIKitの色の半分の強さにする。離したら外す。
     @Test func highlightOverlayShowsWhileRowIsHighlighted() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -360,7 +360,7 @@ struct TimelineMediaTests {
         #expect(!cell.isShowingHighlightOverlay)
     }
 
-    /// アクションバーを閉じる途中は、複製がセルの下端より下にも出るので、押している間のオーバーレイを出さない。縮み終えて押したままなら出す。
+    /// アクションバーを閉じる途中は、複製がセルの下端より下にも出るので、押されている状態のオーバーレイを出さない。縮み終えて押されている状態のままなら出す。
     @Test(arguments: [false, true])
     func highlightOverlayHidesWhileShrinking(snapshotFirst: Bool) throws {
         let harness = try TimelineHarness()

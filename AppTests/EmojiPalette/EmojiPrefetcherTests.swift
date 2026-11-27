@@ -4,11 +4,11 @@ import Synchronization
 import Testing
 @testable import Scia
 
-/// 端末に残した`api/v1/custom_emojis`の応答が変わったら、端末に置く絵文字の画像を分け直し、先読みする仕組み。
+/// 端末に残した`api/v1/custom_emojis`の応答が変わったら、端末に置く絵文字の画像を分け直し、プリフェッチする仕組み。
 @MainActor
 @Suite(.failureState)
 struct EmojiPrefetcherTests {
-    /// 分け直しと先読みの代わり。始めた回ごとに、先読みしたかと門を残し、門を開けるまで終わらない。
+    /// 分け直しとプリフェッチの代わり。始めた回ごとに、プリフェッチしたかと門を残し、門を開けるまで終わらない。
     private final class Runs: Sendable {
         let gates = Mutex<[Gate]>([])
         let prefetches = Mutex<[Bool]>([])
@@ -24,7 +24,7 @@ struct EmojiPrefetcherTests {
         func open(_ index: Int) { gates.withLock { $0[index] }.open() }
     }
 
-    /// 起動したときは分け直すだけで取得しない。応答を読んだときに先読みし、終えたら小さい静止画をまとめて作る処理を始める。
+    /// 起動したときは分け直すだけで取得しない。応答を読んだときにプリフェッチし、終えたらサムネイルをまとめて作る処理を始める。
     @Test func prefetchesOnlyWhenListsChange() async throws {
         let runs = Runs()
         let finished = Mutex(0)
@@ -45,7 +45,7 @@ struct EmojiPrefetcherTests {
         #expect(finished.withLock { $0 } == 1)
     }
 
-    /// 先読みの途中で応答がまた変わったら、途中の作業を止めて初めからやり直す。止めた作業が終わっても、やり直した作業の控えは消さない。
+    /// プリフェッチの途中で応答がまた変わったら、途中の作業を止めて初めからやり直す。止めた作業が終わっても、やり直した作業の控えは消さない。
     @Test func restartsWhenListsChangeDuringPrefetch() async throws {
         let runs = Runs()
         let finished = Mutex(0)

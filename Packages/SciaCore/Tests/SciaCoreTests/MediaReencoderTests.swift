@@ -102,7 +102,7 @@ struct MediaReencoderTests {
         #expect(prepared.size == PixelSize(width: 400, height: 300))
     }
 
-    /// 処理できない形式を、大きさを変えずにJPEGへ作り直しただけなら、縮めたとは知らせない。
+    /// 処理できない形式を、大きさを変えずにJPEGへ作り直しただけなら、縮めたとは伝えない。
     @Test func formatOnlyConversionIsNotAReduction() async throws {
         let directory = try makeDirectory()
         let source = directory.appending(path: "photo.heic")

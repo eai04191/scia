@@ -106,7 +106,7 @@ struct PostingLanguageView: View {
 
 /// 投稿欄が言語を選ぶシートに渡すもの。
 struct PostingLanguageSource {
-    /// 選んだ言語を覚える先。覚えないならnil。
+    /// 選んだ言語を保存する先。保存しないならnil。
     var recent: RecentPostingLanguages?
     /// サーバーが受け付ける言語を読む。
     var load: @Sendable () async throws -> [PostingLanguage]

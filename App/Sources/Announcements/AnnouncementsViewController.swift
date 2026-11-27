@@ -3,7 +3,7 @@ import UIKit
 
 /// サーバーのお知らせのリスト。アカウントの画面の中の1画面として開くか、アカウントのメニューとURLから単独のシートで開く。決まりはdocs/announcements.mdにある。
 ///
-/// お知らせは多くても数件なので、編集履歴と同じく、スクロールビューに行を縦に積む。
+/// お知らせは多くても数件なので、編集履歴と同じく、スクロールビューに行を縦に並べる。
 final class AnnouncementsViewController: UIViewController {
     /// 本文のリンクがタップされたときに、その行き先と、リンクのあったお知らせを渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination, Announcement) -> Void)?
@@ -426,7 +426,7 @@ extension AnnouncementsViewController: UIScrollViewDelegate {
     }
 }
 
-/// お知らせを並べるスクロールビュー。リンクやリアクションのボタンを押下して少し止めてから引いても、スクロールできるようにする。
+/// お知らせを並べるスクロールビュー。リンクやリアクションのボタンに触れて少し止めてから引いても、スクロールできるようにする。
 private final class AnnouncementsScrollView: UIScrollView {
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is UIControl || super.touchesShouldCancel(in: view)

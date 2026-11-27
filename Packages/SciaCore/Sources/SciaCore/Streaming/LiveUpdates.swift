@@ -15,7 +15,7 @@ public struct LiveUpdates: Sendable {
 
     public struct Policy: Sendable {
         public var pollingInterval: Duration
-        /// 短い切断のたびに知らせないよう、これだけ続いてから知らせる。
+        /// 短い切断のたびに出さないよう、切断の表示はこれだけ続いてから出す。
         public var outageNoticeDelay: Duration
 
         public init(pollingInterval: Duration, outageNoticeDelay: Duration) {

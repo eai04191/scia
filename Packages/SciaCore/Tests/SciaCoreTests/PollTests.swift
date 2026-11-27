@@ -202,7 +202,7 @@ struct PollChoicesTests {
         #expect(choices.selection(of: multiple) == [2])
     }
 
-    /// 選んだあとに編集で選択肢が変わったら、同じIDでも選んだものを忘れる。位置で覚えているため、別の選択肢を選んだことになるため。
+    /// 選んだあとに編集で選択肢が変わったら、同じIDでも選んだものを忘れる。位置で保持しているため、別の選択肢を選んだことになるため。
     @Test func forgetsSelectionWhenOptionsAreEdited() {
         var choices = PollChoices()
         choices.toggle(0, in: poll())

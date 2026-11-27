@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 見えていないタイムラインと、設定の画面が手前にある間のタイムラインは、設定が変わっても描き直さずに溜め、見えたときに1回だけ描き直す。
+/// 見えていないタイムラインと、設定の画面が手前にある間のタイムラインは、設定が変わっても再描画せずに溜め、見えたときに1回だけ再描画する。
 @MainActor
 @Suite(.scratch, .serialized, .failureState)
 struct HeldSettingsChangeTests {

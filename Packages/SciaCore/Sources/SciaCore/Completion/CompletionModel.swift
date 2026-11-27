@@ -341,7 +341,7 @@ public final class CompletionModel {
         }
     }
 
-    /// - Parameter recentMentions: 補完で選んだアカウントを覚える場所。なければ覚えず、出さない。
+    /// - Parameter recentMentions: 補完で選んだアカウントを保存する場所。なければ保存せず、出さない。
     /// カスタム絵文字のリストは、`sources`が残しているリスト（`Sources.cachedCustomEmojis`）があれば、それを持って始める。
     /// 絵文字のパレットを開いたときに読み込み中の段を挟まずに並べるため。
     public init(sources: Sources, settings: Settings, recentMentions: RecentMentions? = nil, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await SystemTime.clock.sleep(for: $0) }) {
@@ -353,7 +353,7 @@ public final class CompletionModel {
     }
 
     /// 本文が変わったら、カーソルの位置の語を渡す。語が変われば、閉じていても出し直す。
-    /// 変換中の文字があるときは語がnilになり、閉じる。確定したら語を読み直して出す。
+    /// 変換中の文字があるときは語がnilになり、閉じる。確定したら改めて語を取り出して出す。
     public func textDidChange(_ new: CompletionToken?) {
         guard let new else {
             clear()
@@ -393,7 +393,7 @@ public final class CompletionModel {
         isDismissed = true
     }
 
-    /// 候補を選んで本文に入れたら呼ぶ。入れた後のカーソルは語の外なので閉じる。アカウントなら覚え、次から手元の候補に出す。
+    /// 候補を選んで本文に入れたら呼ぶ。入れた後のカーソルは語の外なので閉じる。アカウントなら保存し、次から手元の候補に出す。
     public func didComplete(_ candidate: CompletionCandidate? = nil) {
         switch candidate {
         case .account(let account): recentMentions?.record(LocalMention(account: account))
@@ -445,7 +445,7 @@ public final class CompletionModel {
 
     /// 投稿欄で投稿するアカウントを替えたときに、替えた先のサーバーで探すようにする。決まりはdocs/compose.mdの「ほかのアカウントで書く」にある。
     /// 前のサーバーで読んだ絵文字、自分のタグ、返信先の人、検索の結果は、そのサーバーのものなので捨て、読んでいる途中の応答も使わない。
-    /// - Parameter recentMentions: そのアカウントで補完で選んだアカウントを覚える場所。
+    /// - Parameter recentMentions: そのアカウントで補完で選んだアカウントを保存する場所。
     public func switchSources(_ sources: Sources, recentMentions: RecentMentions?) {
         self.sources = sources
         self.recentMentions = recentMentions
@@ -568,7 +568,7 @@ public final class CompletionModel {
     }
 
     /// 返信先の人を先に、補完で選んだことのある人を新しい順に後に並べる。同じ人は先に出る方だけを残す。
-    /// 返信先でメンションされた人は表示名とアイコンを持たないので、覚えている同じ人がいればその情報で出し、表示名でも探せるようにする。
+    /// 返信先でメンションされた人は表示名とアイコンを持たないので、保存している同じ人がいればその情報で出し、表示名でも探せるようにする。
     private func localMentionCandidates() -> [CompletionCandidate] {
         guard let token else { return [] }
         let recent = recentMentions?.mentions ?? []

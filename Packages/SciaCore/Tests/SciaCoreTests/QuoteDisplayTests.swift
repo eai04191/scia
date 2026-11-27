@@ -76,7 +76,7 @@ struct QuoteDisplayTests {
         #expect(text(referenceIDs: ["11"], quote: nil).hasSuffix("[参照]"))
     }
 
-    /// 参照のIDは、投稿をencodeして読み直しても残る。落ちると、消したリンクが読み直したあとに出る。
+    /// 参照のIDは、投稿をencodeしてdecodeしても残る。落ちると、消したリンクがdecodeしたあとに出る。
     @Test func referenceIDsSurviveReencoding() throws {
         let status = try MastodonDecoder.make().decode(Status.self, from: try fixture("fedibird_status_with_quote"))
         let encoder = JSONEncoder()
@@ -193,7 +193,7 @@ struct QuoteDisplayTests {
         #expect(NestedQuote(nil) == nil)
     }
 
-    /// 開いたかは引用した投稿で覚え、ブーストの行もそろえる。
+    /// 開いたかは引用した投稿で保持し、ブーストの行もそろえる。
     @Test func revealsApplyToBoostsOfSameStatus() {
         let original = status("1")
         var reveals = QuoteReveals()

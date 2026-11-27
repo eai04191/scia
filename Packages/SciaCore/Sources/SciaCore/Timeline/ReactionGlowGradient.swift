@@ -105,8 +105,8 @@ public struct ExposedColor: Equatable, Sendable {
 }
 
 extension SRGBColor {
-    /// `base`の面を`light`の光で照らした色。光は面の明るさに足されるので、白い面でも白より明るくなる。
-    /// - Parameter intensity: 光の強さ。1なら、白い光で白い面を2倍の明るさにする。
+    /// `base`の色を`light`の光で照らした色。光は`base`の明るさに足されるので、白でも白より明るくなる。
+    /// - Parameter intensity: 光の強さ。1なら、白い光で白を2倍の明るさにする。
     public func lightAdded(_ light: SRGBColor, intensity: Double) -> ExposedColor {
         let lit = linear + light.linear * max(intensity, 0)
         let exposure = max(lit.max(), 1)

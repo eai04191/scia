@@ -144,7 +144,7 @@ public final class FeedTimelineModel {
     }
 
     #if DEBUG
-    /// 始めているタイムラインだけ読み込み直す。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
+    /// 始めているタイムラインだけ再読み込みする。障害を起こすデバッグURLで、開いたことのないタイムラインまで読み始めないようにする。
     public func reloadIfStarted() {
         guard hasStarted else { return }
         start(purpose: .action)
@@ -752,7 +752,7 @@ public final class FeedTimelineModel {
 
     /// 削除した投稿と、それをブーストした投稿を除く。ストリーミングの削除のイベントを待たずに消す。
     /// 消える行は閉じる動きで消す。ストリーミングの削除のイベントがRESTの応答より先に届くと、そちらで動かさずに消え、ここでは何もしない。
-    /// Mastodonは削除のイベントを応答の後に別のジョブで配るので、まれな競合として、削除中の投稿を覚えてイベントを見分ける仕組みは足さない。
+    /// Mastodonは削除のイベントを応答の後に別のジョブで配るので、まれな競合として、削除中の投稿を記録してイベントを見分ける仕組みは足さない。
     public func removeStatus(_ id: Status.ID) {
         guard !isStopped, store.removeStatus(id) else { return }
         showEntries(animatesRemoval: true)
@@ -770,7 +770,7 @@ public final class FeedTimelineModel {
     }
 
     /// ミュートかブロックした相手の投稿とブーストを除き、あとから届いても足さない。使う人の操作の結果なので、閉じる動きで消す。
-    /// 解除したら、また足すようにする。除いた投稿は、読み込み直すまで戻さない。
+    /// 解除したら、また足すようにする。除いた投稿は、再読み込みするまで戻さない。
     public func setAccount(_ id: String, excluded: Bool) {
         guard !isStopped else { return }
         guard excluded else {

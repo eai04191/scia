@@ -38,7 +38,7 @@ public final class PostingDefaultsModel {
     }
     /// 最初の読み込みに失敗した理由。読めたらnil。
     public private(set) var loadFailure: ErrorPresentation?
-    /// 保存できなかったときに呼ぶ。知らせ方は作る側が決める。
+    /// 保存できなかったときに呼ぶ。どう表示するかは作る側が決める。
     @ObservationIgnored public var onFailure: (ErrorPresentation) -> Void = { _ in }
 
     /// サーバーが返した最後の既定。保存できなかった項目は、この値に戻る。

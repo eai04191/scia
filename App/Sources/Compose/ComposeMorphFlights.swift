@@ -44,7 +44,7 @@ final class ComposeMorphFlights {
         let cornerRadius: CGFloat
         /// 白いフチの幅。カプセルの写真だけに付く。
         let border: CGFloat
-        /// 送信の状態の表示。両端の表示のスナップショットを複製に載せ、起点のものを薄くしながら行き先のものを濃くする。出していなければnil。
+        /// 送信の状態の表示。両端の表示のスナップショットを複製に載せ、起点のものを薄くしながら行き先のものの不透明度を上げる。出していなければnil。
         let status: StatusOverlay?
         /// 上に重ねた写真が落としている影のスナップショット。起点にあれば複製に載せ、動き始めに薄くする。
         let betweenShadow: UIView?
@@ -355,7 +355,7 @@ private final class FlightCopy: UIView {
     /// 行き先へ向かい始める前の、重ねた表示の部品の`transform`と不透明度。まだ一度も描いていない複製を止めるとき、見えている形として使う。
     private var tileDecorationBeforeMove: [(view: UIView, transform: CGAffineTransform, alpha: CGFloat)] = []
 
-    /// `view`の上の表示を載せる。`shown`がfalseなら、どの部品も見せずに載せ、`showTileDecoration`で濃くする。
+    /// `view`の上の表示を載せる。`shown`がfalseなら、どの部品も見せずに載せ、`showTileDecoration`で不透明度を上げる。
     /// 再生アイコンの丸と三角より手前に、送信中の暗い下地などの重ねた表示（`attachDecoration`）を置く。列のサムネイルと同じ重なり順にするため。
     /// 同じ本物の表示を載せていても、表示が変わっていれば（動画を読み込み終えて再生アイコンが付いたなど）作り直し、部品の今の不透明度を引き継ぐ。
     func attachTileDecoration(_ layout: MediaTileDecorationLayout, of view: UIView, shown: Bool) {
@@ -433,7 +433,7 @@ private final class FlightCopy: UIView {
                         decoration.view(for: .play).alpha = 0
                     }
                 case .symbol, .more, .badge:
-                    // 起点のものを薄くし、行き先のものを濃くする。
+                    // 起点のものを薄くし、行き先のものの不透明度を上げる。
                     decoration.view(for: part).alpha = decoration === target ? 1 : 0
                 }
             }
@@ -473,7 +473,7 @@ private final class FlightCopy: UIView {
         owner.playGlyph.transform = CGAffineTransform(scaleX: glyphScale, y: glyphScale)
     }
 
-    /// `view`（両端の本物）に重ねた送信の状態の表示のスナップショットを載せる。`shown`がfalseなら見せずに載せ、`showStatus`で濃くする。
+    /// `view`（両端の本物）に重ねた送信の状態の表示のスナップショットを載せる。`shown`がfalseなら見せずに載せ、`showStatus`で不透明度を上げる。
     /// 同じ本物のスナップショットを載せていれば、今の表示で撮り直して今の不透明度を引き継ぐ。撮れなければ前のスナップショットを残す。表示を出していなければ、載せていたスナップショットを外す。
     func attachStatus(_ status: ComposeMorphFlights.StatusOverlay?, of view: UIView, shown: Bool) {
         let id = ObjectIdentifier(view)
@@ -526,7 +526,7 @@ private final class FlightCopy: UIView {
         return overhang
     }
 
-    /// アニメーションの中で呼ぶ。`view`の送信の状態の表示を濃くし、ほかの本物の表示を薄くする。
+    /// アニメーションの中で呼ぶ。`view`の送信の状態の表示の不透明度を上げ、ほかの本物の表示を薄くする。
     func showStatus(of view: UIView) {
         for (id, status) in statuses {
             status.alpha = id == ObjectIdentifier(view) ? 1 : 0

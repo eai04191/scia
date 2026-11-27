@@ -2,7 +2,7 @@ import Observation
 import SciaCore
 import UIKit
 
-/// ホーム画面に出すアプリのアイコン。選んだものはシステムが覚えるため、AppSettingsには持たない。
+/// ホーム画面に出すアプリのアイコン。選んだものはシステムが保存するため、AppSettingsには持たない。
 enum AppIconChoice: CaseIterable {
     /// 青地に白（App/Resources/AppIcon.icon）。
     case standard

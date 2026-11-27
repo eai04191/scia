@@ -71,7 +71,7 @@ final class ReactionChipsView: UIView {
     private var revivingButtons: Set<ObjectIdentifier> = []
     /// 次に並べるときに、フェードインするボタンを、ほかのボタンが場所を空けてからフェードインさせるか。すでにボタンのある列に付いたときに立てる。
     private var delaysEntering = false
-    /// 消えている途中のボタンを、絵文字の名前ごとに覚える。消え終える前に同じ絵文字がまた付いたら、新しいボタンを作らずに、このボタンを今の状態から戻す。
+    /// 消えている途中のボタンを、絵文字の名前ごとに保持する。消え終える前に同じ絵文字がまた付いたら、新しいボタンを作らずに、このボタンを今の状態から戻す。
     /// 別のボタンを作ると、同じリアクションが消えかけの位置と新しい位置に同時に見えるため。
     private var leavingByName: [String: ReactionChipButton] = [:]
 

@@ -4,11 +4,11 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 並びの画面で、「その他」の境目の前と後ろを2つの節に分けて出す。
+/// 並びの画面で、「その他」の境目の前と後ろを2つのセクションに分けて出す。
 @MainActor
 @Suite(.failureState)
 struct MenuLayoutSectionTests {
-    /// 境目は行として出さず、境目の前と後ろの項目を、見出しを付けた2つの節に並べる。
+    /// 境目は行として出さず、境目の前と後ろの項目を、見出しを付けた2つのセクションに並べる。
     @Test func splitsRowsAtMoreBoundaryIntoTitledSections() throws {
         let screen = try Screen(layout: ComposeToolItem.defaultLayout)
         defer { screen.close() }
@@ -20,7 +20,7 @@ struct MenuLayoutSectionTests {
         #expect(screen.rowTitles(inSection: 1) == ComposeToolItem.defaultLayout.elements[(more + 1)...].map(Self.title(of:)))
     }
 
-    /// 節をまたいで動かした項目は、保存する並びで境目の反対側に入る。
+    /// セクションをまたいで動かした項目は、保存する並びで境目の反対側に入る。
     @Test func movingRowAcrossSectionsMovesItAcrossMoreBoundary() throws {
         var saved: MenuLayout<ComposeToolItem>?
         let screen = try Screen(layout: MenuLayout(elements: [.item(.spoiler, isVisible: true), .more, .item(.media, isVisible: true)])) { saved = $0 }
@@ -41,7 +41,7 @@ struct MenuLayoutSectionTests {
         #expect(elements[more...].firstIndex(of: .item(.media, isVisible: true)).map { $0 < moved } == true)
     }
 
-    /// 項目のない節には「なし」の行を置き、そこへ動かした項目は、その節に入る。空の節には指を離せる場所がないため。
+    /// 項目のないセクションには「なし」の行を置き、そこへ動かした項目は、そのセクションに入る。空のセクションには指を離せる場所がないため。
     @Test func emptySectionAcceptsMovedRow() async throws {
         var saved: MenuLayout<ComposeToolItem>?
         let screen = try Screen(layout: MenuLayout(elements: ComposeToolItem.allCases.map { .item($0, isVisible: true) } + [.more])) { saved = $0 }
@@ -62,7 +62,7 @@ struct MenuLayoutSectionTests {
         if case .item(let item, _) = element { item.title } else { nil }
     }
 
-    /// 並びの画面を、すべての行が見える高さの窓に出す。
+    /// 並びの画面を、すべての行が見える高さのウィンドウに出す。
     @MainActor
     private struct Screen {
         let window: UIWindow

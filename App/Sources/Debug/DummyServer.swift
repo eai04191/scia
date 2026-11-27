@@ -104,7 +104,7 @@ enum DummyServer {
         return #"{"id":"\#(id)","created_at":"\#(date)","updated_at":"\#(date)","notifications_count":"\#(count)","account":\#(String(decoding: encode(account), as: UTF8.self))}"#
     }
 
-    /// 通知のフィルタリングの設定。変えた値は、ダミーのセッションの間だけ覚える。
+    /// 通知のフィルタリングの設定。変えた値は、ダミーのセッションの間だけ保持する。
     @MainActor private static var policyValues: [String: String] = [
         "for_not_following": "accept",
         "for_not_followers": "accept",

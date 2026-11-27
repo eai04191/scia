@@ -11,8 +11,8 @@ import UIKit
 struct ThreadControllerTests {
     private static let focus = StatusFactory.make(count: 1, startingAt: 100)[0]
 
-    /// 引っぱって読み直すと、読んでいた途中の会話の読み込みを止めて読み直す。止めた読み込みが終わっても、読み直しの途中のままにし、
-    /// つながったときに読み込みを重ねない。重ねると、引っぱった読み直しが止められ、読み終える前に更新コントロールが閉じる。
+    /// pull to refreshすると、読んでいた途中の会話の読み込みを止めて再読み込みする。止めた読み込みが終わっても、再読み込みの途中のままにし、
+    /// つながったときに読み込みを重ねない。重ねると、pull to refreshの再読み込みが止められ、読み終える前に更新コントロールが閉じる。
     @Test func pullToRefreshStaysLoadingAfterCancellingEarlierLoad() async throws {
         let transport = ThreadTransport()
         let credential = Credential(
@@ -47,7 +47,7 @@ struct ThreadControllerTests {
         try await waitUntil { transport.contextRequests == 2 }
         await earlierLoad.value
 
-        // 止めた読み込みが終わってから、つながった知らせを届ける。知らせは申し込んだ順に届くため、後から申し込んだ相手に届いたら、スレッドも受け取っている。
+        // 止めた読み込みが終わってから、つながったイベントを届ける。イベントは申し込んだ順に届くため、後から申し込んだ相手に届いたら、スレッドも受け取っている。
         let connected = Mutex(false)
         let subscription = streamingHub.subscribe(.user) { activity in
             if activity == .connected { connected.withLock { $0 = true } }
@@ -64,7 +64,7 @@ struct ThreadControllerTests {
         #expect(transport.contextRequests == 2)
     }
 
-    /// ログアウトなどでセッションを閉じたら、開いているスレッドも、画面が積まれたままでも読み込みと購読をやめる。
+    /// ログアウトなどでセッションを閉じたら、開いているスレッドも、画面がナビゲーションのスタックに残ったままでも読み込みと購読をやめる。
     /// セッションが開いている画面を並べて止めていたころは、スレッドを止め忘れ、前のアカウントで読み続けていた。
     @Test func closingSessionStopsLoadAndSubscription() async throws {
         let transport = ThreadTransport()

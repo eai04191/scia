@@ -10,7 +10,7 @@ import UIKit
 struct AppearanceValueRowTests {
     nonisolated private static let groups = AppearanceCatalog.groups + NotificationAppearanceCatalog.groups
 
-    /// 値を変えて変更ありの印が出ても、行の高さは変わらない。変わると、押しているステッパーが指の下から動き、続けて押すと行のタップになるため。
+    /// 値を変えて変更ありのインジケーターが出ても、行の高さは変わらない。変わると、押されている状態のステッパーが指の下から動き、続けて選択すると行を選択したことになるため。
     /// 名前がどの幅で折り返しても変わらないよう、行の幅を少しずつ変えて、すべての項目で比べる。
     @Test(arguments: groups.indices) func modifiedMarkKeepsRowHeight(group: Int) throws {
         let unchanged = AppSettings(defaults: TestScratch.defaults("AppearanceValueRowTests.unchanged"))

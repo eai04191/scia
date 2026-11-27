@@ -113,13 +113,13 @@ public struct PostingLanguageSection: Hashable, Sendable {
     }
 }
 
-/// 言語を選ぶシートで選んだ言語を、ログインしているアカウントごとに新しい順で覚える。
+/// 言語を選ぶシートで選んだ言語を、ログインしているアカウントごとに新しい順で保存する。
 /// `RecentMentions`と同じく、複数のウィンドウで開いても上書きし合わないよう、手元に持たずに毎回UserDefaultsを読み書きする。
 @MainActor
 public final class RecentPostingLanguages {
     private let defaults: UserDefaults
     private let key: String
-    /// 覚えておく数。
+    /// 保存しておく数。
     public static let capacity = 5
 
     /// - Parameter account: ログインしているアカウントのハンドル（`Credential.handle`）。

@@ -262,7 +262,7 @@ struct ScrollAnchorTests {
     }
 
     /// 最上部へ戻る途中で触れて止め、ドラッグせずに離したら、離したときに操作が終わったと知らせる。
-    /// スクロールの止まりの知らせは来ないので、知らせないと、操作の終わりを待って溜めた新着が、次に指でスクロールするまで入らない。
+    /// スクロールが止まったときのコールバックは呼ばれないので、こちらから伝えないと、操作の終わりを待って溜めた新着が、次に指でスクロールするまで入らない。
     @Test func liftingAfterStoppingSpringScrollReportsSettled() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -434,7 +434,7 @@ struct ScrollAnchorTests {
         #expect(abs(frame.maxY - visibleBottom) <= 1, "返信先の投稿の下端が、覆われていない領域の下端から\(frame.maxY - visibleBottom)pt離れています")
     }
 
-    /// 最上部へ動かしている途中で返信先のラベルを押したら、返信先で止まり、最上部へ動かし直さない。
+    /// 最上部へ動かしている途中で返信先のラベルを選択したら、返信先で止まり、最上部へ動かし直さない。
     @Test func scrollingToStatusCancelsScrollingToNewest() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -634,7 +634,7 @@ struct ScrollAnchorTests {
         #expect(approached.last?.1 == .fromOlder)
     }
 
-    /// 下の方で近づいたギャップは、上の投稿に続く新しい側から読ませる。遠いうちは知らせない。
+    /// 下の方で近づいたギャップは、上の投稿に続く新しい側から読ませる。遠いうちはコールバックを呼ばない。
     @Test func gapApproachingInLowerHalfLoadsFromNewer() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -719,7 +719,7 @@ struct ScrollAnchorTests {
         }
     }
 
-    /// 注意書きの本文を開閉しても、押した行の上端は画面上で動かない。表示領域の上端にかかって一部が隠れた行でも同じ。
+    /// 注意書きの本文を開閉しても、選択した行の上端は画面上で動かない。表示領域の上端にかかって一部が隠れた行でも同じ。
     @Test(arguments: [0.0, -40.0])
     func togglingSpoilerKeepsRowTop(offsetFromVisibleTop: CGFloat) throws {
         let harness = try TimelineHarness()
@@ -761,7 +761,7 @@ struct ScrollAnchorTests {
         #expect(abs(try #require(harness.windowMinY(of: .status(target.id))) - targetBefore) <= tolerance)
     }
 
-    /// 同じ投稿のブーストが上に並んでいても、押した行は動かない。上の行も一緒に伸びるため、表示領域の上端の行を基準にするとずれる。
+    /// 同じ投稿のブーストが上に並んでいても、選択した行は動かない。上の行も一緒に伸びるため、表示領域の上端の行を基準にするとずれる。
     @Test func togglingSpoilerKeepsTappedRowWhenSameStatusIsAbove() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

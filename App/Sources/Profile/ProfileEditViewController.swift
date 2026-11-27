@@ -73,7 +73,7 @@ final class ProfileEditViewController: UIViewController {
     private var isTableLoaded = false
     /// 読み込み中の表示を薄くしながら、表を出している途中。
     private var isRevealingTable = false
-    /// 絵文字ピッカーが閉じ終わったら行う操作。ピッカーを出している間は、編集画面に別の画面を重ねられず、閉じることもできないため。
+    /// 絵文字ピッカーが閉じ終わったら行う操作。ピッカーを出している間は、編集画面にモーダルビューを出せず、閉じることもできないため。
     private var afterEmojiSheetCloses: (() -> Void)?
     #if DEBUG
     /// `scia-debug://profile-edit?note=`で渡した、読み込んだあとに置き換える自己紹介。

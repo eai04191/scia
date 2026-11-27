@@ -65,7 +65,7 @@ struct ContextMenuPositionerTests {
         positioner.menuWillEnd()
     }
 
-    /// 高いメニューは、上端が安全領域の上端に届いたら止める。先頭の項目が画面の上に隠れないようにするため。
+    /// 高いメニューは、上端がセーフエリアの上端に届いたら止める。先頭の項目が画面の上に隠れないようにするため。
     @Test func stopsAtSafeAreaTop() throws {
         let harness = try Harness()
         let positioner = ContextMenuPositioner()

@@ -10,7 +10,7 @@ import UIKit
 struct InAppBrowserTests {
     private let notices = NoticeCenter()
 
-    /// シートを出している間に別のリンクを開くと、上に重ねた画面ごと閉じて差し替え、重ねた画面にも閉じたことを知らせる。
+    /// シートを出している間に別のリンクを開くと、上に出したモーダルビューごと閉じて差し替え、そのモーダルビューにも閉じたことを知らせる。
     /// 投稿欄のシートは手前のSafariの上に出すので、知らせないと投稿欄がシートを出したままの扱いになる。
     @Test func replacingClosesScreensAboveAndNotifiesThem() async throws {
         let harness = try TimelineHarness(notices: notices)

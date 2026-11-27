@@ -36,7 +36,7 @@ public enum RecentLogReader {
         }
     }
 
-    /// `readLines`で読み直しながら、`marker`が読めるまで待つ。
+    /// `readLines`で繰り返し読みながら、`marker`が読めるまで待つ。
     static func read(untilMarker marker: String, timeout: Duration, clock: any Clock<Duration>, readLines: () throws -> [LogLine]) async throws -> [LogLine] {
         let elapsed = stopwatch(on: clock)
         while true {

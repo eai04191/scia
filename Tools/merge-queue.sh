@@ -46,7 +46,7 @@ log_timing() {
 child=''
 child_phase=''
 child_start=''
-# 子を起動してからPIDを覚えるまでの間か。その間に届いた止める合図は、覚えてから扱う。覚える前に扱うと、子を止められないため
+# 子を起動してからPIDを記録するまでの間か。その間に届いた止める合図は、記録してから扱う。記録する前に扱うと、子を止められないため
 starting=''
 pending_signal=''
 
@@ -153,7 +153,7 @@ absent_deps() {
 
 # 番を取りに走らせているlockfのプロセス
 lock_holder=''
-# lockfを起動してからPIDを覚えるまでの間か。その間に届いた止める合図は、覚えてから扱う
+# lockfを起動してからPIDを記録するまでの間か。その間に届いた止める合図は、記録してから扱う
 lock_starting=''
 pending_run_signal=''
 

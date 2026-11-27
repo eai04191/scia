@@ -46,7 +46,7 @@ struct ProfileRelationshipActivityTests {
         }
     }
 
-    /// - Parameter retry: 関係のほかの要求は失敗させるので、既定の決まりでは、実際の時間で1秒と2秒待って送り直す。
+    /// - Parameter retry: 関係のほかの要求は失敗させるので、既定の決まりでは、実際の時間で1秒と2秒待って再送する。
     private func open(clock: TestClock, cached: Relationship? = nil, relationshipsBody: String = ProfileTransport.following, retry: RetryPolicy = .standard) throws -> Opened {
         let transport = ProfileTransport(relationshipsBody: relationshipsBody)
         let credential = Credential(
@@ -120,7 +120,7 @@ struct ProfileRelationshipActivityTests {
     /// 読み込み中を示し続けないよう、インジケータを消す。
     @Test func emptyResponseStopsIndicator() async throws {
         let clock = TestClock()
-        // 読み込みを終えるのを待つので、送り直さない。
+        // 読み込みを終えるのを待つので、再送しない。
         let opened = try open(clock: clock, relationshipsBody: "[]", retry: RetryPolicy(maxRetries: 0, initialDelay: .zero))
         defer { opened.close() }
         try await waitUntil { opened.relationshipWaits == 1 }
@@ -131,7 +131,7 @@ struct ProfileRelationshipActivityTests {
         try await waitUntil { try !opened.showsIndicator() }
     }
 
-    /// 一度読んだ関係を覚えていれば、すぐにボタンを出すので、待たない。
+    /// 一度読んだ関係を保持していれば、すぐにボタンを出すので、待たない。
     @Test func cachedRelationshipDoesNotWait() throws {
         let clock = TestClock()
         let opened = try open(clock: clock, cached: Relationship(id: Self.account.id, following: true))

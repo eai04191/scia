@@ -62,7 +62,7 @@ enum DebugURL: Equatable {
     /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://upload/normal`で戻す。
     case slowUploads(seconds: Double?)
     /// `scia-debug://notice/progress`で、出たままの「処理中」のチップを、進み具合を少しずつ進めながら60秒出す。`?seconds=<秒>`で長さを、`?title=<文言>`で文言を変える。
-    /// アプリ全体のアプリ内通知として出すため、画面遷移の途中や引っぱる途中のチップの列の動きを、ダウンロードを用意せずに確かめられる。
+    /// アプリ全体のアプリ内通知として出すため、画面遷移の途中やオーバースクロールの途中のチップの列の動きを、ダウンロードを用意せずに確かめられる。
     case progressNotice(seconds: Double, title: String?)
     /// `scia-debug://notice/transient?title=<文言>`で、数秒で消えるチップを出す。`&seconds=<秒>`で消えるまでの長さを変える。
     /// 2行に折り返す長い文言の出入りや差し替えを、その文言になる失敗を起こさずに確かめるため。

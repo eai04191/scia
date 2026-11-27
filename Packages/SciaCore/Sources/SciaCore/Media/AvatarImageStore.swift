@@ -154,8 +154,8 @@ public final class AvatarImageStore<Image: AnyObject & Sendable> {
                 return decoded
             }
         }
-        // 待ち合わせた呼び出しにも、読めたかを覚えてから結果を返す。覚える前に返すと、待ち合わせた側が再読み込みしてよくなるまでの長さを聞いて、
-        // まだ失敗を覚えていない0を受け取り、描いている間の再読み込みをやめてしまうため。
+        // 待ち合わせた呼び出しにも、読めたかを記録してから結果を返す。記録する前に返すと、待ち合わせた側が再読み込みしてよくなるまでの長さを聞いて、
+        // まだ失敗を記録していない0を受け取り、描いている間の再読み込みをやめてしまうため。
         let settled = Task<Decoded, any Error> { @MainActor in
             defer { inFlight[key] = nil }
             do {

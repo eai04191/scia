@@ -5,7 +5,7 @@ import UIKit
 @MainActor
 @Suite(.failureState)
 struct MonospacedDigitFontTests {
-    /// 数字の幅を揃えた文字も、端末の文字の大きさに合わせて、同じ書式の文字と同じ大きさになる。
+    /// 数字の幅を揃えた文字も、Dynamic Typeに合わせて、同じ書式の文字と同じ大きさになる。
     @Test(arguments: [UIContentSizeCategory.small, .large, .extraExtraExtraLarge, .accessibilityExtraExtraExtraLarge])
     func followsTheContentSizeLikeTheTextStyle(category: UIContentSizeCategory) {
         let traits = UITraitCollection(preferredContentSizeCategory: category)

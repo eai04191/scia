@@ -397,7 +397,7 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...17).reversed()))
     }
 
-    /// 読み込み中の表示に使う。何ページで終わるかは分からないので、1ページ読むたびに、加わった投稿の数を積み上げて渡す。
+    /// 読み込み中の表示に使う。何ページで終わるかは分からないので、1ページ読むたびに、加わった投稿の数を足し合わせて渡す。
     @Test func fillReportsAddedCountPerPage() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
@@ -460,7 +460,7 @@ struct TimelineGapTests {
 
         let filled = try await store.expectChanges(during: { store in try await store.fillFromLatest(maxPages: 3)?.map(\.id) }) {
             $0.entries = entryRows([20, 19, 18]) + [gapEntry(18, 10)] + entryRows([10, 9, 8])
-            // 補完の中で続けて読んだギャップの失敗も、ギャップを読んだときと同じく、行の中で知らせるために覚える。
+            // 補完の中で続けて読んだギャップの失敗も、ギャップを読んだときと同じく、行の中で出すために記録する。
             $0.failedGaps = [TimelineGap(newerID: "18", olderID: "10").id: ErrorPresentation(URLError(.networkConnectionLost))]
         }
         #expect(filled == ["20", "19", "18"])
@@ -2283,7 +2283,7 @@ struct TimelineGapTests {
         }
     }
 
-    /// 最初の読み込みに失敗したタイムラインに入れると、空でなくなり、読み込み直す代わりに続きを読むようになるため、入れない。
+    /// 最初の読み込みに失敗したタイムラインに入れると、空でなくなり、再読み込みする代わりに続きを読むようになるため、入れない。
     @Test func postedStatusIsNotInsertedBeforeInitialLoad() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = TimelineStoreTester(pageSize: Self.pageSize) { _ in throw URLError(.networkConnectionLost) }
@@ -2397,7 +2397,7 @@ struct TimelineGapTests {
         }) { _ in }
     }
 
-    /// 新着は今の並びに差し込むが、全件を並べ直したときと同じ並びになる。ギャップの上下、遅れて届いて積んだ投稿、読めなかった行の置き換えを含めて確かめる。
+    /// 新着は今の並びに差し込むが、全件を並べ直したときと同じ並びになる。ギャップの上下、遅れて届いて挿入した投稿、読めなかった行の置き換えを含めて確かめる。
     @Test func insertedArrivalsMatchFullReorder() async throws {
         let server = FakeHomeServer(ids: 1...20, unreadableIDs: [4])
         let store = makeStore(server)
@@ -2423,7 +2423,7 @@ struct TimelineGapTests {
         }
         try await store.expectChanges(during: { store in store.flushPending() }) {
             $0.pending = []
-            // 10と12は一番上の22の上に届いた順に積み、4は読めなかった行の位置に入れる。
+            // 10と12は一番上の22の上に届いた順に挿入し、4は読めなかった行の位置に入れる。
             $0.entries = entryRows([12, 10, 22, 20, 19, 18]) + [gapEntry(18, 8)] + entryRows([8, 7, 6, 5, 4, 3])
             $0.unreadableItems = []
             $0.lateArrivalSequence = 2
@@ -2544,7 +2544,7 @@ struct TimelineGapTests {
 
     // MARK: - 遅れて届いた投稿
 
-    /// 遅れて届いて一番上に積んだ投稿があっても、補完と古いページの読み込みは、IDで最も新しい投稿と最も古い投稿を境に読む。
+    /// 遅れて届いて一番上に挿入した投稿があっても、補完と古いページの読み込みは、IDで最も新しい投稿と最も古い投稿を境に読む。
     @Test func lateArrivalOnTopDoesNotShiftPagingBaselines() async throws {
         let server = FakeHomeServer(ids: Array(1...7) + [10, 12, 14])
         let store = makeStore(server)
@@ -2576,7 +2576,7 @@ struct TimelineGapTests {
         #expect(server.queries.last?.maxID == "10")
     }
 
-    /// ギャップの範囲のIDの投稿が遅れて届いても一番上に積み、ギャップは新しい側の端の投稿のすぐ下に残す。
+    /// ギャップの範囲のIDの投稿が遅れて届いても一番上に挿入し、ギャップは新しい側の端の投稿のすぐ下に残す。
     @Test func lateArrivalInsideGapRangeStacksOnTopAndKeepsGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)

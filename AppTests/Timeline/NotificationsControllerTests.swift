@@ -36,7 +36,7 @@ struct NotificationsControllerTests {
     }
 
     /// 補完が手元とつながらなければ、手元の通知を残してギャップを置く。
-    /// ギャップを押して読んだ通知を足しても、押した位置の側で読んでいた行は動かない。上半分で押したら下の行、下半分で押したら上の行を保つ。
+    /// ギャップを選択して読んだ通知を足しても、選択した位置の側で読んでいた行は動かない。上半分を選択したら下の行、下半分を選択したら上の行を保つ。
     @Test(arguments: [TimelineStore.GapDirection.fromOlder, .fromNewer])
     func loadingGapKeepsReadingRow(direction: TimelineStore.GapDirection) async throws {
         let controller = try makeController()
@@ -106,7 +106,7 @@ private struct NotificationsTransport: HTTPTransport {
         return (body, response)
     }
 
-    /// フォローの通知を、まとまりにしない形で並べた応答。
+    /// フォローの通知を、グループにしない形で並べた応答。
     private static func groupedBody(_ ids: [Int]) throws -> Data {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase

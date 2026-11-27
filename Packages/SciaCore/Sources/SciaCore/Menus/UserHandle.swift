@@ -29,7 +29,7 @@ public struct UserHandle: Equatable, Sendable {
         return parts.count > 1 ? String(parts[1]) : nil
     }
 
-    /// 2つのドメインが、同じサーバーかもしれないか。忘れすぎてよいところ（覚えている関係を忘れるなど）で使う。
+    /// 2つのドメインが、同じサーバーかもしれないか。忘れすぎてよいところ（保持している関係を忘れるなど）で使う。
     /// Mastodonは国際化ドメインを、`acct`ではUnicode（`Account#pretty_acct`）、ドメインのブロックではPunycodeで書くので、文字のままでは比べられない。
     /// Punycodeに直さず、どちらも国際化ドメインなら同じかもしれないとみなす。
     public static func mayBeSameDomain(_ a: String, _ b: String) -> Bool {

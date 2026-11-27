@@ -75,7 +75,7 @@ struct RetryScheduleTests {
         #expect(schedule.hasFailed(image))
     }
 
-    /// 回線で控えた失敗は覚えない。回線が変わって再描画したときに、すぐ読めるようにする。
+    /// 回線で控えた失敗は記録しない。回線が変わって再描画したときに、すぐ読めるようにする。
     @Test func failureUnavailableOnNetworkIsNotRecorded() {
         var schedule = makeSchedule()
         let error = URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue])

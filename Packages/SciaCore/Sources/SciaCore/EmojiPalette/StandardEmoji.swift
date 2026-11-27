@@ -171,7 +171,7 @@ public enum StandardEmojiSearch {
     }
 
     /// 語が、単語を丸ごと1つ以上つなげ、最後に単語の始まりを付けたものになっているか。同じ単語を何度使ってもよい。
-    /// 何文字目まで丸ごとの単語で切り終えられるかだけを覚えて頭から進めるので、切り方がいくつあっても、手間は語の長さと単語の数で頭打ちになる。
+    /// 何文字目まで丸ごとの単語で切り終えられるかだけを記録して頭から進めるので、切り方がいくつあっても、手間は語の長さと単語の数で頭打ちになる。
     private static func matchesJoinedWords(_ query: [UInt8], in words: [[UInt8]]) -> Bool {
         guard !query.isEmpty else { return false }
         var reachable = [Bool](repeating: false, count: query.count)

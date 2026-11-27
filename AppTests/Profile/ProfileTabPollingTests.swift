@@ -93,7 +93,7 @@ struct ProfileTabPollingTests {
         #expect(opened.transport.sincePurposes.allSatisfy { $0 == .display })
     }
 
-    /// 投稿のなかったタイムラインも読み直し、最初の投稿が届いたら出す。
+    /// 投稿のなかったタイムラインも再読み込みし、最初の投稿が届いたら出す。
     @Test func readsFirstPostIntoEmptyList() async throws {
         let clock = TestClock()
         let opened = try await open(clock: clock, latest: [])
@@ -172,7 +172,7 @@ private final class StatusesTransport: HTTPTransport {
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let url = try #require(request.url)
-        // 注目のハッシュタグと紹介しているユーザーは、タイムラインを出す前に読み終える。一時的な失敗は時計で待って送り直すので、空の結果を返す。
+        // 注目のハッシュタグと紹介しているユーザーは、タイムラインを出す前に読み終える。一時的な失敗は時計で待って再送するので、空の結果を返す。
         if ["/api/v1/accounts/2/featured_tags", "/api/v1/accounts/2/endorsements"].contains(url.path()) {
             return (Data("[]".utf8), try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)))
         }

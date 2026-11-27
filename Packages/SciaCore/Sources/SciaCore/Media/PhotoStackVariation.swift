@@ -1,6 +1,6 @@
 /// タイムラインで本文の右に重ねた写真の置き方を、投稿ごとに少しずつばらつかせる。どの投稿も同じ角度と重なりで並ぶと不自然なため。
 ///
-/// 同じ投稿は、再描画しても、ブーストや通知の行、ほかのタブでも同じ形にするため、投稿のIDから決めた種で乱数を作る。
+/// 同じ投稿は、再描画しても、ブーストや通知の行、ほかのタブでも同じ形にするため、投稿のIDから決めたseedで乱数を作る。
 /// ばらつかせても、回す向き（角度の正負）とのぞかせる側（ずらす量の正負）は変えず、基準の値の半分より0に近づけない。
 /// 基準の値が0なら、向きがないのでばらつかせない。角度を0にした写真は、まっすぐのままになる。
 public enum PhotoStackVariation {
@@ -35,7 +35,7 @@ public enum PhotoStackVariation {
         return lower + (upper - lower) * unit
     }
 
-    /// 文字列から種を作る（FNV-1a）。`String.hashValue`は起動のたびに変わるため使わない。
+    /// 文字列からseedを作る（FNV-1a）。`String.hashValue`は起動のたびに変わるため使わない。
     private static func hash(_ text: String) -> UInt64 {
         var hash: UInt64 = 0xCBF2_9CE4_8422_2325
         for byte in text.utf8 {

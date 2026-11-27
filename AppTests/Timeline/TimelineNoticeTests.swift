@@ -27,7 +27,7 @@ struct TimelineNoticeTests {
         #expect(try abs(chipMinY(in: harness) - (barBottom + 8)) < 1)
     }
 
-    /// 新着のボタンが出入りしても動かさず、ボタンの上に重ねる。出たままのチップを押そうとしている間に、位置が変わらないようにするため。
+    /// 新着のボタンが出入りしても動かさず、ボタンの上に重ねる。出たままのチップを選択しようとしている間に、位置が変わらないようにするため。
     @Test func chipStaysWhenNewArrivalsButtonAppears() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -41,7 +41,7 @@ struct TimelineNoticeTests {
         #expect(try chipMinY(in: harness) == alone)
     }
 
-    /// 指が触れている間（VoiceOverの読み上げ位置が乗っている間も）は、画面を移っても動かさず、離したら動かす。
+    /// 指が触れている間（VoiceOverの読み上げ位置が乗っている間も）は、画面遷移しても動かさず、離したら動かす。
     @Test func heldChipStaysUntilReleased() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -77,7 +77,7 @@ struct TimelineNoticeTests {
         #expect(try chipMinY(in: harness) == moved)
     }
 
-    /// 画面を移って動いている途中に触れたら、その場で止めて留める。
+    /// 画面遷移で動いている途中に触れたら、その場で止めて留める。
     @Test func chipStopsWhereItIsWhenHeldWhileMoving() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -101,7 +101,7 @@ struct TimelineNoticeTests {
         #expect(heldMinY > start && heldMinY < end)
     }
 
-    /// 出てくる途中に指で触れても、大きさと濃さは見えているところから出てくる動きを続け、1コマで替えない。
+    /// 出てくる途中に指で触れても、大きさと不透明度は見えているところから出てくる動きを続け、1コマで替えない。
     @Test func grabbingAppearingChipKeepsItsAppearance() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -145,7 +145,7 @@ struct TimelineNoticeTests {
         #expect(chip.bounds.width > before + 1)
     }
 
-    /// チップと、その中のガラスの包みの、描かれている大きさの倍率と濃さ。
+    /// チップと、その中のガラスの包みの、描かれている大きさの倍率と不透明度。
     private func presentedAppearance(of chip: NoticeChip) -> (scale: CGFloat, alpha: CGFloat) {
         var scale: CGFloat = 1
         var alpha: CGFloat = 1
@@ -157,7 +157,7 @@ struct TimelineNoticeTests {
         return (scale, alpha)
     }
 
-    /// 一番上から引っぱっても、列は下げない。十分に引っぱれば、一番上の投稿が列の下に見えるため。
+    /// 一番上からオーバースクロールしても、列は下げない。オーバースクロールの量が十分なら、一番上の投稿が列の下に見えるため。
     @Test func pullingDownLeavesChipInPlace() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -171,7 +171,7 @@ struct TimelineNoticeTests {
         #expect(try chipMinY(in: harness) == before)
     }
 
-    /// ログインし直しの段は列の一番上に出し、チップはその下へ動かす。押すとログインし直しを始める。
+    /// ログインし直しの段は列の一番上に出し、チップはその下へ動かす。選択するとログインし直しを始める。
     @Test func reauthenticationRowSitsAboveChips() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -209,7 +209,7 @@ struct TimelineNoticeTests {
         #expect(try chipMinY(in: harness) > before + button.bounds.height)
     }
 
-    /// チップを押して出すものは、押した時点のウインドウのいちばん手前の画面に出す。出した時点の画面が閉じていても出せるようにするため。
+    /// チップを選択して出すものは、選択した時点のウインドウのいちばん手前の画面に出す。出した時点の画面が閉じていても出せるようにするため。
     @Test func noticePresenterIsResolvedWhenTapped() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -328,7 +328,7 @@ struct TimelineNoticeTests {
         #expect(hit.isDescendant(of: harness.collectionView))
     }
 
-    /// 画面を移ったら、チップは前の画面と一緒に流れず、次の画面の位置へ動く。戻れば元の位置に戻る。
+    /// 画面遷移したら、チップは前の画面と一緒に流れず、次の画面の位置へ動く。戻れば元の位置に戻る。
     @Test func chipMovesToPushedScreenAndBack() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -344,7 +344,7 @@ struct TimelineNoticeTests {
         #expect(try chipMinY(in: harness) == onTimeline)
     }
 
-    /// 位置を決めない画面では、上の安全領域のすぐ下に置く。
+    /// 位置を決めない画面では、上のセーフエリアのすぐ下に置く。
     @Test func chipSitsBelowSafeAreaOnPlainScreen() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

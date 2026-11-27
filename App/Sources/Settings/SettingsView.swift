@@ -462,7 +462,7 @@ extension SettingsHostingController: UIAdaptivePresentationControllerDelegate {
 }
 
 extension SettingsHostingController: UIGestureRecognizerDelegate {
-    /// 指を置いた位置を覚えるだけで、ほかの操作の邪魔をしないよう、ジェスチャーには触れたものを渡さない。
+    /// 指を置いた位置を記録するだけで、ほかの操作の邪魔をしないよう、ジェスチャーには触れたものを渡さない。
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         touchDownLocation = touch.location(in: view)
         return false

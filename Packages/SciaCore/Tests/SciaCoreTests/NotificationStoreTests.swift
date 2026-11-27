@@ -184,7 +184,7 @@ struct NotificationStoreTests {
         #expect(queue.queries.dropFirst().allSatisfy { $0.sinceID == "30" })
     }
 
-    /// 読み込み中の表示に使う。つながったかが分かるまで並べないので、読んだ通知の数を1ページごとに積み上げて渡す。
+    /// 読み込み中の表示に使う。つながったかが分かるまで並べないので、読んだ通知の数を1ページごとに足し合わせて渡す。
     @Test func fillReportsReadCountPerPage() async throws {
         let queue = PageQueue([try page([30, 29, 28]), try page([36, 35, 34]), try page([33, 32, 31]), try page([])])
         let store = makeStore(queue)

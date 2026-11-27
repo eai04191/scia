@@ -295,7 +295,7 @@ final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
     private let lift: ObjectLift
     var target: (any ObjectActionTarget)?
     private var longPress: ObjectLongPress?
-    /// 部品がボタンのように自分でタップを受けるとき、その処理は選択した位置を受け取らないため、触れた位置を覚えてメニューを出す位置にする。
+    /// 部品がボタンのように自分でタップを受けるとき、その処理は選択した位置を受け取らないため、触れた位置を記録してメニューを出す位置にする。
     private let touchRecorder = TouchLocationRecorder()
 
     /// - Parameter tapsSelf: 部品のタップもここで受ける。部品がボタンのように自分でタップを受けるなら、falseにしてその処理から`handleTap(at:)`を呼ぶ。
@@ -389,7 +389,7 @@ final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
     }
 }
 
-/// 触れた位置を覚えるだけで、認識しない。タイムラインの行のタップのように、タップの処理が選択した位置を受け取らないときに、メニューを出す位置にする。
+/// 触れた位置を記録するだけで、認識しない。タイムラインの行のタップのように、タップの処理が選択した位置を受け取らないときに、メニューを出す位置にする。
 final class TouchLocationRecorder: UIGestureRecognizer {
     private(set) var lastLocation: CGPoint?
 

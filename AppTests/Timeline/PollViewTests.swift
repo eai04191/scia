@@ -48,7 +48,7 @@ struct PollViewTests {
         return choices
     }
 
-    /// 窓に置いた投票。窓の層の時間を止めて、テストが進める。
+    /// ウィンドウに置いた投票。ウィンドウの層の時間を止めて、テストが進める。
     private static func pollInWindow(_ content: PollView.Content) throws -> (view: PollView, window: UIWindow, clock: LayerClock) {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
@@ -149,7 +149,7 @@ struct PollViewTests {
         #expect(first.showsBar)
     }
 
-    /// 浮かび上がる前の透明なボタンも押せる。結果を見た直後に「投票に戻る」を押しても効くようにするため。
+    /// フェードインする前の透明なボタンも選択できる。結果を見た直後に「投票に戻る」を選択しても効くようにするため。
     @Test func incomingButtonReceivesTouchesWhileTransparent() throws {
         let poll = Self.poll()
         let (view, window, _) = try Self.pollInWindow(Self.content(poll))

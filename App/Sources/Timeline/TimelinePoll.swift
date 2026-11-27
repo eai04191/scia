@@ -25,7 +25,7 @@ extension TimelineViewController {
         )
     }
 
-    /// 投票の選択肢やボタンが選択されたときの処理。選んだ状態はこのタイムラインで覚え、同じ投票の行をまとめて再描画する。
+    /// 投票の選択肢やボタンが選択されたときの処理。選んだ状態はこのタイムラインで保持し、同じ投票の行をまとめて再描画する。
     /// - Parameter anchorID: 選択した行。再描画しても、この行の画面上の位置を保つ。
     func handlePollAction(_ action: PollView.Action, on status: Status, keeping anchorID: ItemID?) {
         guard let poll = status.displayed.poll else { return }

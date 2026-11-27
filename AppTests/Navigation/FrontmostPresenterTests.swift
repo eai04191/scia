@@ -3,7 +3,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 重ねた画面を閉じている途中に出そうとした画面を、閉じ終えてから、そのとき手前にある画面に出す。
+/// モーダルビューを閉じている途中に出そうとした画面を、閉じ終えてから、そのとき手前にある画面に出す。
 /// 閉じる動きは、ウィンドウの層の時間を止めて手で進める。進めるまでは、閉じている途中のままになる。
 @MainActor
 @Suite(.serialized, .failureState)
@@ -32,7 +32,7 @@ struct FrontmostPresenterTests {
         screen.presentingViewController != nil && !screen.isBeingPresented
     }
 
-    /// 重ねた画面を閉じ、ウィンドウを隠す。
+    /// モーダルビューを閉じ、ウィンドウを隠す。
     private func tearDown() async throws {
         clock.release()
         root.dismiss(animated: false)
@@ -110,7 +110,7 @@ struct FrontmostPresenterTests {
         try await tearDown()
     }
 
-    /// 手前の画面を閉じている途中に、重ねた画面をすべて閉じても、下の画面が残らない。
+    /// 手前の画面を閉じている途中に、モーダルビューをすべて閉じても、下の画面が残らない。
     @Test func closesAllScreensAfterTopFinishesDismissing() async throws {
         let lower = UIViewController()
         let upper = UIViewController()

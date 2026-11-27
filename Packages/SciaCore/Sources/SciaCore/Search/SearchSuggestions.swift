@@ -1,13 +1,13 @@
 public import Foundation
 import os
 
-/// 確定した検索の語を、ログインしているアカウントごとに新しい順で覚える。決まりはdocs/search.mdの「最近の検索」にある。
+/// 確定した検索の語を、ログインしているアカウントごとに新しい順で保存する。決まりはdocs/search.mdの「最近の検索」にある。
 /// `RecentMentions`と同じく、複数のウィンドウで開いても上書きし合わないよう、手元に持たずに毎回UserDefaultsを読み書きする。
 @MainActor
 public final class RecentSearches {
     private let defaults: UserDefaults
     private let key: String
-    /// 覚えておく数。
+    /// 保存しておく数。
     public static let capacity = 20
 
     /// - Parameter account: ログインしているアカウントのハンドル（`Credential.handle`）。

@@ -23,7 +23,7 @@ extension TimelineViewController {
     }
 
     /// 引用とXの投稿のカードの添付ファイルを並べる中身。カードの並べ方が本文の右に小さく出す設定なら、重ねて出す。
-    /// - Parameter seed: 重ね方をばらつかせる種。引用元の投稿のIDか、Xの投稿のID。
+    /// - Parameter seed: 重ね方をばらつかせるseed。引用元の投稿のIDか、Xの投稿のID。
     /// - Parameter appearance: カードを置く投稿を組むときの見た目の選択肢。
     func embedMediaContent(of attachments: [MediaAttachment], cover: MediaCover?, seed: String, appearance: AppearanceChoices) -> MediaGridView.Content? {
         guard appearance.showsMedia else { return nil }

@@ -42,7 +42,7 @@ struct QuoteBarsTests {
         label.previewLines().map(\.frame)
     }
 
-    /// 入れ子の引用では、深さの数だけ、各段の字下げの頭に線を引く。外側の線は、内側の引用をはさんだ前後の段落までつなげる。
+    /// 入れ子の引用では、深さの数だけ、各段のインデントの頭に線を引く。外側の線は、内側の引用をはさんだ前後の段落までつなげる。
     /// 引用の外の段落には伸ばさない。
     @Test(arguments: [false, true]) func nestedQuoteDrawsOneBarPerLevel(drawsWithTextKit: Bool) {
         let label = label([
@@ -89,8 +89,8 @@ struct QuoteBarsTests {
         #expect((bars.first?.maxY ?? .infinity) <= label.bounds.maxY + 0.5)
     }
 
-    /// 字下げは段落の書き始めの側に空くので、線もその側に引き、本文に重ねない。画面の向きでは決めない。
-    /// 左から右の画面の右から左に書く段落は右に、右から左の画面の左から右に書く段落は左に、字下げが空く。
+    /// インデントは段落の書き始めの側に空くので、線もその側に引き、本文に重ねない。画面の向きでは決めない。
+    /// 左から右の画面の右から左に書く段落は右に、右から左の画面の左から右に書く段落は左に、インデントが空く。
     @Test(arguments: [
         (text: "اقتباس طويل بعض الشيء للتحقق من موضع الخط", direction: UISemanticContentAttribute.unspecified, isRightToLeft: true),
         (text: "A quoted English paragraph to check where the bar goes", direction: .forceRightToLeft, isRightToLeft: false),
@@ -109,7 +109,7 @@ struct QuoteBarsTests {
         }
     }
 
-    /// 字下げは、本文の文字の大きさに合わせて伸び縮みする。文字を大きくしても、線とすき間が文字に比べて詰まらない。
+    /// インデントは、本文の文字の大きさに合わせて伸び縮みする。文字を大きくしても、線と間隔が文字に比べて詰まらない。
     @Test func indentScalesWithFontSize() throws {
         func indent(fontSize: CGFloat) throws -> CGFloat {
             let text = RichTextRenderer(font: .systemFont(ofSize: fontSize), textColor: .label, settings: AppDependencies.settings, emojiImages: .offline, language: "ja")

@@ -91,7 +91,7 @@ struct TranslationArrivalTests {
         #expect(abs(harness.initialOffsetY(of: avatar, in: cell) - grown) < 0.5, "本文より上の部品が、前の位置から動いていません（\(harness.initialOffsetY(of: avatar, in: cell))pt、伸びは\(grown)pt）")
     }
 
-    /// 本文の先頭に足す翻訳のマークの空きは、先頭の文字の書体と段落の形だけを引き継ぐ。リンクを引き継ぐと、マークを押して先頭のリンクが開く。
+    /// 本文の先頭に足す翻訳のマークの空きは、先頭の文字の書体と段落の形だけを引き継ぐ。リンクを引き継ぐと、マークを選択して先頭のリンクが開く。
     @Test func translationMarkDoesNotInheritLink() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let font = UIFont.systemFont(ofSize: 15)
@@ -198,7 +198,7 @@ struct TranslationArrivalTests {
         #expect(TextReplacementTransition.wordStart(left, in: rtl, slot: slot) > 0.5)
     }
 
-    /// 濃さを変える時間は、短い行でも一番長い行に合わせる。短い行だけ速く消えて前の行を追い越さないように。
+    /// 不透明度を変える時間は、短い行でも一番長い行に合わせる。短い行だけ速く消えて前の行を追い越さないように。
     @Test func fadeDurationFollowsLongestLine() {
         let slots = TextReplacementTransition.slots(old: [[line(0, width: 300), line(20, width: 30)]], new: [[line(0, width: 300)]], duration: 1)
 

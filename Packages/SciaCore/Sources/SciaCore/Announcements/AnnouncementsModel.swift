@@ -225,7 +225,7 @@ public final class AnnouncementsModel {
                 self?.logger.info("announcement dismiss found nothing")
             } catch {
                 guard let self, !tasks.isClosed, !(error is CancellationError) else { return }
-                // 使う人にできることがないので知らせない。未読に戻し、次に行が画面に出たときに再送する。
+                // 使う人にできることがないのでエラーを出さない。未読に戻し、次に行が画面に出たときに再送する。
                 logger.error("announcement dismiss failed: \(SciaLog.describe(error), privacy: .public)")
                 dismissing.remove(id)
                 update(id) { $0.read = false }
@@ -287,7 +287,7 @@ public final class AnnouncementsModel {
         }
         for (key, pending) in pendingReactions where key.announcementID == announcement.id {
             let isMine = announcement.reactions.first { $0.name == key.name }?.me == true
-            // 届いた数は、選択した結果をまだ含まない数か、もう含む数のどちらか。含んでいなければ重ね、重ねたかを覚える。
+            // 届いた数は、選択した結果をまだ含まない数か、もう含む数のどちらか。含んでいなければ重ね、重ねたかを記録する。
             // ストリーミングのお知らせは自分がしたかを持たず、手元の値を残すので、ここでは重ねない。
             let reapplies = isMine != pending.isOn
             if reapplies {

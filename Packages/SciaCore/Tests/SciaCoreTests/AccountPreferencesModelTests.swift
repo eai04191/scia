@@ -30,7 +30,7 @@ struct AccountPreferencesModelTests {
         #expect(!model.loadFailed)
     }
 
-    /// 読めなければ、前に読めた値を出したまま、読めなかったことを覚える。
+    /// 読めなければ、前に読めた値を出したまま、読めなかったことを記録する。
     @Test func keepsLoadedValueWhenReloadFails() async throws {
         let initial = ServerPreferences(defaultVisibility: .public, defaultSensitive: false, expandsSpoilers: false, mediaDisplay: .hidesAll)
         let model = AccountPreferencesModel(initial: initial, load: { throw URLError(.notConnectedToInternet) }, tasks: TaskScope())

@@ -156,7 +156,7 @@ struct RichTextTranslationPlanTests {
 
 @MainActor
 struct StatusTranslationStoreTests {
-    /// 頼まれた段落を覚えて、先頭に「訳:」を付けて返す。`gate`が閉じている間は止まる。
+    /// 頼まれた段落を記録して、先頭に「訳:」を付けて返す。`gate`が閉じている間は止まる。
     private final class FakeTranslator: StatusTranslating {
         let requests = Mutex<[String]>([])
         let notInstalledLanguages: Mutex<Set<String>>

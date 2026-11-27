@@ -46,7 +46,7 @@ struct StoredImageFetchTests {
         #expect(remote.count == 1)
     }
 
-    /// 端末に置いたファイルから読んだときは、そう知らせる。取得したときは、通信の層が知らせるので、ここでは知らせない。
+    /// 端末に置いたファイルから読んだときは、そう伝える。取得したときは、通信の層が伝えるので、ここでは伝えない。
     @Test func reportsFileAsSourceOnlyWhenReadFromStoredFile() async throws {
         let fetch = makeFetch(Remote())
         let reported = Mutex<[ResponseSource]>([])

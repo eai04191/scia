@@ -64,7 +64,7 @@ final class MediaViewerController: UIViewController {
     var onCloseFinish: (() -> Void)?
     /// `closeItself(dismissed:)`で渡された、画面の重なりから外れたときに呼ぶもの。
     private var dismissedHandlers: [() -> Void] = []
-    /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
+    /// 黒い下地。画像だけを動かし、下地はその場で不透明度を上げ下げする。
     private let backdrop = UIView()
     /// 画面に収めるときに避ける幅を読む。ページは左右にめくると動くため、動かないビューアの画面で読み、各ページへ渡す。
     private let reservedRegionsView = MediaViewerReservedRegionsView()
@@ -73,7 +73,7 @@ final class MediaViewerController: UIViewController {
     private let morph = FocusCroppedImageView()
     /// 複製のすぐ後ろに置く影。起点が影を落としていれば、起点の近くで同じ影にする。
     private let morphShadow = MorphShadowView()
-    /// 複製に載せる、サムネイルに重ねた表示（ALT、GIF、残りの枚数）の複製。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
+    /// 複製に載せる、サムネイルに重ねた表示（ALT、GIF、残りの枚数）の複製。サムネイルに近いほど不透明度を上げ、ビューアの画像の大きさでは見せない。
     private var morphDecoration: UIView?
     /// 複製のさらに手前に置く、サムネイルに重なっているビューの複製。重ねた表示と同じ不透明度で出し入れする。
     private var morphOverlap: MediaSourceOverlap?
@@ -490,7 +490,7 @@ final class MediaViewerController: UIViewController {
     private var chromeViews: [UIView] { [menuButton, counterLabel, captionView] }
 
     /// 閉じる操作と閉じる動きを始めたときに、ページの中の部品（動画の操作の部品と暗くする下地）のスナップショット。
-    /// 動かしている間はページを空のマスクで隠すため、描き写さないと、つかんだ瞬間に部品が1コマで消える。
+    /// 動かしている間はページを空のマスクで隠すため、スナップショットを撮らないと、つかんだ瞬間に部品が1コマで消える。
     /// 部品は動く画像と位置が合わなくなるため、ボタン類のように指の位置で不透明度を決めず、始めたところから薄くして消す。
     private var pageOverlayCopy: UIView?
 
@@ -1219,7 +1219,7 @@ extension MediaViewerController {
         morph.contentOpacity = look.contentOpacity
         morph.dimming = look.dimming
         morph.place(unrotatedFrame: frame, rotation: rotation)
-        // 影は、起点の近くから始めるときだけ起点と同じ不透明度から始める。ビューアの画像の位置から始めるときは描かず、閉じる動きが濃くしていく。
+        // 影は、起点の近くから始めるときだけ起点と同じ不透明度から始める。ビューアの画像の位置から始めるときは描かず、閉じる動きが不透明度を上げていく。
         morphShadow.opacity = look.shadowOpacity
         attachDecoration(from: tile, alpha: decorationAlpha)
         morphFollowsPage = page?.drawsImage ?? false
@@ -2403,13 +2403,13 @@ extension ImagePageController {
 /// 再生している間は、最後に触れてから`controlsHideDelay`秒で、ビューアに隠すよう頼む。長押ししている間は2倍速で再生する。
 final class PlayerPageController: MediaPageController {
     private let playerController = AVPlayerViewController()
-    /// 動画を最後まで再生したら、隠したボタンや操作の部品を出すための通知の受け口。
+    /// 動画を最後まで再生したら、隠したボタンや操作の部品を出すための通知のオブザーバー。
     private var endObserver: (any NSObjectProtocol)?
-    /// 再生の途中で読めなくなったら、Now Playingを離すための通知の受け口。
+    /// 再生の途中で読めなくなったら、Now Playingを離すための通知のオブザーバー。
     private var failureObserver: (any NSObjectProtocol)?
-    /// VoiceOverを入れたり切ったりしたときに、自動で隠すかを決め直す通知の受け口。
+    /// VoiceOverを入れたり切ったりしたときに、自動で隠すかを決め直す通知のオブザーバー。
     private var voiceOverObserver: (any NSObjectProtocol)?
-    /// 再生している間、操作の部品の再生位置を進める受け口。
+    /// 再生している間、操作の部品の再生位置を進めるオブザーバー。
     private var timeObserver: Any?
     private var statusObservation: AnyCancellable?
     /// 動画の画素を表示の向きにする回し方。端末を縦にして撮った動画は、横向きの画素に回転情報を付けて保存されている。
@@ -2762,7 +2762,7 @@ final class PlayerPageController: MediaPageController {
     private func setUpPlayer() {
         guard let url = mediaURL else { return }
         let playerItem = AVPlayerItem(url: url)
-        // 再生しているコマを取り出せるようにする。AVPlayerLayerの絵は描き写せないため、映像の出口を別に付ける。
+        // 再生しているコマを取り出せるようにする。AVPlayerLayerの絵はスナップショットに取れないため、映像の出口を別に付ける。
         // 画素は10bitで受け取る。実機（iPhone 16 Pro、iOS 27）では、8bitのRGBを求めると画面の再生までHDRを失い、HLGの動画が白飛びした。
         playerItem.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange]))
         let player: AVPlayer

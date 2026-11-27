@@ -258,7 +258,7 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         updateListVisibility()
     }
 
-    /// 候補を並べていて、出す候補が1つもなければリストを隠す。行のないリストに、見つからなかったことと読み込み直すボタンが出るため。
+    /// 候補を並べていて、出す候補が1つもなければリストを隠す。行のないリストに、見つからなかったことと再読み込みのボタンが出るため。
     private func updateListVisibility() {
         guard let list else { return }
         list.view.isHidden = showsSuggestions && (suggestions?.content.entries.isEmpty ?? true)

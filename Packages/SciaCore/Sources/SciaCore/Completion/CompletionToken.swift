@@ -55,7 +55,7 @@ public enum CompletionTokenizer {
 
     /// - Parameters:
     ///   - selection: 選んでいる範囲（UTF-16）。空でなければ補完しない。
-    ///   - markedRange: 変換中の未確定の文字の範囲（UTF-16）。あれば補完しない。確定してから語を読み直す。
+    ///   - markedRange: 変換中の未確定の文字の範囲（UTF-16）。あれば補完しない。確定してから改めて語を取り出す。
     ///   - kinds: 補完する種類。注意書きの欄では絵文字だけにする。
     ///   - minimumQueryLength: 記号のあとに何文字打ったら語にするか。英数字以外は1文字を2文字と数える。ない種類は1文字。0なら記号だけでも語にする。
     public static func token(

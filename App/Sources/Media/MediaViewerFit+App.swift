@@ -51,7 +51,7 @@ extension MediaViewerFit {
 }
 
 /// 画面に収めるときに避ける領域を読み、変わったら知らせる。画面と同じ位置と大きさに置く。
-/// 予約領域は`updateConstraints()`で読む。UIKitはそこで読んだ予約領域を覚え、変わると呼び直すため。
+/// 予約領域は`updateConstraints()`で読む。UIKitはそこで読んだ予約領域を保持し、変わると呼び直すため。
 final class MediaViewerReservedRegionsView: UIView {
     private(set) var regions: [CGRect] = []
     var onChange: (([CGRect]) -> Void)?

@@ -66,7 +66,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
         let maxPixelSize: Int
         /// 動画の先頭から作った最初のフレーム。
         var isVideoFrame = false
-        /// 送ってよい回線。キャッシュの鍵には含めず、読み込みの待ち合わせだけを分ける。
+        /// 送ってよい回線。キャッシュのキーには含めず、読み込みの待ち合わせだけを分ける。
         /// Wi-Fiで始めた元の画像の読み込みにモバイル通信でOSが断ると、同じURLをプレビューとして読む処理までその失敗を受けてしまうため。
         /// 違う回線の読み込みも`joinRestricted(of:)`で待つが、OSが断ったときは失敗を引き継がない。
         var networkAccess = RequestPurpose.display.networkAccess
@@ -145,8 +145,8 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
                     return frame
                 } catch {
                     // 通信の失敗やサーバーの一時的な障害は、待てば作れるため、間隔をおいて作り直す。
-                    // 範囲に応えないサーバーや、先頭から作れない動画は、作り直しても同じなので覚える。
-                    // 回線で控えたものは、回線が変わって再描画したときに選び直すので覚えない。
+                    // 範囲に応えないサーバーや、先頭から作れない動画は、作り直しても同じなので記録する。
+                    // 回線で控えたものは、回線が変わって再描画したときに選び直すので記録しない。
                     switch HTTPFailure(error) {
                     case .temporary: retry.recordFailure(error, for: request.url)
                     case .permanent, .unauthorized: failedVideoFrames.insert(request.url)
@@ -340,8 +340,8 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
             }
             return Loaded(decoded: image, keptOriginal: keptOriginal)
         } }
-        // 待ち合わせた呼び出しにも、読めたかを覚えてから結果を返す。覚える前に返すと、待ち合わせた側が再読み込みしてよくなるまでの長さを聞いて、
-        // まだ失敗を覚えていない0を受け取り、描いている間の再読み込みをやめてしまうため。
+        // 待ち合わせた呼び出しにも、読めたかを記録してから結果を返す。記録する前に返すと、待ち合わせた側が再読み込みしてよくなるまでの長さを聞いて、
+        // まだ失敗を記録していない0を受け取り、描いている間の再読み込みをやめてしまうため。
         let settled = Task<Loaded, any Error> { @MainActor in
             defer { inFlight[key] = nil }
             do {
@@ -406,7 +406,7 @@ public final class MediaImageStore<Image: AnyObject & Sendable> {
 
     /// `maxPixelSize`まで縮め、描画できる状態まで展開する。重い処理のため、メインスレッドの外で行う。
     /// HDRの写真は、ゲインマップを使ってHDRのまま展開する。指定しないとSDRに展開され、HDRで描く設定にしても明るくならない。
-    /// どれくらいの明るさで描くかは、画面ごとのtraitで決める（`MediaDynamicRangeTraits`）。そのため、設定を選び直しても読み込み直さずに済む。
+    /// どれくらいの明るさで描くかは、画面ごとのtraitで決める（`MediaDynamicRangeTraits`）。そのため、設定を選び直しても再読み込みせずに済む。
     @concurrent
     private static func decode(_ data: Data, maxPixelSize: Int, maker: PlatformImageMaker<Image>) async -> Decoded? {
         await ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .high).map { Decoded(image: maker.still($0), cost: PlatformImageMaker<Image>.cost(of: $0)) }

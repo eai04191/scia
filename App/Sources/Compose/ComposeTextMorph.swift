@@ -113,7 +113,7 @@ final class ComposeTextMorph {
         }
     }
 
-    /// 行を入れ替える前に、今の配置を起点として覚える。動かしている途中なら、かたまりと見える範囲を、そのとき見えている形で止める。
+    /// 行を入れ替える前に、今の配置を起点として記録する。動かしている途中なら、かたまりと見える範囲を、そのとき見えている形で止める。
     func takeOff(from side: Side, at end: End) {
         if isMorphing {
             for holder in flights.values {
@@ -233,7 +233,7 @@ final class ComposeTextMorph {
             Self.handOver(from: holder.line(at: source.end), to: holder.line(at: end), duration: duration, swap: swap)
         }
         // カプセルにしかない文字があれば、それを先に消し切り、書いているときにしかない文字はそのあとでフェードインさせる（閉じるときは逆）。
-        // 同じ場所に出入りするので、同時に薄くしたり濃くしたりすると重なって見えるため。
+        // 同じ場所に出入りするので、同時に不透明度を下げたり上げたりすると重なって見えるため。
         // 行末と同じ文字も、行末と入れ替わりに出入りさせる。
         let staged = !plan.departures.isEmpty
         let stagedStays = plan.stays.filter { stay in staged || plan.tails.contains { $0.key.content == stay.key.content && $0.key.range.clamped(to: stay.key.range) == stay.key.range } }
@@ -654,7 +654,7 @@ private final class FadeStage: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// `window`の外を透明にし、内側へ`fade`の幅で濃くする。座標はこの入れ物の中のもの。
+    /// `window`の外を透明にし、内側へ`fade`の幅で不透明度を上げる。座標はこの入れ物の中のもの。
     func setWindow(_ window: CGRect, fade: TextMorphFade) {
         let across = CGRect(x: -2000, y: -2000, width: 4000 + max(bounds.width, window.maxX), height: 4000 + max(bounds.height, window.maxY))
         verticalWindow.set(range: window.minY ... max(window.minY, window.maxY), leadingFade: fade.top, trailingFade: fade.bottom, across: across)
@@ -673,7 +673,7 @@ private final class FadeStage: UIView {
     }
 }
 
-/// 見える範囲を1つの向きで区切るマスク。範囲の両端から内側へ、決めた幅で透明から濃くする。範囲と幅を変えると、アニメーションの中で動く。
+/// 見える範囲を1つの向きで区切るマスク。範囲の両端から内側へ、決めた幅で透明から不透明にする。範囲と幅を変えると、アニメーションの中で動く。
 final class FadeWindowView: UIView {
     enum Axis {
         case horizontal

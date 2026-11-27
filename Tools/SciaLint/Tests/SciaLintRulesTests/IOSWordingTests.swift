@@ -17,7 +17,7 @@ import Testing
         #"Text("メニューに「カスタマイズ」を出します。")"#,
         #"Text("結果を見せる")"#,
         #"Button("\(name)を消す") {}"#,
-        #"button.accessibilityHint = "押すと読み込み直します""#,
+        #"button.accessibilityHint = "押すと読み込み直します""#, // coined-words: allow
         #"let title = "リストの名前を変えられませんでした""#,
         #"let message = "@aliceからは返信先の投稿が見られません。""#,
         // ログでない受け手の、ログと同じ名前の呼び出しは見る

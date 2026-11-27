@@ -5,7 +5,7 @@ import UIKit
 @testable import Scia
 
 /// 大きい文字の設定で、ステータスバーの通知を長押しの拡大表示で読んでいる間は、次の通知へ進めず、消さない。
-/// 読んでいる途中で消えると、指を離しても押したことにならず、通知タブを開けない。
+/// 読んでいる途中で消えると、指を離しても選択したことにならず、通知タブを開けない。
 @MainActor
 @Suite(.serialized, .failureState)
 struct StatusBarTickerLargeContentTests {
@@ -28,8 +28,8 @@ struct StatusBarTickerLargeContentTests {
         ticker.receive(StatusBarTickerItem(id: "1", kind: .favourite, account: account, subject: .text(RichText.plain("本文", emojis: []))))
         let view = try #require(tickerView(in: scene))
         view.layoutIfNeeded()
-        // 押した場所は、見えているカプセルの枠で当てる。広がりきる前に押すと、描画が確定しているかどうかで、
-        // 広がり始めの小さい枠か、広がった枠かが変わるため、層の時計で広がりきるまで進めてから押す。
+        // 選択した場所は、見えているカプセルの枠で当てる。広がりきる前に選択すると、描画が確定しているかどうかで、
+        // 広がり始めの小さい枠か、広がった枠かが変わるため、層の時計で広がりきるまで進めてから選択する。
         let layerClock = LayerClock(freezing: try #require(view.window).layer)
         try await layerClock.runUntilIdle()
         let capsule = try #require(view.subviews.first { $0.isAccessibilityElement })

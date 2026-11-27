@@ -303,7 +303,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        // 押下はセルの選択で受けるため、サムネイル自身には触れさせない。
+        // タッチはセルの選択で受けるため、サムネイル自身には触れさせない。
         tile.isUserInteractionEnabled = false
         tile.isAccessibilityElement = false
         overlay.isUserInteractionEnabled = false

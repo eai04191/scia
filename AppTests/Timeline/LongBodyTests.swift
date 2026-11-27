@@ -44,7 +44,7 @@ struct LongBodyTests {
         #expect(post(in: harness, of: exact.id)?.postBody.isBodyTruncated == false)
     }
 
-    /// 広げると全文になり、押した行の画面上の位置は動かず、下の行が下がる。
+    /// 広げると全文になり、選択した行の画面上の位置は動かず、下の行が下がる。
     @Test func expandingKeepsRowPositionAndPushesRowsBelow() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -88,7 +88,7 @@ struct LongBodyTests {
         #expect(abs(try #require(harness.windowMinY(of: .status(status.id))) - y) < 0.01)
     }
 
-    /// 広げたことは投稿ごとに覚え、同じ投稿のブーストの行も全文にする。
+    /// 広げたことは投稿ごとに保持し、同じ投稿のブーストの行も全文にする。
     @Test func expandingAlsoExpandsBoosts() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -102,7 +102,7 @@ struct LongBodyTests {
         #expect(configuration(in: harness, of: boost.id)?.bodyTruncation == nil)
     }
 
-    /// 同じ投稿のブーストが上にも並んでいて一緒に伸びても、押した行の画面上の位置は動かない。
+    /// 同じ投稿のブーストが上にも並んでいて一緒に伸びても、選択した行の画面上の位置は動かない。
     @Test func expandingKeepsPressedRowWhenSamePostIsAbove() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

@@ -5,7 +5,7 @@ import Testing
 
 @MainActor
 struct LayerClockTests {
-    /// メインキューの処理が次の処理を積んでいくとき、1コマ進めたら、積まれた処理を最後まで流し終えてから戻る。
+    /// メインキューの処理が次の処理をキューに入れていくとき、1コマ進めたら、キューに入った処理を最後まで流し終えてから戻る。
     /// 途中で戻ると、残った処理が次のコマに持ち越され、状態を確かめる時点や次の動きを始める時点がずれる。
     @Test func advanceWaitsForChainedMainQueueWork() async throws {
         let clock = LayerClock(freezing: CALayer())

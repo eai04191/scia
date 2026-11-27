@@ -61,7 +61,7 @@ final class StreamingDemoUITests: XCTestCase {
         pause(2)
         XCTAssertEqual(photo.frame.minY, photoFrame.minY, accuracy: 0.5, "ビューアを閉じたあと、読んでいた投稿の位置が変わった")
 
-        // 新着の件数を押すと、一番上へ戻って新着が読める
+        // 新着の件数を選択すると、一番上へ戻って新着が読める
         let arrivals = app.buttons.matching(NSPredicate(format: "label ENDSWITH '件の新着'")).firstMatch
         XCTAssertTrue(arrivals.exists)
         arrivals.tap()
@@ -85,7 +85,7 @@ final class StreamingDemoUITests: XCTestCase {
     /// 録画を始める。
     /// シミュレーターでは`simctl io recordVideo`で撮っているので、素材の始めの目印を画面に出させる。シミュレーターでもアプリの中の録画（ReplayKit）は動くが、
     /// 二重に録画して描画を重くしないよう始めない。
-    /// 実機ではアプリがReplayKitで撮り始め、初回だけ出る収録の許可を押す。録画そのものがシナリオの区間なので、目印は出さない。
+    /// 実機ではアプリがReplayKitで撮り始め、初回だけ出る収録の許可を選択する。録画そのものがシナリオの区間なので、目印は出さない。
     /// - Returns: アプリがReplayKitで撮っているか。撮り始められなかったら、シナリオを失敗させる。
     @MainActor
     private func startRecording(_ app: XCUIApplication) throws -> Bool {

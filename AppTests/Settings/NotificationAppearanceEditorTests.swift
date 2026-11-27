@@ -69,7 +69,7 @@ struct NotificationAppearanceEditorTests {
         #expect(samples.configurations(groups: []).count == 1)
     }
 
-    /// 見本の通知で押せるのはリンクだけにし、誰が何をしたかの行、アイコン、サムネイル、注意書きの開閉などは押せない。
+    /// 見本の通知で選択できるのはリンクだけにし、誰が何をしたかの行、アイコン、サムネイル、注意書きの開閉などは選択できない。
     @Test func samplesKeepOnlyLinks() throws {
         let samples = NotificationAppearanceSamples(settings: .isolated(), tuning: TuningStore(defaults: nil), now: now)
         let configurations = samples.configurations()
@@ -84,7 +84,7 @@ struct NotificationAppearanceEditorTests {
         #expect(mention.onOpenContextAccount == nil && mention.contextTarget == nil && mention.onOpenAccount == nil)
     }
 
-    /// すき間を示す帯の太さは、その項目の値と同じになる。帯がラベルの枠から測られていると、文字の上下の余白の分だけずれる。
+    /// 間隔を示す帯の太さは、その項目の値と同じになる。帯がラベルの枠から測られていると、文字の上下の余白の分だけずれる。
     @Test(arguments: NotificationAppearanceCatalog.values.filter { item in
         item.unit == .point && AppearanceHighlight(item)?.measuresNotificationGap == true
     })
@@ -140,7 +140,7 @@ struct NotificationAppearanceEditorTests {
 }
 
 private extension AppearanceHighlight {
-    /// すき間を示すか。部品そのものを示すものは、太さが値と一致しないので除く。
+    /// 間隔を示すか。部品そのものを示すものは、太さが値と一致しないので除く。
     var measuresNotificationGap: Bool {
         switch self {
         case .verticalGap, .horizontalGap: true

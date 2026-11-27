@@ -63,7 +63,7 @@ enum AppDependencies {
         CACurrentMediaTime()
     }
 
-    /// このプロセスを起動した日時。カーネルが覚えている値を読む。読めなければnil。
+    /// このプロセスを起動した日時。カーネルが保持している値を読む。読めなければnil。
     /// 設定のストレージの画面で、これより前に作った一時ファイルを、どこからも使っていない残りとして消すのに使う。
     nonisolated static let processStartDate: Date? = {
         var info = kinfo_proc()

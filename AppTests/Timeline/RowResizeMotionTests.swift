@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 行の高さが変わる描き直しを、原因によらず、下の行ごと動かしてつなぐことを確かめる（docs/vision.mdの「タイムラインの動き」）。
+/// 行の高さが変わる再描画を、原因によらず、下の行ごと動かしてつなぐことを確かめる（docs/vision.mdの「タイムラインの動き」）。
 @MainActor
 @Suite(.scratch, .failureState)
 struct RowResizeMotionTests {
@@ -16,7 +16,7 @@ struct RowResizeMotionTests {
         Status(id: base.id, createdAt: base.createdAt, account: base.account, content: content, spoilerText: spoilerText, url: nil)
     }
 
-    /// 注意書きを開くと、下の行を元の位置から動かす。閉じると、なくなる本文の像を、本文のあった場所に見せて下の端から縮め、下の行が詰めてくる前に空きを見せない。
+    /// 注意書きを開くと、下の行を元の位置から動かす。閉じると、なくなる本文のスナップショットを、本文のあった場所に見せて下の端から縮め、下の行が詰めてくる前に空きを見せない。
     /// 開くときの行の切り抜きは、行の下端ではなく、閉じていたときの中身の下の端から広げる。行の下端からにすると、余白だった部分に本文が1コマで見える。
     @Test func togglingSpoilerShiftsRowsBelowAndConcealsShrink() async throws {
         let harness = try TimelineHarness()
@@ -38,7 +38,7 @@ struct RowResizeMotionTests {
         #expect(abs((grow.fromValue as? CGFloat ?? 0) - contentBottom) < 0.01, "閉じていたときの中身の下の端から切り抜いていません")
         #expect(try hasRowShift(#require(harness.visibleCell(of: below))), "開いたときに下の行を動かしていません")
 
-        // 描かれる前の行は像を取れないため、描かれるのを待つ。
+        // 描かれる前の行はスナップショットを取れないため、描かれるのを待つ。
         try await waitUntil { harness.visibleCell(of: id)?.snapshotView(afterScreenUpdates: false) != nil }
         let opened = try #require(harness.visibleCell(of: id))
         let text = try #require((opened.contentView as? PostContentView)?.postBody.subviews.first { $0 is LinkLabel }, "本文がありません")
@@ -184,8 +184,8 @@ struct RowResizeMotionTests {
         #expect(abs(endBottom - text.bounds.height) < 0.5, "切り抜きの行き先が、今の高さになっていません")
     }
 
-    /// 編集で本文にリンクが足された見えている投稿は、描き直したあとの中身で、カードを取り直す投稿として報告する。
-    /// 描き直す前の中身で報告すると、リンクがないので報告から漏れ、次にスクロールするまで取り直さない。
+    /// 編集で本文にリンクが足された見えている投稿は、再描画したあとの中身で、カードを取り直す投稿として報告する。
+    /// 再描画する前の中身で報告すると、リンクがないので報告から漏れ、次にスクロールするまで取り直さない。
     @Test func editedRowWithNewLinkIsReportedAsUnsettled() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -206,8 +206,8 @@ struct RowResizeMotionTests {
         return try #require(body.subviews.lazy.compactMap { $0 as? EmojiLabel }.first, "本文がありません")
     }
 
-    /// 編集で本文の途中が削られたら、残った文字を前の位置から動かし、削られた文字は前の位置で薄くして消す。縮む前の行の像は重ねない。
-    /// 像は、なくなる中身が行の末尾にあるものとして下の端から縮めるので、重ねると、動いている文字と像の中の文字が食い違う。
+    /// 編集で本文の途中が削られたら、残った文字を前の位置から動かし、削られた文字は前の位置で薄くして消す。縮む前の行のスナップショットは重ねない。
+    /// スナップショットは、なくなる中身が行の末尾にあるものとして下の端から縮めるので、重ねると、動いている文字とスナップショットの中の文字が食い違う。
     @Test func removingTextInEditFadesRemovedCharacters() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -250,7 +250,7 @@ struct RowResizeMotionTests {
         #expect(try textLabel(in: harness, of: id).emojiArrival?.isRunning != true, "行を動かさないのに、本文の文字を動かしています")
     }
 
-    /// 上端が表示領域より上にある行からリンクカードがなくなったら、カードのあった場所に、描き直す前の像を見せ、上の中身が下りてくるのに合わせて、上の端から縮める。
+    /// 上端が表示領域より上にある行からリンクカードがなくなったら、カードのあった場所に、再描画する前のスナップショットを見せ、上の中身が下りてくるのに合わせて、上の端から縮める。
     /// 見せないと、カードのあった場所が、上の中身が下りてくるまで空く。
     @Test func cardLeavingRowAboveTopIsConcealedFromItsTop() async throws {
         let harness = try TimelineHarness()
@@ -264,7 +264,7 @@ struct RowResizeMotionTests {
         try harness.scroll(to: id, at: .top)
         harness.collectionView.contentOffset.y += 20
         harness.collectionView.layoutIfNeeded()
-        // 描かれる前の行は像を取れないため、描かれるのを待つ。
+        // 描かれる前の行はスナップショットを取れないため、描かれるのを待つ。
         try await waitUntil { harness.visibleCell(of: id)?.snapshotView(afterScreenUpdates: false) != nil }
         let height = try #require(harness.visibleCell(of: id)?.bounds.height)
         let below = TimelineViewController.ItemID.status(statuses[11].id)
@@ -376,8 +376,8 @@ struct RowResizeMotionTests {
         #expect(abs(startBottom - visibleBottom) < 1, "伸びたコマで、本文の見える下の端が\(visibleBottom)ptから\(startBottom)ptへ飛んでいます")
     }
 
-    /// 本文の編集と一緒にリンクカードがなくなったら、カードのあった場所には、描き直す前の像を見せる。
-    /// 本文は、なくなった文字を自分で薄くして消すが、カードは一度に隠れるので、像を見せないと、下の部品が上がってくるまで空く。
+    /// 本文の編集と一緒にリンクカードがなくなったら、カードのあった場所には、再描画する前のスナップショットを見せる。
+    /// 本文は、なくなった文字を自分で薄くして消すが、カードは一度に隠れるので、スナップショットを見せないと、下の部品が上がってくるまで空く。
     @Test func cardRemovedWithTextEditIsConcealed() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -389,7 +389,7 @@ struct RowResizeMotionTests {
         let id = TimelineViewController.ItemID.status(base.id)
         try harness.scroll(to: id, at: .centeredVertically)
         harness.collectionView.layoutIfNeeded()
-        // 描かれる前の行は像を取れないため、描かれるのを待つ。
+        // 描かれる前の行はスナップショットを取れないため、描かれるのを待つ。
         try await waitUntil { harness.visibleCell(of: id)?.snapshotView(afterScreenUpdates: false) != nil }
         let cardView = try #require((harness.visibleCell(of: id)?.contentView as? PostContentView)?.postBody.linkCard, "リンクカードが出ていません")
         let cardTop = try cardView.convert(cardView.bounds, to: #require(harness.visibleCell(of: id))).minY

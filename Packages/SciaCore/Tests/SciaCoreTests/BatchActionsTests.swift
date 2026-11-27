@@ -197,7 +197,7 @@ struct BatchActionsTests {
         #expect(log.sent == ["reblog 1", "unreblog 2", "reblog 2"])
     }
 
-    /// 受け付けたブーストを覚え、選んだときの投稿より新しい状態を答える。迷ったときはブースト済みとみなす。
+    /// 受け付けたブーストを記録し、選んだときの投稿より新しい状態を答える。迷ったときはブースト済みとみなす。
     @Test func interactionsRememberSettledReblog() async throws {
         let original = status("1")
         let interactions = StatusInteractions(operations: StatusInteractions.Operations(

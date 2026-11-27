@@ -100,7 +100,7 @@ struct SettingsScreenForm: View {
         case .statusBarTicker: StatusBarTickerToggle(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable, isModified: settings.isModified(.statusBarTicker))
         case .linkBrowser: choicePicker(item, selection: $settings.linkBrowser, title: \.title)
         case .inAppBrowserHeight:
-            // 本物のホームの上で選ぶので、設定の画面を重ねずに外へ出る。行の見た目は、ほかの画面へ入る行に揃え、シェブロンを付ける。
+            // 本物のホームの上で選ぶので、設定の上にモーダルビューを出さずに外へ出る。行の見た目は、ほかの画面へ入る行に揃え、シェブロンを付ける。
             Button(action: openInAppBrowserHeight) {
                 HStack(spacing: 8) {
                     LabeledContent {
@@ -356,7 +356,7 @@ struct NotInPresetLabel: View {
     }
 }
 
-/// 組み込みのプリセットの名前に添える鍵のアイコン。名前は使う人のプリセットと重なりうるので、アイコンで見分ける（docs/preset.md）。
+/// 組み込みのプリセットの名前に添えるロックのアイコン。名前は使う人のプリセットと重なりうるので、アイコンで見分ける（docs/preset.md）。
 struct PresetNameLabel: View {
     let name: String
     let isBuiltIn: Bool
