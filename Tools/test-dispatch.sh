@@ -2,7 +2,7 @@
 # make check、make test、make check-testを、空いている枠で走らせる入口。makeとTools/merge-queue.shの両方がここを通る。決まりはdocs/test-dispatch.md。
 # 流れ: 順番のチケットを取る → チケットが先頭になるまで待つ → 別のMacに依頼する → 断られたら手元の枠を取る → どちらも空いていなければ、間をおいて別のMacから試し直す。
 # 使い方:
-#   Tools/test-dispatch.sh dispatch <target> '<SIM>' '<ONLY>' [front]   空いている枠で走らせ、その結果の終了コードで終わる。frontを付けると列の先頭に並ぶ
+#   Tools/test-dispatch.sh dispatch <target> '<SIM>' '<ONLY>' [front]   空いている枠で走らせ、その結果の終了コードで終わる。frontを付けると列の先頭に並び、別のMacではmerge queueの専用の作業コピーでビルドする
 #   Tools/test-dispatch.sh remote <target>                               今の作業ツリーの中身を別のMacに1回依頼する。dispatchが呼ぶ
 # remoteの終了コード: 0 通った、1 使い方の誤りや想定外の失敗、2 落ちた、69 届かない、75 受け付けない（設定がない、SCIA_REMOTE_TEST=local、貸し出しを止めている、電源につながっていない、組が全部ふさがっている）
 set -euo pipefail
@@ -62,7 +62,7 @@ run_in_free_slot() {
                 # 後ろで走らせる。前で走らせると、終わるまで止める合図を扱えない。呼び出し元がプロセスグループへ送る合図が、依頼の取り消しより先にsshを止めないよう、グループを分ける
                 starting=1
                 set -m
-                SCIA_REMOTE_TICKET=$ticket SCIA_REMOTE_QUIET=$quiet "$0" remote "$target" &
+                SCIA_REMOTE_TICKET=$ticket SCIA_REMOTE_QUIET=$quiet SCIA_REMOTE_COPY=${front:+queue} "$0" remote "$target" &
                 child=$!
                 set +m
                 child_started
@@ -158,7 +158,7 @@ remote() {
     trap 'cancel 143' TERM
     # 前で走らせると、シェルは終わるまで止める合図を扱わないので、後ろで走らせて待つ
     git archive "$tree" | ssh "${ssh_args[@]}" "$SCIA_REMOTE_HOST" \
-        "/bin/bash -c \"\$(echo $worker | base64 -d)\" remote-test-worker $target $tree $id '$(development_team)'$(printf ' %q' "$(build_branch)" "$(build_commit)")$(printf ' %q' "${SCIA_REMOTE_SIMS[@]}")" > >(release_ticket_on_acceptance) &
+        "/bin/bash -c \"\$(echo $worker | base64 -d)\" remote-test-worker $target $tree $id '$(development_team)'$(printf ' %q' "$(build_branch)" "$(build_commit)" "${SCIA_REMOTE_COPY:-}")$(printf ' %q' "${SCIA_REMOTE_SIMS[@]}")" > >(release_ticket_on_acceptance) &
     pipeline=$!
     wait "$pipeline" || status=$?
     trap - HUP INT TERM

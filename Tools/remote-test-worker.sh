@@ -1,7 +1,7 @@
 #!/bin/bash
 # Tools/test-dispatch.shが、テストを任せるMacへSSHで送って走らせる。treeの中身のtarを標準入力で受け取る。
-# 使い方: remote-test-worker.sh <check|test|check-test> <tree> <依頼のID> <DEVELOPMENT_TEAM（空なら付けない）> <依頼元のbranch> <依頼元のcommit> <端末>...
-# 渡した端末の数だけ、作業コピーと端末の組で同時に走らせる。
+# 使い方: remote-test-worker.sh <check|test|check-test> <tree> <依頼のID> <DEVELOPMENT_TEAM（空なら付けない）> <依頼元のbranch> <依頼元のcommit> <queue（空なら組の作業コピー）> <端末>...
+# 渡した端末の数だけ、作業コピーと端末の組で同時に走らせる。queueを渡すと、端末は空いている組のものを使い、作業コピーはmerge queueの回だけが使うtree-queueにする。
 # SIGTERMを受けると、順番待ちでも実行中でも、この依頼だけを止めて終わる。Tools/test-dispatch.shは依頼のIDで~/scia/jobs/のPIDを引いて送る。
 # 走らせると決まったら、標準出力の最初の行にそのことを書く。受け付けないときは標準出力に何も書かない。Tools/test-dispatch.shは最初の行で、受け付けられたと知る。
 # 終了コード: 0 通った、75 受け付けない（貸し出しを止めている、電源につながっていない、組が全部ふさがっている）、それ以外 落ちたか、走らせられなかった
@@ -13,7 +13,8 @@ id=$3
 team=$4
 branch=$5
 commit=$6
-sims=("${@:7}")
+copy=$7
+sims=("${@:8}")
 sim=
 
 export PATH=/opt/homebrew/bin:$PATH
@@ -81,6 +82,17 @@ echo "組${slot}（${sim}）で走らせます"
 
 transfer_start=$(date +%s)
 work=~/scia/tree-$slot
+# merge queueの回どうしは、mainの先頭へrebaseした中身なので差が小さい。組の作業コピーには、古いmainから分かれたbranchの中身が間に入り、差分ビルドが作り直しになるため、専用の作業コピーを使う
+# 手元のmerge queueは1回ずつしか走らないが、接続が切れて手元で走らせ直した回の処理がここに残ることがあるので、ロック（ファイル記述子7）を取れたときだけ使い、取れなければ組の作業コピーで走らせる
+if [ "$copy" = queue ]; then
+    exec 7> ~/scia/tree-queue.lock
+    if lockf -s -t 0 7; then
+        work=~/scia/tree-queue
+    else
+        exec 7>&-
+        copy=
+    fi
+fi
 mkdir -p "$work" || exit 1
 incoming=$(mktemp -d ~/scia/incoming.XXXXXX) || exit 1
 tar -x -C "$incoming" || exit 1
@@ -96,6 +108,10 @@ if [ -n "$team" ]; then
     echo "DEVELOPMENT_TEAM = $team" > Config/Local.xcconfig
 else
     rm -f Config/Local.xcconfig
+fi
+# 専用の作業コピーは差分ビルドで速くなり、コンパイルキャッシュには頼らない。キャッシュは空きの50%まで溜まるので切る（Config/Cache.xcconfig）
+if [ "$copy" = queue ]; then
+    echo "COMPILATION_CACHE_ENABLE_CACHING[config=Debug] = NO" > Config/CacheLocal.xcconfig
 fi
 [ -d .git ] || git init -q -b job
 git add -A
@@ -116,7 +132,7 @@ log=~/scia/logs/$tree.$target.$id.log
 # ロックのファイル記述子を閉じてから起動する。xcodebuildの常駐プロセスが受け継ぐと、終わってもロックが外れないため
 make_start=$(date +%s)
 set -m
-SCIA_GIT_BRANCH=$branch SCIA_GIT_COMMIT=$commit caffeinate -i make "$target-here" SIM="$sim" > "$log" 2>&1 8>&- &
+SCIA_GIT_BRANCH=$branch SCIA_GIT_COMMIT=$commit caffeinate -i make "$target-here" SIM="$sim" > "$log" 2>&1 7>&- 8>&- &
 job=$!
 set +m
 
