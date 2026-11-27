@@ -49,6 +49,8 @@
 
 別のMacで`touch /Users/Shared/scia-runner-paused`を走らせると、新しい依頼を受け付けず、走っているテストを中断してシミュレーターも止める。再開は`rm /Users/Shared/scia-runner-paused`。
 
+シミュレーターは、回が終わっても次の回のために起動したままにする。回が終わったあとは、後ろの処理が貸し出しを止めたかを3秒ごとに見て、止めたらシミュレーターを止める。
+
 ## 設定
 
 worktreeどうしで共有する`.git`の共通ディレクトリに`scia-remote-test.conf`を置く。

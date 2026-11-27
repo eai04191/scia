@@ -16,6 +16,8 @@ commit=$6
 copy=$7
 sims=("${@:8}")
 sim=
+slot=
+sim_down=
 
 export PATH=/opt/homebrew/bin:$PATH
 paused=/Users/Shared/scia-runner-paused
@@ -57,8 +59,26 @@ on_term() {
         kill -TERM -- "-$job" 2>/dev/null
         wait "$job"
         limit 40 xcrun simctl shutdown "$sim"
+        sim_down=1
     fi
     exit 143
+}
+
+# 端末は次の回のために起動したままにするので、回がどう終わっても、貸し出しを止めたら端末を止めるよう後ろで見張る。
+# 止める間は組のロックを持ち、次の回が同じ組を取って起動した端末を、遅れて終わった停止で止めないようにする。組とtree-queueのロックを受け継がないよう、ファイル記述子を閉じる
+watch_idle() {
+    [ -n "$slot" ] && [ -z "$sim_down" ] || return 0
+    ( while sleep 3; do
+        [ -e "$paused" ] || continue
+        exec 9> ~/scia/slot-$slot.lock
+        if lockf -s -t 0 9; then
+            limit 40 xcrun simctl shutdown "$sim"
+            rm -f ~/scia/idle-watch-$slot.pid
+            exit 0
+        fi
+        exec 9>&-
+    done ) < /dev/null > /dev/null 2>&1 7>&- 8>&- &
+    echo $! > ~/scia/idle-watch-$slot.pid
 }
 
 mkdir -p ~/scia/logs ~/scia/jobs ~/scia/results ~/scia/apps
@@ -69,7 +89,7 @@ SCIA_STEP_LOG=
 send_steps() {
     [ -z "$SCIA_STEP_LOG" ] || sed "s/^/scia-step	/" "$SCIA_STEP_LOG" 2>/dev/null
 }
-trap 'send_steps; rm -rf "$incoming" ~/scia/jobs/"$id".pid' EXIT
+trap 'send_steps; rm -rf "$incoming" ~/scia/jobs/"$id".pid; watch_idle' EXIT
 trap on_term TERM
 
 refuse_if_not_lent
@@ -79,6 +99,9 @@ if ! take_slot; then
     exit 75
 fi
 echo "組${slot}（${sim}）で走らせます"
+# 前の回が残した端末の見張りは、この回が引き継ぐ。見張りは組のロックを持つ間だけ端末を止めるので、ロックを取ったこの回が止めても、停止の途中ではない
+[ ! -f ~/scia/idle-watch-$slot.pid ] || kill "$(cat ~/scia/idle-watch-$slot.pid)" 2>/dev/null
+rm -f ~/scia/idle-watch-$slot.pid
 
 transfer_start=$(date +%s)
 work=~/scia/tree-$slot
@@ -148,7 +171,11 @@ done
 wait "$job"
 result=$?
 Tools/step-time.sh record "$target" "$make_start" "$result"
-limit 40 xcrun simctl shutdown "$sim"
+# 端末は次の回のために起動したままにする。止めると、次の回で起動とアプリの立ち上げに約70秒よけいにかかる
+if [ -n "$stopped" ]; then
+    limit 40 xcrun simctl shutdown "$sim"
+    sim_down=1
+fi
 find ~/scia/logs -type f -mtime +7 -delete
 find ~/scia/results -mindepth 1 -maxdepth 1 -mtime +7 -exec rm -rf {} +
 find ~/scia/apps -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf {} +
