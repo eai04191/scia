@@ -17,7 +17,7 @@ struct ErrorPresentationTests {
         let until = Date(timeIntervalSince1970: 1_800_000_000)
         let presentation = ErrorPresentation(AutomaticRequestsPaused(until: until))
 
-        #expect(presentation.message == "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(until.formatted(date: .omitted, time: .shortened))を過ぎたら自動で読み込み直します。")
+        #expect(presentation.message == "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(until.formatted(date: .omitted, time: .shortened))を過ぎたら自動で再読み込みします。")
         #expect(presentation.code == nil)
     }
 

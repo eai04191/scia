@@ -23,7 +23,7 @@ public enum ProfileTexts {
         /// フォローの関係を読めなかったときに、フォローのボタンの場所に出す文言。
         public static let relationshipFailure = "読み込みエラー"
         public static let relationshipRetry = "再試行"
-        public static let relationshipRetryHint = "フォローの状態を読み込み直します。"
+        public static let relationshipRetryHint = "フォローの状態を再読み込みします。"
         /// 関係を読む前の、フォローのボタンの読み上げ。
         public static let relationshipLoading = "フォローの状態を読み込み中"
         /// 相手にフォローされていることを示すバッジ。

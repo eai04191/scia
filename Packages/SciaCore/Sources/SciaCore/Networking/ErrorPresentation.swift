@@ -30,7 +30,7 @@ public struct ErrorPresentation: Hashable, Sendable {
             self = Self.presentation(of: error)
         case let error as AutomaticRequestsPaused:
             // 再開の時刻になったら、失敗した読み込みはアプリがやり直す。
-            self.init(message: "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(error.until.formatted(date: .omitted, time: .shortened))を過ぎたら自動で読み込み直します。", code: nil)
+            self.init(message: "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(error.until.formatted(date: .omitted, time: .shortened))を過ぎたら自動で再読み込みします。", code: nil)
         case is DecodingError:
             self.init(message: "サーバーから届いた内容を読めませんでした。", code: nil)
         default:

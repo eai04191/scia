@@ -17,7 +17,7 @@ public enum TimelineScreenTexts {
     public static let loadFailure = "読み込めませんでした"
     /// サーバーがホームを作り直しているときの見出しと説明。
     public static let regeneratingTitle = "ホームを準備しています"
-    public static let regeneratingDetail = "しばらく使っていなかったため、サーバーがホームを作り直しています。少し待ってから読み込み直してください。"
+    public static let regeneratingDetail = "しばらく使っていなかったため、サーバーがホームを作り直しています。少し待ってから再読み込みしてください。"
 
     /// タイムラインの末尾に出す、続きを読み込めなかった文。理由の文言を埋める。
     public static func footerFailure(reason: String) -> String {
