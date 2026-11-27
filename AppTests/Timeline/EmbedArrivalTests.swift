@@ -68,7 +68,7 @@ struct EmbedArrivalTests {
         view.layoutIfNeeded()
 
         #expect(view.linkCard == nil)
-        let leaving = try #require(view.leavingCardSnapshot, "替わったカードの像を残していません")
+        let leaving = try #require(view.leavingCardSnapshot, "替わったカードのスナップショットを残していません")
         #expect(leaving.superview === view)
         #expect(leaving.frame == cardFrame)
         #expect(try #require(view.embed).alpha == 0)
@@ -174,7 +174,7 @@ struct XPostArrivalScrollTests {
         harness.viewController.applyXPost(id: "7")
 
         let grown = try #require(harness.visibleCell(of: id)?.frame.height) - height
-        #expect(grown > 0, "囲みに替わって行が伸びていません")
+        #expect(grown > 0, "Xの投稿のカードに替わって行が伸びていません")
         #expect(try abs(#require(harness.windowMinY(of: id)) - (y - grown)) < 0.5, "伸びた分が上へ出ていません")
         #expect(try abs(#require(harness.windowMinY(of: below)) - belowY) < 0.5, "下の行が動きました")
         #expect(belowCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } != true, "動かない下の行に動きを付けています")
@@ -211,10 +211,10 @@ struct XPostArrivalScrollTests {
         let pushedOut = before.subtracting(harness.collectionView.visibleCells.map(ObjectIdentifier.init))
         #expect(pushedOut.count >= 2, "複数の行が押し出される条件になっていません")
         let sentOut = harness.collectionView.subviews.filter { !($0 is UICollectionViewCell) && $0.layer.animation(forKey: "rowShiftEnd") != nil }
-        #expect(sentOut.count >= pushedOut.count, "押し出された行の像を動かしていません")
+        #expect(sentOut.count >= pushedOut.count, "押し出された行のスナップショットを動かしていません")
         // 替わったリンクカードのスナップショットは、本文が自分で薄くして外す。新しく現れた部品として切り抜くと、見えていたスナップショットが最初のコマで隠れる。
-        let leaving = try #require((harness.visibleCell(of: id)?.contentView as? PostContentView)?.postBody.leavingCardSnapshot, "替わったカードの像を残していません")
-        #expect(leaving.layer.mask == nil, "薄くして消すカードの像を切り抜いています")
+        let leaving = try #require((harness.visibleCell(of: id)?.contentView as? PostContentView)?.postBody.leavingCardSnapshot, "替わったカードのスナップショットを残していません")
+        #expect(leaving.layer.mask == nil, "薄くして消すカードのスナップショットを切り抜いています")
     }
 
     /// 見えている行が伸びたら、上の行は動かさず、下の行を伸びた分だけ押し下げる。
@@ -237,7 +237,7 @@ struct XPostArrivalScrollTests {
         harness.collectionView.layoutIfNeeded()
 
         let grown = try #require(harness.visibleCell(of: id)?.frame.height) - height
-        #expect(grown > 0, "囲みに替わって行が伸びていません")
+        #expect(grown > 0, "Xの投稿のカードに替わって行が伸びていません")
         #expect(harness.windowMinY(of: above) == aboveY)
         #expect(harness.windowMinY(of: id) == y)
         #expect(try abs(#require(harness.windowMinY(of: below)) - (belowY + grown)) < 0.5)

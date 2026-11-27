@@ -162,7 +162,7 @@ custom_rules:
       - comment
       - doccomment
       - string
-    message: "コンテキストメニューは、コントロールに組み込まれたメニューではなく、別に付けたUIContextMenuInteractionで出す。組み込まれたメニューでは触覚フィードバックが出ない"
+    message: "コンテキストメニューは、コントロールに組み込まれたメニューではなく、別に付けたUIContextMenuInteractionで出す。組み込まれたメニューではハプティクスが出ない"
     severity: error
 
   # URLSessionは、通信の層のURLSessionTransport.swiftでだけ使う。ほかの場所で直接使うと、HTTPClientの決まり（再開の時刻で止める、再送する、大きさの上限、httpとhttps以外を開かない）を通らない経路ができる。

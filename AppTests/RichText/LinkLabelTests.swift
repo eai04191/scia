@@ -112,9 +112,9 @@ struct LinkLabelTests {
         let lineY = third.minY + 8
         let lineEnd = CGPoint(x: third.maxX - 1, y: lineY)
 
-        #expect(whole.link(at: lineEnd) == .url(url), "切らなければ押せる位置")
+        #expect(whole.link(at: lineEnd) == .url(url), "切らなければタップできる位置")
         #expect(truncated.link(at: lineEnd) == nil)
-        #expect(truncated.link(at: CGPoint(x: 20, y: lineY)) == .url(url), "「…」より前のリンクは押せる")
+        #expect(truncated.link(at: CGPoint(x: 20, y: lineY)) == .url(url), "「…」より前のリンクはタップできる")
     }
 
     /// 最後の行に入りきらない単語のリンクも、UILabelは「…」の前まで途中を描くので、見えている部分を選択できる。

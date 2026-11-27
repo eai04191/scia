@@ -167,7 +167,7 @@ struct TimelineQuoteTests {
         #expect(abs(grid.frame.maxX - (embed.bounds.width - content.padding)) < 0.5)
         #expect(body.frame.maxX <= grid.frame.minX - content.mediaSpacing + 0.5, "本文がサムネイルの分をあけていません")
         #expect(grid.frame.minY < body.frame.maxY, "サムネイルが本文の横に並んでいません")
-        #expect(embed.bounds.height >= grid.frame.maxY + content.padding - 0.5, "囲みがサムネイルの分だけ伸びていません")
+        #expect(embed.bounds.height >= grid.frame.maxY + content.padding - 0.5, "カードがサムネイルの分だけ伸びていません")
     }
 
     /// 右に並べる大きさと本文とのあいだを上限にしても、カードの中のサムネイルと間隔はカードの内側の半分までに縮め、本文の幅を残す。
@@ -186,7 +186,7 @@ struct TimelineQuoteTests {
         let body = try #require(embed.subviews.first { $0 is LinkLabel && !$0.isHidden })
         let inner = embed.bounds.width - content.padding * 2
         #expect(grid.frame.width == grid.frame.height)
-        #expect(grid.frame.width + content.mediaSpacing <= inner / 2 + 0.5, "サムネイルとすき間が囲みの内側の半分を超えています")
+        #expect(grid.frame.width + content.mediaSpacing <= inner / 2 + 0.5, "サムネイルと間隔がカードの内側の半分を超えています")
         #expect(abs(body.frame.width - (inner - grid.frame.width - content.mediaSpacing)) < 0.5, "本文がサムネイルの分だけをあけていません")
     }
 
@@ -273,7 +273,7 @@ struct TimelineQuoteTests {
         harness.setStatuses(statuses)
 
         #expect(configuration(in: harness, of: base.id)?.embed?.text.string == "引用元の本文")
-        #expect(try #require(harness.visibleCell(of: id)?.frame.height) > height, "囲みに替わって行が伸びていません")
+        #expect(try #require(harness.visibleCell(of: id)?.frame.height) > height, "カードに替わって行が伸びていません")
         #expect(harness.windowMinY(of: id) == y)
         #expect(belowCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true, "下の行を動かしていません")
     }

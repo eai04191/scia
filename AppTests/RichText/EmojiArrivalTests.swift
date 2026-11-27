@@ -58,7 +58,7 @@ struct EmojiArrivalTests {
         #expect(label.layer.contentsRect == .zero, "動いている間に、ラベル自身の描画を隠していません")
         let pieces = label.layer.sublayers?.last?.sublayers ?? []
         #expect(pieces.contains { $0.animation(forKey: "move") != nil }, "あとの文字を動かしていません")
-        #expect(pieces.contains { $0.animation(forKey: "fadeIn") != nil }, "絵文字を薄い状態から濃くしていません")
+        #expect(pieces.contains { $0.animation(forKey: "fadeIn") != nil }, "絵文字を薄い状態から不透明度を上げていません")
         // 行数を限らないラベルでは、スナップショットをラベルの枠で切らない。折り返しが減ると、前の最後の行から上がる文字が枠の外から動き始めるため。
         #expect(label.layer.sublayers?.last?.masksToBounds == false)
 

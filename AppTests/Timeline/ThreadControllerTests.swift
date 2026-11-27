@@ -56,7 +56,7 @@ struct ThreadControllerTests {
         transport.instance.open()
         try await waitUntil { connected.withLock { $0 } }
 
-        #expect(transport.contextRequests == 2, "つながったときに、読み直しの途中の読み込みを止めて読み直しました")
+        #expect(transport.contextRequests == 2, "つながったときに、再読み込みの途中の読み込みを止めて再読み込みしました")
         #expect(refreshControl.isRefreshing)
 
         transport.context.open()

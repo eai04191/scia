@@ -49,7 +49,7 @@ struct ThreadModelTests {
         #expect(display.footerState == .loading)
         try await waitUntil { deferred.count >= 1 }
         #expect(deferred.count == 1)
-        #expect(display.statusIDs == ["2"], "画面を移り終える前に並べました")
+        #expect(display.statusIDs == ["2"], "画面遷移を終える前に並べました")
 
         deferred.removeFirst()()
         #expect(display.statusIDs == ["1", "2"])

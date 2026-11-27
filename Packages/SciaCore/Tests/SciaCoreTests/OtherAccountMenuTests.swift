@@ -622,7 +622,7 @@ struct OtherAccountMenuTests {
         fails.withLock { $0 = true }
 
         guard case .found = await bob.lookup(shown) else {
-            Issue.record("覚えている投稿が使われません")
+            Issue.record("保持している投稿が使われません")
             return
         }
         #expect(bob.known(shown)?.id == "7000")
@@ -682,7 +682,7 @@ struct OtherAccountMenuTests {
         #expect(changed.following)
         #expect(sent.withLock { $0 } == ["follow/500"])
         guard case .relation(let known) = bob.userActions.knownRelation(.account(id: "500", acct: "alice@remote.example")) else {
-            Issue.record("関係を覚えていません")
+            Issue.record("関係を保持していません")
             return
         }
         #expect(known.relationship.following)
@@ -700,7 +700,7 @@ struct OtherAccountMenuTests {
         _ = try await bob.change(.blockDomain("remote.example"), of: relation)
 
         guard case .relation(let known) = bob.userActions.knownRelation(.account(id: "500", acct: "alice@remote.example")) else {
-            Issue.record("変えた相手の関係を覚えていません")
+            Issue.record("変えた相手の関係を保持していません")
             return
         }
         #expect(known.relationship.domainBlocking)

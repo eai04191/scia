@@ -644,7 +644,7 @@ struct TimelineStoreTests {
         #expect(store.unreadCount == 1)
 
         try await store.expectChanges(during: { store in
-            #expect(store.markRead(["29"]), "IDが既読より古くても、上に積んだ投稿を見れば既読の位置は進みます")
+            #expect(store.markRead(["29"]), "IDが既読より古くても、上に挿入した投稿を見れば既読の位置は進みます")
         }) {
             // サーバーに保存するIDは戻さず、位置だけ挿入した投稿まで進める。
             $0.lastReadPosition = TimelineStore.DisplayPosition(anchorID: "30", sequence: 1)

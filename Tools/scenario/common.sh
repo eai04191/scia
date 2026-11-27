@@ -117,7 +117,7 @@ tap_label_until_gone() {
     local udid="$1" label="$2" kind="$3" deadline=$((SECONDS + 30)) tree
     wait_label "$udid" "$label" "$kind"
     while true; do
-        [ $SECONDS -lt $deadline ] || fail "30秒押しても「${label}」が消えなかった"
+        [ $SECONDS -lt $deadline ] || fail "30秒タップしても「${label}」が消えなかった"
         if ! tree="$(axe describe-ui --udid "$udid" 2>/dev/null)" || ! python3 -I -c 'import json, sys; json.load(sys.stdin)' <<< "$tree" 2>/dev/null; then
             sleep 1
             continue

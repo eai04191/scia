@@ -51,10 +51,10 @@ struct HeldSettingsChangeTests {
 
         harness.settings.setValue(3, for: AppearanceCatalog.bodyText)
         try await waitUntil { harness.viewController.hasHeldSettingsChange }
-        #expect(bodyPointSize(harness, statuses[0].id) == before, "設定の画面が手前にあるのに描き直しました")
+        #expect(bodyPointSize(harness, statuses[0].id) == before, "設定の画面が手前にあるのに再描画しました")
 
         harness.viewController.holdsSettingsChanges = false
-        #expect(bodyPointSize(harness, statuses[0].id) != before, "設定の画面を閉じたのに描き直していません")
+        #expect(bodyPointSize(harness, statuses[0].id) != before, "設定の画面を閉じたのに再描画していません")
         #expect(!harness.viewController.hasHeldSettingsChange)
     }
 
@@ -70,11 +70,11 @@ struct HeldSettingsChangeTests {
 
         harness.settings.setValue(3, for: AppearanceCatalog.bodyText)
         try await waitUntil { harness.viewController.hasHeldSettingsChange }
-        #expect(bodyPointSize(harness, statuses[0].id) == before, "見えていないタイムラインを描き直しました")
+        #expect(bodyPointSize(harness, statuses[0].id) == before, "見えていないタイムラインを再描画しました")
 
         harness.navigation.popViewController(animated: false)
         harness.window.layoutIfNeeded()
-        #expect(bodyPointSize(harness, statuses[0].id) != before, "画面に戻ったのに描き直していません")
+        #expect(bodyPointSize(harness, statuses[0].id) != before, "画面に戻ったのに再描画していません")
         #expect(!harness.viewController.hasHeldSettingsChange)
     }
 }

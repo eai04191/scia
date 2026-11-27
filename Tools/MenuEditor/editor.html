@@ -255,7 +255,7 @@ function renderRows() {
       label.append(meta);
     } else if (token === "separator" || isRowToken(token)) {
       li.classList.add(isRowToken(token) ? "rowsep" : "sep");
-      title.textContent = token === "row:small" ? "── 横並びの区切り線（下のまとまりをアイコンのみで横に並べる） ──" : token === "row" ? "── 横並びの区切り線（下のまとまりを横に並べる） ──" : "── 区切り線 ──";
+      title.textContent = token === "row:small" ? "── 横並び（アイコンのみ） ──" : token === "row" ? "── 横並び ──" : "── 区切り線 ──";
       removable = true;
     } else {
       const [kind, id] = token.split(":");

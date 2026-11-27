@@ -198,6 +198,6 @@ struct ProfileTimelineTests {
         harness.viewController.headerDidChangeSize()
 
         let pulled = top - harness.collectionView.contentOffset.y
-        #expect(abs(pulled - 80) <= tolerance, "引っぱった分が\(pulled)ptになりました")
+        #expect(abs(pulled - 80) <= tolerance, "オーバースクロールの量が\(pulled)ptになりました")
     }
 }

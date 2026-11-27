@@ -161,7 +161,7 @@ struct PollViewTests {
         let button = view.footerButtons.secondary
         #expect(button.alpha == 0)
         let center = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: view)
-        #expect(view.hitTest(center, with: nil) === button, "浮かび上がる前の「投票に戻る」に触れたものを渡していません")
+        #expect(view.hitTest(center, with: nil) === button, "フェードインする前の「投票に戻る」に触れたものを渡していません")
     }
 
     /// 投票に戻ると、棒を縮めて割合を消し終えてから、先頭の記号を出したままにする。

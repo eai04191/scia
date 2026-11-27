@@ -231,7 +231,7 @@ final class InlineComposeControllerTests {
         defer { window.isHidden = true }
         composer.beginEditing()
         NotificationCenter.default.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: CGRect.zero])
-        #expect(composer.stateDump().contains("lastKeyboardHeight: nil"), "大きさのない枠を、キーボードの高さとして覚えました\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("lastKeyboardHeight: nil"), "大きさのない枠を、キーボードの高さとして記録しました\n\(composer.stateDump())")
     }
 
     /// アプリ内のSafariを伏せて画面が縮んでいても、メディアを選ぶシートに使うキーボードの高さは、画面の下端から測る。
@@ -465,7 +465,7 @@ final class InlineComposeControllerTests {
         let summary = try #require(buttons(in: window).first { $0.accessibilityLabel == "投票の選択肢" })
         summary.sendActions(for: .primaryActionTriggered)
         try await waitUntilSettled()
-        #expect(composer.stateDump().contains("firstResponder: poll"), "1行を押しても、選択肢に書き始めていません\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("firstResponder: poll"), "1行をタップしても、選択肢に書き始めていません\n\(composer.stateDump())")
         #expect(composer.stateDump().contains("folded=false"), "選択肢を書いているのに折りたたんだままです\n\(composer.stateDump())")
 
         textView.becomeFirstResponder()
@@ -912,13 +912,13 @@ final class InlineComposeControllerTests {
         await composer.model.submit()
         let rest = try #require(restContents(in: window).first)
         let drawsPosted = { self.textLines(in: self.window).contains { $0.attributedText.string.contains("送った本文") } }
-        #expect(!drawsPosted(), "畳み始めに、送った本文を描いています")
+        #expect(!drawsPosted(), "折りたたみ始めに、送った本文を描いています")
         #expect(rest.label.attributedText.string == "いまどうしてる？")
         try await clock.advance(by: 0.1)
-        #expect(!drawsPosted(), "畳む途中に、送った本文を描いています")
+        #expect(!drawsPosted(), "折りたたむ途中に、送った本文を描いています")
         try await waitUntilSettled()
-        #expect(!drawsPosted(), "畳んだあとに、送った本文を描いています")
-        #expect(rest.label.concealedRanges.isEmpty, "畳んだあとも、カプセルの文字を隠しています")
+        #expect(!drawsPosted(), "折りたたんだあとに、送った本文を描いています")
+        #expect(rest.label.concealedRanges.isEmpty, "折りたたんだあとも、カプセルの文字を隠しています")
     }
 
     /// 送信に失敗してアラートを出している間も、書き終えたことにせず、バーをキーボードの高さに留めて広げた欄を保つ。
@@ -943,8 +943,8 @@ final class InlineComposeControllerTests {
         }
         // アラートがファーストレスポンダーになり、ソフトウェアキーボードが下がった通知。
         postKeyboardFrame(height: 0, to: keyboard)
-        #expect(composer.stateDump().contains("editing: true"), "失敗の知らせを出すと書き終えたことになりました\n\(composer.stateDump())")
-        #expect(composer.isBarHeld, "失敗の知らせを出すとバーがキーボードの高さから外れました\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("editing: true"), "失敗のアラートを出すと書き終えたことになりました\n\(composer.stateDump())")
+        #expect(composer.isBarHeld, "失敗のアラートを出すとバーがキーボードの高さから外れました\n\(composer.stateDump())")
         window.rootViewController?.dismiss(animated: false)
     }
 
@@ -1101,7 +1101,7 @@ final class InlineComposeControllerTests {
         try await clock.advance { composer.stateDump().contains("mediaViewer: nil") }
         #expect(composer.stateDump().contains("mediaViewer: nil"), "ビューアが閉じませんでした\n\(composer.stateDump())")
         #expect(composer.stateDump().contains("editing: true"), "ビューアを閉じると書き終えたことになりました\n\(composer.stateDump())")
-        #expect(composer.isBarHeld, "キーボードの知らせが届く前に、バーを外しました\n\(composer.stateDump())")
+        #expect(composer.isBarHeld, "キーボードの通知が届く前に、バーを外しました\n\(composer.stateDump())")
 
         // 入力欄に戻したあとに、どちらのキーボードかが分かる高さの通知が届く。
         switch followUp {
@@ -1179,7 +1179,7 @@ final class InlineComposeControllerTests {
         try await clock.advance { window.rootViewController?.presentedViewController == nil }
         try await waitUntilSettled()
         #expect(composer.stateDump().contains("firstResponder: text"), "入力欄にキーボードを戻していません\n\(composer.stateDump())")
-        #expect(composer.isBarHeld, "キーボードの知らせが届く前に、バーを外しました\n\(composer.stateDump())")
+        #expect(composer.isBarHeld, "キーボードの通知が届く前に、バーを外しました\n\(composer.stateDump())")
 
         postKeyboardFrame(height: 300, to: keyboard)
         #expect(composer.isBarHeld, "ソフトウェアキーボードが上がりきる前に、バーを外しました\n\(composer.stateDump())")
@@ -1199,7 +1199,7 @@ final class InlineComposeControllerTests {
             switch self {
             case .softwareKeyboard: "ソフトウェアキーボードが上がる"
             case .hardwareKeyboard: "ハードウェアキーボードに替わった"
-            case .reopenBeforeKeyboard: "知らせの前に開き直す"
+            case .reopenBeforeKeyboard: "通知の前に開き直す"
             }
         }
     }
@@ -1529,8 +1529,8 @@ final class InlineComposeControllerTests {
         try await waitUntilSettled()
         window.layoutIfNeeded()
         let textView = try #require(textViews(in: window).first)
-        #expect(!textView.isHidden, "畳まない設定なのに、書いていないときに入力欄が隠れています\n\(composer.stateDump())")
-        #expect(composer.stateDump().contains("editing: false open: true"), "畳まない設定なのに、カプセルに畳んでいます\n\(composer.stateDump())")
+        #expect(!textView.isHidden, "折りたたまない設定なのに、書いていないときに入力欄が隠れています\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("editing: false open: true"), "折りたたまない設定なのに、カプセルに折りたたんでいます\n\(composer.stateDump())")
         let bar = try composerBar()
         let resting = bar.frame
 
@@ -1542,14 +1542,14 @@ final class InlineComposeControllerTests {
         composer.endEditing()
         try await waitUntilSettled()
         window.layoutIfNeeded()
-        #expect(composer.stateDump().contains("editing: false open: true"), "書き終えると、カプセルに畳みました\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("editing: false open: true"), "書き終えると、カプセルに折りたたみました\n\(composer.stateDump())")
         #expect(bar.frame == resting, "書き終えると、投稿欄の形が変わりました: \(resting) → \(bar.frame)")
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
 
         settings.keepsComposeBarOpen = false
         try await waitUntilSettled()
         window.layoutIfNeeded()
-        #expect(composer.stateDump().contains("open: false"), "設定を戻しても、カプセルに畳みません\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("open: false"), "設定を戻しても、カプセルに折りたたみません\n\(composer.stateDump())")
         #expect(bar.frame.height < resting.height, "設定を戻しても、投稿欄が細くなりません: \(bar.frame)")
     }
 
@@ -1560,7 +1560,7 @@ final class InlineComposeControllerTests {
         composer.onOpenWithoutEditing = { loads += 1 }
         settings.keepsComposeBarOpen = true
         try await waitUntilSettled()
-        #expect(loads == 1, "畳まない設定にしても、既定の値を読ませていません")
+        #expect(loads == 1, "折りたたまない設定にしても、既定の値を読ませていません")
     }
 
     /// 空の投稿欄を隠している間に折りたたまない設定をオンにしても、隠すのをやめて出したときは、カプセルではなく書いているときの形で出す。
@@ -1576,9 +1576,9 @@ final class InlineComposeControllerTests {
         try await waitUntilSettled()
         window.layoutIfNeeded()
         #expect(!composer.isBarHidden)
-        #expect(composer.stateDump().contains("editing: false open: true"), "隠している間に畳まない設定にしたのに、カプセルで出しました\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("editing: false open: true"), "隠している間に折りたたまない設定にしたのに、カプセルで出しました\n\(composer.stateDump())")
         let textView = try #require(textViews(in: window).first)
-        #expect(!textView.isHidden, "隠している間に畳まない設定にしたのに、入力欄を出していません")
+        #expect(!textView.isHidden, "隠している間に折りたたまない設定にしたのに、入力欄を出していません")
     }
 
     /// 書きかけの本文や返信先があるときは、閉じても隠さない。残っていることに気づけるようにする。
@@ -1789,12 +1789,12 @@ final class InlineComposeControllerTests {
             if opacity > 0.5 {
                 landing = ink
             }
-            frames.append(String(format: "%.3f 濃さ%.2f y=%.3f ", clock.now - start, opacity, ink.y) + surroundings(of: textView))
+            frames.append(String(format: "%.3f 不透明度%.2f y=%.3f ", clock.now - start, opacity, ink.y) + surroundings(of: textView))
             try await clock.advance(by: LayerClock.frame)
         }
         let removed = "かたまりが外れたコマ: " + String(format: "%.3f ", clock.now - start) + surroundings(of: textView)
         try await waitUntilSettled()
-        let last = try #require(landing, "宛先を浮かび上がらせるかたまりがありません\n\(composer.stateDump())")
+        let last = try #require(landing, "宛先をフェードインさせるかたまりがありません\n\(composer.stateDump())")
         let range = try #require(textView.textRange(from: textView.beginningOfDocument, to: textView.position(from: textView.beginningOfDocument, offset: 1) ?? textView.beginningOfDocument))
         expectClose(last, try ink(of: textView, glyphs: textView.firstRect(for: range).insetBy(dx: 0, dy: -8), in: bar), """
         着地のコマの宛先が、入力欄の本物の文字と同じ位置にありません

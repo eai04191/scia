@@ -11,7 +11,7 @@ enum CaptionCatalog {
             },
             CatalogState(title: "投稿欄から開いて、代替テキストがない") { caption("", isEditable: true) },
             CatalogState(title: "投稿欄から開いて、代替テキストがある") { caption("縦長の画像（9:16）", isEditable: true) },
-            CatalogState(title: "コントラストを上げる設定で、代替テキストがない（「代替テキストを追加」を濃く）") {
+            CatalogState(title: "コントラストを上げる設定で、代替テキストがない（「代替テキストを追加」の不透明度を上げる）") {
                 caption("", isEditable: true, contrast: .high)
             },
         ]

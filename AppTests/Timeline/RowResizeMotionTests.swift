@@ -47,7 +47,7 @@ struct RowResizeMotionTests {
 
         let cell = try #require(harness.visibleCell(of: id))
         #expect(abs(cell.bounds.height - height) < 0.5, "注意書きを閉じても行が縮んでいません")
-        let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "閉じたときに、なくなる本文の像を縮めていません")
+        let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "閉じたときに、なくなる本文のスナップショットを縮めていません")
         #expect(abs(mask.frame.minY - textTop) < 0.01, "なくなった本文の枠の上の端まで縮めていません")
     }
 
@@ -227,7 +227,7 @@ struct RowResizeMotionTests {
         let fading = (label.layer.sublayers ?? []).flatMap { $0.sublayers ?? [] }.filter { $0.animation(forKey: "fadeOut") != nil }
         #expect(!fading.isEmpty, "削られた文字を薄くしていません")
         let cell = try #require(harness.visibleCell(of: id))
-        #expect(!cell.subviews.contains { $0.layer.mask?.animation(forKey: TimelineViewController.shrinkName) != nil }, "縮む前の行の像を重ねています")
+        #expect(!cell.subviews.contains { $0.layer.mask?.animation(forKey: TimelineViewController.shrinkName) != nil }, "縮む前の行のスナップショットを重ねています")
     }
 
     /// 新着と一緒に届いた編集では、行を動かさずに替えるので、本文の文字も動かさない。
@@ -277,7 +277,7 @@ struct RowResizeMotionTests {
         let cell = try #require(harness.visibleCell(of: id))
         #expect(cell.bounds.height < height, "リンクカードがなくなっても行が縮んでいません")
         #expect(try abs(#require(harness.windowMinY(of: below)) - belowY) < 0.5, "下の行が動きました")
-        let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "カードのあった場所に、前の像を見せていません")
+        let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "カードのあった場所に、前のスナップショットを見せていません")
         #expect(mask.anchorPoint.y == 1, "上の端から縮めていません")
     }
 
@@ -399,7 +399,7 @@ struct RowResizeMotionTests {
         harness.collectionView.layoutIfNeeded()
 
         let cell = try #require(harness.visibleCell(of: id))
-        let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "カードのあった場所に、前の像を見せていません")
+        let mask = try #require(cell.subviews.lazy.compactMap { $0.layer.mask }.first { $0.animation(forKey: TimelineViewController.shrinkName) != nil }, "カードのあった場所に、前のスナップショットを見せていません")
         #expect(abs(mask.frame.minY - cardTop) < 0.01, "カードの枠の上の端から縮めていません")
     }
 }

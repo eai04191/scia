@@ -66,7 +66,7 @@ struct LineFittingAttachmentTests {
         for frame in frames {
             #expect(frame.minX >= 0 && frame.maxX <= width + 0.01, "\(frame)")
         }
-        #expect(abs((frames.last?.width ?? 0) - width) < 0.01, "字下げのない段落では行の幅いっぱいに縮める")
+        #expect(abs((frames.last?.width ?? 0) - width) < 0.01, "インデントのない段落では行の幅いっぱいに縮める")
     }
 
     /// 縮めた絵文字だけの本文は、縮めた絵文字の高さの行に並ぶ。縮める前の大きさで付けた行の高さのままだと、絵文字の上が空く。

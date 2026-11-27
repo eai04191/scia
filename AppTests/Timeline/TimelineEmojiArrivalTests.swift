@@ -63,6 +63,6 @@ struct TimelineEmojiArrivalTests {
         try await waitUntil { showsImage(in: harness, of: statuses[0].id) }
 
         let after = try #require((harness.visibleCell(of: .status(statuses[1].id))?.contentView as? PostContentView)?.configuration as? PostContentConfiguration)
-        #expect(after.body === other.body, "絵文字のない行を描き直しています")
+        #expect(after.body === other.body, "絵文字のない行を再描画しています")
     }
 }

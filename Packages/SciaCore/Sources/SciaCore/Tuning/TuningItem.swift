@@ -257,7 +257,7 @@ public enum TuningCatalog {
     /// 本文が編集されたとき、新しく入った文字の不透明度を上げ始めるまでの、動きの時間に対する割合。前の文字が通り終える前に不透明度を上げると、同じ場所で重なって見える。
     public static let textEditNewCharacterFadeDelay = NumberTuning(
         id: "timeline.textEditNewCharacterFadeDelay",
-        title: "本文の編集で入った文字を濃くし始めるまでの割合",
+        title: "本文の編集で入った文字の不透明度を上げ始めるまでの割合",
         range: 0...0.9,
         step: 0.05,
         defaultValue: 0.5

@@ -482,7 +482,7 @@ struct PostActionBarTests {
         #expect(hit(content, button: button, y: frame.midY + 21) === button)
         #expect(hit(content, button: button, y: frame.minY - 9) !== button)
         #expect(hit(content, button: button, y: content.bounds.maxY + 1) !== button)
-        #expect(button.point(inside: button.convert(CGPoint(x: frame.midX, y: frame.midY + 21), from: content), with: nil), "指を離す位置をボタンの外と扱うと、押したことになりません")
+        #expect(button.point(inside: button.convert(CGPoint(x: frame.midX, y: frame.midY + 21), from: content), with: nil), "指を離す位置をボタンの外と扱うと、タップしたことになりません")
     }
 
     /// ボタンの上で指を止めてから動かしても、スクロールに切り替わる。ヒット領域を空きまで広げたので、切り替わらないと、空きから始めたスクロールが効かない。

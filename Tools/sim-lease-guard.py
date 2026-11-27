@@ -150,7 +150,7 @@ def main():
         if reason is None:
             return 0
         print(f"シミュレーターのツールの呼び出しを止めた（{tool_input.get('action', '?')}）: {reason}。"
-              "Tools/sim.sh acquireの出力の最後の行で、借りた端末を確かめてから、その名前で送り直す。", file=sys.stderr)
+              "Tools/sim.sh acquireの出力の最後の行で、借りた端末を確かめてから、その名前でもう一度実行する。", file=sys.stderr)
         return 2
     return 0
 

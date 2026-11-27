@@ -11,8 +11,8 @@ enum AltTextEditorCatalog {
             CatalogState(title: "残りを出す（上限30文字に8文字、残り22）") { editor("オレンジの地に白", limit: 30) },
             CatalogState(title: "ちょうど上限（上限30文字に30文字、残り0）") { editor(String(repeating: "あ", count: 30), limit: 30) },
             CatalogState(title: "上限超え（上限30文字に38文字、-8を赤）") { editor(String(repeating: "あ", count: 38), limit: 30) },
-            CatalogState(title: "コントラストを上げる設定で、空（プレースホルダーを濃く）") { editor("", contrast: .high) },
-            CatalogState(title: "コントラストを上げる設定で、残りを出す（数を濃く）") { editor("オレンジの地に白", limit: 30, contrast: .high) },
+            CatalogState(title: "コントラストを上げる設定で、空（プレースホルダーの不透明度を上げる）") { editor("", contrast: .high) },
+            CatalogState(title: "コントラストを上げる設定で、残りを出す（数の不透明度を上げる）") { editor("オレンジの地に白", limit: 30, contrast: .high) },
             CatalogState(title: "いちばん大きい文字で、残りを出す") { editor("オレンジの地に白", limit: 30, contentSize: .accessibilityExtraExtraExtraLarge) },
             CatalogState(title: "最大の行数を超えて、中でスクロールする") {
                 editor(String(repeating: "代替テキストが長いときに、入力欄が最大の行数で止まり、中でスクロールすることを確かめる文。", count: 6))

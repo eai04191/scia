@@ -52,11 +52,11 @@ struct EmojiImageStoreTests {
         #expect(store.image(for: url) == nil)
         try await waitUntil { store.hasFailed(url) }
         #expect(store.image(for: url) == nil)
-        #expect(responses.fetchCount == 1, "間隔の前に読み直しました")
+        #expect(responses.fetchCount == 1, "間隔の前に再読み込みしました")
 
         clock.advance(by: .seconds(5))
         #expect(store.image(for: url) == nil)
-        #expect(store.hasFailed(url), "読み直している間に文字で描かなくなりました")
+        #expect(store.hasFailed(url), "再読み込みしている間に文字で描かなくなりました")
         try await waitUntil { store.image(for: url) != nil }
         #expect(responses.fetchCount == 2)
         #expect(!store.hasFailed(url))

@@ -32,7 +32,7 @@ struct SpringAnimationTests {
         try await clock.advance(by: LayerClock.frame)
 
         let opacity = try #require(view.layer.presentation()).opacity
-        #expect(opacity < 0.05, "濃さが\(opacity)から始まりました")
+        #expect(opacity < 0.05, "不透明度が\(opacity)から始まりました")
     }
 
     /// 不透明度を上げている途中で`stopFading`すると、残りを足さずにその不透明度で止まる。

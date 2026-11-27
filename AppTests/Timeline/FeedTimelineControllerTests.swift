@@ -87,7 +87,7 @@ struct FeedTimelineControllerTests {
         try await waitUntil { homeRequests.withLock { $0 } >= 2 && clock.sleeperCount(remaining: .seconds(5)) >= 1 }
         controller.setEnabled(false)
         let countWhenDisabled = homeRequests.withLock { $0 }
-        #expect(clock.sleeperCount == 0, "無効にしても、読み直しの予約が残っています")
+        #expect(clock.sleeperCount == 0, "無効にしても、再読み込みの予約が残っています")
         clock.advance(by: .seconds(6))
 
         try await waitUntil { controller.runningTaskCount == 0 }

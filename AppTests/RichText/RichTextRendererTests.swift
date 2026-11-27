@@ -60,7 +60,7 @@ struct RichTextRendererTests {
         #expect(reads.withLock { $0 } == 1)
 
         clock.advance(by: .seconds(5))
-        #expect(renderer(store).render(text).string == ":ok:", "読み直している間に文字で描かなくなりました")
+        #expect(renderer(store).render(text).string == ":ok:", "再読み込みしている間に文字で描かなくなりました")
         try await waitUntil { !store.hasFailed(emoji.staticUrl) }
         #expect(reads.withLock { $0 } == 2)
         #expect(attachments(in: renderer(store).render(text)).count == 1)

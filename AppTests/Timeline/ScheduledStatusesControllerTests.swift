@@ -112,7 +112,7 @@ struct ScheduledStatusBodyTests {
     @Test func plainBodyKeepsSourceAsWritten() {
         let builder = PostContentBuilder(tuning: AppDependencies.tuning, renderSettings: PostRenderSettings(settings: AppDependencies.settings), emojiImages: AppDependencies.emojiImages, mediaImages: AppDependencies.mediaImages, avatarImages: AppDependencies.avatarImages)
         let status = Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: Account(id: "1", username: "a", acct: "a", displayName: "A", avatar: nil), content: "", spoilerText: "", url: nil)
-        let source = "A  B\n  字下げ\n<b>&</b>"
+        let source = "A  B\n  インデント\n<b>&</b>"
 
         let body = builder.body(plain: source, of: status, base: .cell())
 

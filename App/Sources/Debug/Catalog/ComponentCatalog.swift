@@ -103,7 +103,7 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineUnreadable: "読めない投稿と通知の行"
         case .timelineGap: "ギャップの行"
         case .timelineOverlays: "タイムラインの上に重ねる表示"
-        case .streamingStatus: "引っぱると見える新着の経路"
+        case .streamingStatus: "オーバースクロールで見える新着の経路"
         case .timelineMotion: "タイムラインの動きの実験"
         case .mediaGrid: "タイムラインの添付ファイルのサムネイル"
         case .profileHeader: "プロフィールのヘッダー"

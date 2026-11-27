@@ -60,7 +60,7 @@ struct ReactionMotionTests {
         #expect(try !hasRowShift(#require(harness.visibleCell(of: above))), "上の行を動かしました")
         let buttons = reactionButtons(in: cell).filter { $0.superview?.isHidden == false }
         #expect(!buttons.isEmpty)
-        #expect(buttons.allSatisfy { $0.layer.animationKeys()?.isEmpty == false }, "ボタンを浮かび上がらせていません")
+        #expect(buttons.allSatisfy { $0.layer.animationKeys()?.isEmpty == false }, "ボタンをフェードインさせていません")
     }
 
     /// すべてなくなったら、行を縮め、下の行を元の位置から動かして覆う。
@@ -122,7 +122,7 @@ struct ReactionMotionTests {
 
         let buttons = try #require(view.reactions).subviews.compactMap { $0 as? ReactionChipButton }
         #expect(!buttons.isEmpty)
-        #expect(buttons.allSatisfy { $0.layer.animationKeys() == nil && $0.lastCountTransition == nil }, "別の投稿の描き直しで動かしました")
+        #expect(buttons.allSatisfy { $0.layer.animationKeys() == nil && $0.lastCountTransition == nil }, "別の投稿の再描画で動かしました")
     }
 
     /// すでにリアクションのある列に付いたら、新しいボタンは、そこにいた「＋」が動いて場所を空けてからフェードインする。
@@ -137,8 +137,8 @@ struct ReactionMotionTests {
 
         let added = try #require(reactionButtons(in: cell).first { $0.accessibilityLabel == "🎉 1件" })
         // UIKitは、遅らせる長さを、送る前の動きの`beginTime`に相対の値で入れる。
-        let appear = try #require(added.layer.animation(forKey: "opacity"), "浮かび上がらせていません")
-        #expect(appear.beginTime > 0, "「＋」が場所を空ける前に浮かび上がらせました")
+        let appear = try #require(added.layer.animation(forKey: "opacity"), "フェードインさせていません")
+        #expect(appear.beginTime > 0, "＋」が場所を空ける前にフェードインさせました")
         #expect(appear.fillMode == .backwards || appear.fillMode == .both, "待っている間に見えています")
         let plus = try #require(reactionButtons(in: cell).first { $0.accessibilityLabel != "🎉 1件" && $0.accessibilityLabel != "👍 1件" })
         let move = try #require(plus.layer.animation(forKey: "position"), "「＋」を動かしていません")

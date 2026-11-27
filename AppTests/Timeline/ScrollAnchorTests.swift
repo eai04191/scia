@@ -709,7 +709,7 @@ struct ScrollAnchorTests {
         try await waitUntil { harness.collectionView.contentSize.height != heightBefore }
 
         #expect(harness.collectionView.contentSize.height > heightBefore, "段落間隔の変更が反映されていません")
-        let after = try #require(harness.windowMinY(of: anchor.id), "描き直し後に基準の投稿が画面外へ出ました")
+        let after = try #require(harness.windowMinY(of: anchor.id), "再描画後に基準の投稿が画面外へ出ました")
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
     }
 
@@ -776,7 +776,7 @@ struct ScrollAnchorTests {
 
         harness.viewController.toggleSpoiler(of: original, keeping: .status(original.id))
 
-        let after = try #require(harness.windowMinY(of: .status(original.id)), "開いたあとに押した行が画面外へ出ました")
-        #expect(abs(after - before) <= tolerance, "押した行が\(after - before)pt動きました")
+        let after = try #require(harness.windowMinY(of: .status(original.id)), "開いたあとにタップした行が画面外へ出ました")
+        #expect(abs(after - before) <= tolerance, "タップした行が\(after - before)pt動きました")
     }
 }

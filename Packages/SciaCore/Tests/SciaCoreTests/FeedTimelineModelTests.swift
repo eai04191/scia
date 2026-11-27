@@ -207,7 +207,7 @@ struct FeedTimelineModelTests {
         model.start(purpose: .action)
         try await waitUntil { model.runningTaskCount == 0 }
         guard case .failed = model.contentState else {
-            Issue.record("最初の読み込みの失敗を覚えていません: \(model.contentState)")
+            Issue.record("最初の読み込みの失敗を保持していません: \(model.contentState)")
             return
         }
         #expect(display.contentState == model.contentState)

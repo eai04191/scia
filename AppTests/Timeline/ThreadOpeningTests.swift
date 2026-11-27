@@ -39,12 +39,12 @@ struct ThreadOpeningTests {
         let harness = try openThread(atWindowY: windowY)
         defer { harness.tearDown() }
         let opened = try #require(harness.windowMinY(of: focusID))
-        #expect(abs(opened - windowY) <= tolerance, "開いた時点で押した投稿が\(opened - windowY)pt動きました")
+        #expect(abs(opened - windowY) <= tolerance, "開いた時点でタップした投稿が\(opened - windowY)pt動きました")
 
         loadContext(into: harness, ancestorCount: 30)
 
-        let loaded = try #require(harness.windowMinY(of: focusID), "読んだあとに押した投稿が画面外へ出ました")
-        #expect(abs(loaded - windowY) <= tolerance, "読んだあとに押した投稿が\(loaded - windowY)pt動きました")
+        let loaded = try #require(harness.windowMinY(of: focusID), "読んだあとにタップした投稿が画面外へ出ました")
+        #expect(abs(loaded - windowY) <= tolerance, "読んだあとにタップした投稿が\(loaded - windowY)pt動きました")
     }
 
     /// ブーストの行から開いたときは、ブーストした人の行を除いた投稿の中身の上端を、スレッドの選択した投稿の上端に合わせる。
@@ -64,7 +64,7 @@ struct ThreadOpeningTests {
         defer { harness.tearDown() }
 
         let opened = try #require(harness.windowMinY(of: focusID))
-        #expect(abs(opened - content.minY) <= tolerance, "押した投稿の中身が\(opened - content.minY)pt ずれました")
+        #expect(abs(opened - content.minY) <= tolerance, "タップした投稿の中身が\(opened - content.minY)ptずれました")
     }
 
     /// 祖先が選択した位置より上に足りないときは、最上部まで動かして祖先を上端に置き、上の空きを詰める。
@@ -119,10 +119,10 @@ struct ThreadOpeningTests {
         harness.collectionView.layoutIfNeeded()
 
         let loaded = try #require(harness.visibleCell(of: focusID))
-        #expect((loaded.contentConfiguration as? PostContentConfiguration)?.context != nil, "押した投稿のラベルが消えました")
-        #expect(abs(loaded.bounds.height - openedHeight) <= tolerance, "押した投稿の行の高さが\(loaded.bounds.height - openedHeight)pt変わりました")
+        #expect((loaded.contentConfiguration as? PostContentConfiguration)?.context != nil, "タップした投稿のラベルが消えました")
+        #expect(abs(loaded.bounds.height - openedHeight) <= tolerance, "タップした投稿の行の高さが\(loaded.bounds.height - openedHeight)pt変わりました")
         let other = try #require(harness.visibleCell(of: .status(replyToFocus.id)))
-        #expect((other.contentConfiguration as? PostContentConfiguration)?.context == nil, "押した投稿でない返信にラベルが出ました")
+        #expect((other.contentConfiguration as? PostContentConfiguration)?.context == nil, "タップした投稿でない返信にラベルが出ました")
     }
     /// 選択した投稿の下に返信がなく、選択した投稿を上端まで上げられるだけの余白を足しているときに、選択した投稿の高さが変わっても、上端まで上げられる。
     /// 余白を会話を読んだときにしか測り直していないと、アクションバーを開いたまま読み終えてから閉じたときに、閉じた分だけ余白が足りなくなる。
@@ -143,6 +143,6 @@ struct ThreadOpeningTests {
         let frame = try #require(harness.visibleCell(of: focusID)).frame
         let maxOffset = collectionView.contentSize.height + collectionView.adjustedContentInset.bottom - collectionView.bounds.height
         let focusAtTop = frame.minY - collectionView.adjustedContentInset.top
-        #expect(maxOffset >= focusAtTop - tolerance, "押した投稿を上端まで上げられず、\(focusAtTop - maxOffset)pt足りません")
+        #expect(maxOffset >= focusAtTop - tolerance, "タップした投稿を上端まで上げられず、\(focusAtTop - maxOffset)pt足りません")
     }
 }

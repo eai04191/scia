@@ -308,7 +308,7 @@ struct InAppBrowserDockTests {
     private func tapStatusBar(in scene: UIWindowScene, x: CGFloat) throws {
         let manager = try #require(scene.statusBarManager)
         let selector = NSSelectorFromString("_handleScrollToTopAtXPosition:")
-        try #require(manager.responds(to: selector), "iOSの更新で、ステータスバーを押したときの処理の名前が変わった")
+        try #require(manager.responds(to: selector), "iOSの更新で、ステータスバーをタップしたときの処理の名前が変わった")
         typealias Handle = @convention(c) (AnyObject, Selector, CGFloat) -> Void
         unsafeBitCast(manager.method(for: selector), to: Handle.self)(manager, selector, x)
     }

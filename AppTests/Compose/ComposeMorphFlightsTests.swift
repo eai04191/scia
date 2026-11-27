@@ -90,7 +90,7 @@ struct ComposeMorphFlightsTests {
 
         let badge = try #require(Self.badges(in: container).first { !$0.isHidden }, "複製にバッジを載せていません")
         #expect(badge.alpha == 1)
-        let fade = try #require(badge.layer.animation(forKey: "opacity") as? CABasicAnimation, "バッジを濃くしていません")
+        let fade = try #require(badge.layer.animation(forKey: "opacity") as? CABasicAnimation, "バッジの不透明度を上げていません")
         #expect((fade.fromValue as? Float) == 0)
     }
 
@@ -151,7 +151,7 @@ struct ComposeMorphFlightsTests {
         let copies = container.subviews.flatMap(\.subviews).filter { $0 !== mark && $0.bounds.size == mark.bounds.size }
         let copy = try #require(copies.first, "複製に失敗のアイコンを載せていません")
         #expect(copy.alpha == 1)
-        let fade = try #require(copy.layer.animation(forKey: "opacity") as? CABasicAnimation, "失敗のアイコンを濃くしていません")
+        let fade = try #require(copy.layer.animation(forKey: "opacity") as? CABasicAnimation, "失敗のアイコンの不透明度を上げていません")
         #expect((fade.fromValue as? Float) == 0)
         // 複製が行き先の大きさになったとき、本物のアイコンと重なる。
         let holder = try #require(copy.superview)
@@ -160,7 +160,7 @@ struct ComposeMorphFlightsTests {
         #expect(copy.frame == mark.frame)
 
         flights.finish(generation: generation)
-        #expect(mark.layer.animation(forKey: "opacity") == nil, "本物に替えてから、失敗のアイコンを浮かび上がらせています")
+        #expect(mark.layer.animation(forKey: "opacity") == nil, "本物に替えてから、失敗のアイコンをフェードインさせています")
     }
 
     /// 描く前に行き先を測り直し、そのまま逆へ向かうとき、行き先の失敗のアイコンのスナップショットは、まだ見せていない不透明度に戻る。

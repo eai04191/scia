@@ -28,7 +28,7 @@ struct EmojiPaletteViewTests {
         try await waitUntil { core.personalEmojiSet?.categories.first?.name == "後のカテゴリー" }
         completion.updatePalette(palette, recentKeys: [])
         let titles = Self.sectionTitles(in: palette)
-        #expect(titles.contains("後のカテゴリー") && !titles.contains("前のカテゴリー"), "まとまりのボタン: \(titles)")
+        #expect(titles.contains("後のカテゴリー") && !titles.contains("前のカテゴリー"), "グループのボタン: \(titles)")
     }
 
     /// 出している間に、個人セットの同じ絵文字の画像だけが変わったら、そのセルを新しい画像で再描画する。
@@ -235,7 +235,7 @@ struct EmojiPaletteViewTests {
         let collectionView = try #require(Self.descendants(of: palette).compactMap { $0 as? UICollectionView }.first)
         let cell = try #require(Self.cells(in: collectionView).first)
 
-        #expect(Self.imageView(of: cell)?.image?.cgImage?.height == 8, "静止画が届く前は、小さい静止画で描く")
+        #expect(Self.imageView(of: cell)?.image?.cgImage?.height == 8, "静止画が届く前は、サムネイルで描く")
 
         gate.open()
         try await waitUntil { store.image(for: emoji.url) != nil && Self.imageView(of: cell)?.image?.cgImage?.height == 96 }

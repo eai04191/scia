@@ -75,7 +75,7 @@ struct NoticeStackViewTests {
     /// 2行のチップを2枚並べても重ねず、取っておいた高さに収める。
     @Test func twoWrappedChipsStackWithinHeight() throws {
         let stack = makeStack()
-        stack.setPersistent(Notice(id: "failed", kind: .failure, title: "代替テキストを送信できませんでした。押すと理由を確かめられます"))
+        stack.setPersistent(Notice(id: "failed", kind: .failure, title: "代替テキストを送信できませんでした。タップすると理由を確かめられます"))
         stack.showTransient(Notice(id: "long", kind: .info, title: "この投稿では「メンションされたユーザー」を使えません"), duration: 60)
         stack.layoutIfNeeded()
 

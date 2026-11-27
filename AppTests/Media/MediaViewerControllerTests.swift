@@ -1689,7 +1689,7 @@ struct MediaViewerControllerTests {
 
         viewer.beginDragging(at: CGPoint(x: 100, y: 300))
         viewer.updateDragging(translation: CGPoint(x: 0, y: 1))
-        #expect(abs(viewer.chromeAlpha - before) < 0.05, "つかんだ瞬間にボタン類の濃さが飛びました: \(before) → \(viewer.chromeAlpha)")
+        #expect(abs(viewer.chromeAlpha - before) < 0.05, "つかんだ瞬間にボタン類の不透明度が飛びました: \(before) → \(viewer.chromeAlpha)")
         viewer.updateDragging(translation: CGPoint(x: 0, y: viewer.view.bounds.height * 0.3))
         #expect(viewer.chromeAlpha == 0, "背景が半分透けてもボタン類が残っています: \(viewer.chromeAlpha)")
 
@@ -1738,7 +1738,7 @@ struct MediaViewerControllerTests {
         #expect(!viewer.isMoving, "めくり始めても開く動きが残っています")
         let copy = try #require(viewer.interruptedMotionCopy, "途中の見え方を残していません")
         #expect(copy.window === viewer.view.window && copy.frame == viewer.view.window?.bounds)
-        #expect(!copy.isUserInteractionEnabled, "めくる指を像が受けます")
+        #expect(!copy.isUserInteractionEnabled, "めくる指をスナップショットが受けます")
 
         viewer.close()
         try await waitUntil { harness.viewController.presentedViewController == nil }

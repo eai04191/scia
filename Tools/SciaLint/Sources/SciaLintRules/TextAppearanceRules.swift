@@ -18,7 +18,7 @@ extension Rule {
     // 白を透かして控えめにした文字は、明るい画像の上で読みにくくなる。コントラストを上げる設定に応えるよう、dimmedWhiteText(alpha:)で作る
     static let dimmedWhiteText = Rule(
         id: "dimmed_white_text",
-        message: "半透明の白い文字はdimmedWhiteText(alpha:)で作り、コントラストを上げる設定で濃くする",
+        message: "半透明の白い文字はdimmedWhiteText(alpha:)で作り、コントラストを上げる設定で不透明度を上げる",
         appliesTo: isReleaseAppFile,
         find: { tree in
             tree.all(FunctionCallExprSyntax.self)

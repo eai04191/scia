@@ -152,7 +152,7 @@ enum ProfileHeaderCatalog {
             CatalogState(title: "関係を読み込む前") { header(fullAccount, .unknown) },
             CatalogState(title: "関係を読み込むのが長引いている（ボタンの中のインジケータ）") { header(fullAccount, .unknown, showsRelationshipActivity: true) },
             CatalogState(title: "関係を読み込めなかった（再試行をタップすると再読み込みする途中になる）") { header(fullAccount, .loadFailed) },
-            CatalogState(title: "読み込めなかった関係を読み込み直している途中") { header(fullAccount, .loadFailed, isReloadingRelationship: true) },
+            CatalogState(title: "読み込めなかった関係を再読み込みしている途中") { header(fullAccount, .loadFailed, isReloadingRelationship: true) },
             CatalogState(title: "自分（ボタンなし）、ヘッダー画像・自己紹介・補足情報・アイコンなし") {
                 header(Fixtures.account(acct: "me", avatar: nil), .myself)
             },

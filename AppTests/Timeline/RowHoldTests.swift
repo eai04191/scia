@@ -48,7 +48,7 @@ struct RowHoldTests {
         harness.setStatuses(statuses)
         harness.collectionView.layoutIfNeeded()
 
-        #expect(try #require(harness.visibleCell(of: id)?.bounds.height) > height, "メニューを出している間に描き直していません")
+        #expect(try #require(harness.visibleCell(of: id)?.bounds.height) > height, "メニューを出している間に再描画していません")
     }
 
     /// スワイプのボタンを閉じる途中の行は、閉じ終えるまで前の縦の位置に描かれるため、閉じ終えてから並びを変える。
