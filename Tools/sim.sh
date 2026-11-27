@@ -68,9 +68,9 @@ work_dir() {
     mktemp -d "$dir/$(date +%H%M%S).XXXX"
 }
 
-# 端末の画面の倍率（ポイントあたりのピクセル）。端末の種類のprofile.plistから読む。
-screen_scale() {
-    local sim=$1 type_id bundle
+# 端末の種類の識別子（com.apple.CoreSimulator.SimDeviceType.iPhone-Duoなど）。
+device_type() {
+    local type_id
     type_id=$(xcrun simctl list devices -j | /usr/bin/python3 -I -c '
 import json, sys
 name = sys.argv[1]
@@ -78,8 +78,15 @@ for devices in json.load(sys.stdin)["devices"].values():
     for d in devices:
         if d["name"] == name or d["udid"] == name:
             print(d["deviceTypeIdentifier"]); sys.exit()
-' "$sim")
-    [ -n "$type_id" ] || fail "端末が見つからない: $sim"
+' "$1")
+    [ -n "$type_id" ] || fail "端末が見つからない: $1"
+    echo "$type_id"
+}
+
+# 端末の画面の倍率（ポイントあたりのピクセル）。端末の種類のprofile.plistから読む。
+screen_scale() {
+    local sim=$1 type_id bundle
+    type_id=$(device_type "$sim")
     bundle=$(xcrun simctl list devicetypes -j | /usr/bin/python3 -I -c '
 import json, sys
 for t in json.load(sys.stdin)["devicetypes"]:
@@ -117,12 +124,13 @@ capture() {
 # 縮小した画像のハッシュと、何も描かれていないかを「<ハッシュ> blank|drawn」で出す。
 # 時計の数字の変化などの細かい差を無視するため、小さくしてから比べる。圧縮のないBMPにすると、標準のPythonで画素を読める。
 # 何も描かれていないとみなすのは、次のどちらか。
-# - 端の帯を外した残りが一色。上下は8%ずつ外し、ステータスバーとホームインジケーターを除く。Scia Duoはステータスバーが右の端に縦に並ぶので、左右は20%ずつ外す。
+# - 端の帯を外した残りが一色。上下は8%ずつ外し、ステータスバーとホームインジケーターを除く。左右は、iPadの画面の縁の1pxを除くため2%ずつ外す。
+#   第2引数にsideを渡したとき（iPhone Duo）は、縦長のコマの右20%も外す。閉じたときの外側の画面は、右の端にステータスバーが縦に並ぶため。横向きにするとステータスバーが出ず、開いたときの内側の画面は横長。
 # - 画面でいちばん大きい一色の長方形が、端から5%より内側に収まり、画面の15%以上を占める。iPadのウインドウ表示では、空のウィンドウの周りに壁紙が写り、画面全体は一色にならない。
 #   測ったときは、描き終えた画面のいちばん大きい一色の長方形は画面の10%以下か、端に触れていた。空のウィンドウは22%だった。
 #   中身が一色のまま描き終えたウィンドウも、何も描かれていないとみなす。
 inspect_frame() {
-    local small="$1.small.bmp"
+    local small="$1.small.bmp" side_status_bar=${2:-}
     sips -Z 96 -s format bmp "$1" --out "$small" >/dev/null 2>&1 || return 1
     /usr/bin/python3 -I -c '
 import hashlib, struct, sys
@@ -137,8 +145,9 @@ order = range(rows) if height < 0 else range(rows - 1, -1, -1)
 pixels = [[data[offset + r * stride + x * size: offset + r * stride + (x + 1) * size] for x in range(width)] for r in order]
 
 def single_color_inside_bands():
-    mx, my = round(width * 0.2), round(rows * 0.08)
-    return len({pixel for line in pixels[my:rows - my] for pixel in line[mx:width - mx]}) <= 1
+    left, my = round(width * 0.02), round(rows * 0.08)
+    right = width - (round(width * 0.2) if sys.argv[2] == "side" and rows > width else left)
+    return len({pixel for line in pixels[my:rows - my] for pixel in line[left:right]}) <= 1
 
 def blank_window():
     # いちばん大きい一色の長方形を、行ごとのヒストグラムで求める。
@@ -167,17 +176,18 @@ def blank_window():
     return inside and best >= width * rows * 0.15
 
 print(hashlib.md5(data).hexdigest(), "blank" if single_color_inside_bands() or blank_window() else "drawn")
-' "$small"
+' "$small" "$side_status_bar"
 }
 
 # 続けて撮った2枚が同じになるまで撮り直す。何も描かれていないコマは、同じでも止まったとみなさない。
 # 最後に撮ったファイルのパスを残し、止まったら0、上限まで変わり続けたら1、上限まで何も描かれていなければ2を返す。
 settle() {
-    local sim=$1 out=$2 previous="" current state started
+    local sim=$1 out=$2 previous="" current state started side_status_bar=""
+    [ "$(device_type "$sim")" != com.apple.CoreSimulator.SimDeviceType.iPhone-Duo ] || side_status_bar=side
     started=$(date +%s)
     while true; do
         capture "$sim" "$out"
-        read -r current state <<<"$(inspect_frame "$out")"
+        read -r current state <<<"$(inspect_frame "$out" "$side_status_bar")"
         [ -n "$state" ] || fail "撮ったコマを調べられない: $out"
         if [ "$current" = "$previous" ] && [ "$state" = drawn ]; then
             return 0
